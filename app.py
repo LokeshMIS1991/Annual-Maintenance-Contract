@@ -13,7 +13,7 @@ from google.oauth2.service_account import Credentials
 # 1. PAGE CONFIGURATION
 # ==========================================
 st.set_page_config(
-    page_title="Sidharth Shutter & Automation - AMC Tracker",
+    page_title="Annual Maintenance Contract Tracker 🔧",
     page_icon="🔧",
     layout="wide"
 )
