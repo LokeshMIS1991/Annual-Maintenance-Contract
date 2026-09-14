@@ -10,12 +10,82 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # ==========================================
-# 1. PAGE CONFIGURATION
+# 1. PAGE CONFIGURATION & CUSTOM BRANDING CSS
 # ==========================================
 st.set_page_config(
-    page_title="Annual Maintenance Contract Tracker 🔧",
+    page_title="Annual Maintenance Contract Tracker",
+    page_icon="🔧",
     layout="wide"
 )
+
+# Custom CSS matching Sidharth Shutter & Automation Logo (Navy Blue & Emerald Green accents)
+st.markdown("""
+<style>
+    /* Main Background & Fonts */
+    .stApp {
+        background-color: #F8FAFC;
+    }
+    
+    /* Headers & Branding Colors */
+    h1, h2, h3 {
+        color: #0F2C59 !important;
+        font-weight: 700 !important;
+    }
+    
+    /* Primary Buttons */
+    .stButton > button {
+        background: linear-gradient(135deg, #0F2C59 0%, #1E56A0 100%) !important;
+        color: white !important;
+        font-weight: 600 !important;
+        border-radius: 8px !important;
+        border: none !important;
+        padding: 0.5rem 1.5rem !important;
+        transition: all 0.3s ease !important;
+    }
+    .stButton > button:hover {
+        background: linear-gradient(135deg, #1E56A0 0%, #0F2C59 100%) !important;
+        box-shadow: 0 4px 12px rgba(15, 44, 89, 0.25) !important;
+    }
+
+    /* Metric KPI Card Styling */
+    [data-testid="stMetric"] {
+        background-color: #FFFFFF !important;
+        border-left: 5px solid #10B981 !important;
+        border-radius: 10px !important;
+        padding: 15px 20px !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+    }
+    [data-testid="stMetricLabel"] {
+        color: #64748B !important;
+        font-weight: 600 !important;
+    }
+    [data-testid="stMetricValue"] {
+        color: #0F2C59 !important;
+        font-weight: 800 !important;
+    }
+
+    /* Tabs Styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 12px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #E2E8F0;
+        border-radius: 8px 8px 0px 0px;
+        padding: 10px 20px;
+        color: #0F2C59;
+        font-weight: 600;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #0F2C59 !important;
+        color: white !important;
+    }
+
+    /* Info & Alert Boxes */
+    .stAlert {
+        border-radius: 8px !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # ==========================================
 # 2. GOOGLE SHEETS AUTHENTICATION
@@ -86,28 +156,30 @@ sheet = get_gspread_client()
 df = fetch_all_visits(sheet)
 
 # ==========================================
-# 3. BRANDED HEADER & METRIC DASHBOARD
+# 3. BRANDED HEADER (LOGO ON THE RIGHT SIDE)
 # ==========================================
-header_col1, header_col2 = st.columns([1, 4])
+header_title_col, header_logo_col = st.columns([3, 1])
 
-with header_col1:
-    # Looks for local file 'Company Logo.jpeg' in root directory
-    if os.path.exists("Company Logo.jpeg"):
-        st.image("Company Logo.jpeg", use_container_width=True)
-    elif os.path.exists("Company Logo.jpg"):
-        st.image("Company Logo.jpg", use_container_width=True)
-    elif os.path.exists("Company Logo.png"):
-        st.image("Company Logo.png", use_container_width=True)
-    else:
-        st.title("🔧")
+with header_title_col:
+    st.title("Annual Maintenance Contract Tracker")
+    st.markdown("<p style='color: #475569; font-size: 1.1rem; margin-top: -10px;'>Sidharth Shutter & Automation — Service Portal</p>", unsafe_allow_html=True)
 
-with header_col2:
-    st.title("Sidharth Shutter & Automation")
-    st.subheader("AMC Field Visit & Contract Tracker")
+with header_logo_col:
+    # Display logo aligned to the right side
+    logo_path = None
+    for ext in ["Company Logo.jpeg", "Company Logo.jpg", "Company Logo.png"]:
+        if os.path.exists(ext):
+            logo_path = ext
+            break
+            
+    if logo_path:
+        st.image(logo_path, use_container_width=True)
 
-st.caption("Connected to Google Sheets Database")
+st.divider()
 
-# Compute live metrics with updated status names
+# ==========================================
+# 4. METRIC DASHBOARD
+# ==========================================
 active_count = len(df[df['Contract_Status'] == 'Active']) if not df.empty and 'Contract_Status' in df.columns else 0
 inactive_count = len(df[df['Contract_Status'] == 'Inactive']) if not df.empty and 'Contract_Status' in df.columns else 0
 expiring_count = len(df[df['Contract_Status'] == 'Expiring Soon']) if not df.empty and 'Contract_Status' in df.columns else 0
@@ -127,10 +199,10 @@ col2.metric("Inactive Contracts", inactive_count)
 col3.metric("Expiring Soon", expiring_count)
 col4.metric("Total Revenue", total_rev_str)
 
-st.divider()
+st.write("")
 
 # ==========================================
-# 4. ENTRY FORM & RECORDS HISTORY TABS
+# 5. ENTRY FORM & RECORDS HISTORY TABS
 # ==========================================
 tab1, tab2 = st.tabs(["📝 Add New Field Visit", "📊 Visit History & Records"])
 
@@ -157,7 +229,6 @@ with tab1:
             reason_for_visit = st.text_input("Reason for Visit")
             product_name = st.text_input("Product Name")
             
-            # Updated Status options as requested
             contract_status = st.selectbox(
                 "Contract Status", 
                 ["Active", "Inactive", "Expiring Soon"]
@@ -167,7 +238,7 @@ with tab1:
         
         remarks = st.text_area("Remarks")
         
-        submitted = st.form_submit_button("Submit to Google Sheets")
+        submitted = st.form_submit_button("Save Visit Entry")
         
         if submitted:
             if not client_name or not technician_name:
@@ -207,7 +278,7 @@ with tab2:
     if df.empty:
         st.info("No records currently stored in Google Sheets.")
     else:
-        # Search & Filter Controls with requested Status options
+        # Search & Filter Controls
         f_col1, f_col2 = st.columns([2, 1])
         with f_col1:
             search_visit_id = st.text_input("🔍 Search by Visit ID (e.g., AMC-2026-XXXXX)", "").strip()
@@ -223,11 +294,11 @@ with tab2:
         if search_visit_id:
             filtered_df = filtered_df[filtered_df['Visit_ID'].astype(str).str.contains(search_visit_id, case=False, na=False)]
 
-        # Display Summary Table (Excluding heavy Base64 image column)
+        # Summary Table View
         display_cols = [c for c in filtered_df.columns if c != 'Job_Sheet_Photo_Base64']
         st.dataframe(filtered_df[display_cols], use_container_width=True)
 
-        # --- DETAILED SINGLE VISIT INSPECTION ---
+        # Detailed Inspection Section
         st.divider()
         st.subheader("📋 Detailed Visit Inspection & Job Sheet")
 
@@ -239,7 +310,6 @@ with tab2:
             else:
                 row = exact_match.iloc[0]
                 
-                # Render Detailed Card
                 with st.expander(f"📌 Complete Details for Visit ID: {row['Visit_ID']}", expanded=True):
                     d_col1, d_col2 = st.columns(2)
                     
@@ -259,7 +329,7 @@ with tab2:
                         st.markdown(f"**Contract Value:** ₹{row.get('Contract_Value', 0)}")
                         st.markdown(f"**Remarks:** {row.get('Remarks', 'N/A')}")
                     
-                    # Render Photo ONLY for this searched Visit ID
+                    # Job Sheet Photo Display
                     photo_b64 = str(row.get('Job_Sheet_Photo_Base64', ''))
                     if len(photo_b64) > 10:
                         st.subheader("🖼️ Job Sheet Photo")
