@@ -289,11 +289,9 @@ with tab1:
             
         auto_pending = max(0, total_services - auto_completed)
         
-        # Display specific status for entered client
+        # Display specific status ONLY when client name is entered
         if client_name.strip():
             st.info(f"📊 **Automated Progress Status for {client_name.strip()}:** Completed `{auto_completed}` of `{total_services}` services (`{auto_pending}` Pending)")
-        else:
-            st.caption("👈 Enter a Client Name on the left to view their automated service progress status.")
         
         freq_days_map = {2: 180, 3: 120, 4: 90}
         default_next_due = date_of_visit + datetime.timedelta(days=freq_days_map.get(service_freq, 90))
@@ -337,7 +335,7 @@ with tab1:
                 st.success(f"✅ Visit `{auto_id}` registered for {client_name.strip()}! ({auto_completed}/{total_services} Completed - {auto_pending} Pending)")
                 st.cache_resource.clear()
                 st.rerun()
-
+                
 # --- TAB 2: HISTORY & SEARCH BY VISIT ID ---
 with tab2:
     st.subheader("🔍 Visit Search & Historical Records")
