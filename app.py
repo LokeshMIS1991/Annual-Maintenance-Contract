@@ -95,11 +95,32 @@ def get_gspread_client():
         st.stop()
 
 def fetch_all_visits(sheet):
-    """Retrieves all records from Google Sheets into a DataFrame."""
+    """Retrieves all records from Google Sheets into a DataFrame safely."""
     try:
-        data = sheet.get_all_records()
-        df = pd.DataFrame(data)
+        # Expected header order matching the sheet structure
+        expected_cols = [
+            "Visit_ID", "Client_Name", "Company_Name", "Date_of_Visit", 
+            "Address", "Phone_Number", "Technician_Name", "Visit_Type", 
+            "Reason_for_Visit", "Product_Name", "Service_Frequency", 
+            "Next_Service_Due_Date", "Total_Services_Included", 
+            "Services_Completed", "Remarks", "Job_Sheet_Photo_Base64", "Contract_Status"
+        ]
+        
+        # Read raw data values to avoid duplicate header dict errors
+        all_values = sheet.get_all_values()
+        if not all_values or len(all_values) < 2:
+            return pd.DataFrame(columns=expected_cols)
+        
+        # Use row 1 as headers, but drop duplicates automatically
+        headers = all_values[0]
+        data = all_values[1:]
+        
+        df = pd.DataFrame(data, columns=headers)
+        
+        # Deduplicate column names if Google Sheet has duplicate columns
+        df = df.loc[:, ~df.columns.duplicated()]
         return df
+
     except Exception as e:
         st.error(f"Error reading Google Sheet: {e}")
         return pd.DataFrame()
