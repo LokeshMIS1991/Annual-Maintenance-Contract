@@ -186,24 +186,16 @@ if not df.empty:
     breakdown_df = df[df.get('Visit_Type', pd.Series()) == 'Breakdown Call / Emergency Repair'] if 'Visit_Type' in df.columns else pd.DataFrame()
     breakdown_count = len(breakdown_df)
 
-    # Total Revenue calculation
-    if 'Contract_Value' in df.columns:
-        total_rev_val = pd.to_numeric(df['Contract_Value'], errors='coerce').sum()
-        total_rev_str = f"₹{total_rev_val:,.2f}"
-    else:
-        total_rev_str = "₹0.00"
 else:
-    active_count, inactive_count, expiring_count, pending_count, breakdown_count = 0, 0, 0, 0, 0
-    total_rev_str = "₹0.00"
+    active_count, inactive_count, expiring_count, pending_count, breakdown_count = 0, 0, 0, 0
     expiring_df, pending_df, breakdown_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-# Display Dashboard Cards
-c1, c2, c3, c4, c5 = st.columns(5)
+# Display Dashboard Cards (Revenue Removed)
+c1, c2, c3, c4 = st.columns(4)
 c1.metric("Active Contracts", active_count)
 c2.metric("Pending Services", pending_count)
 c3.metric("Expiring Soon", expiring_count)
 c4.metric("Breakdown Calls", breakdown_count)
-c5.metric("Total Revenue", total_rev_str)
 
 st.write("")
 
@@ -281,7 +273,6 @@ with tab1:
                 services_completed = st.number_input("Services Completed To Date", min_value=0, value=1, step=1)
                 
             contract_status = st.selectbox("Contract Status", ["Active", "Inactive", "Expiring Soon", "Pending Service"])
-            contract_value = st.number_input("Contract Value (₹)", min_value=0.0, value=0.0, step=500.0)
             uploaded_photo = st.file_uploader("Upload Job Sheet Photo", type=["jpg", "jpeg", "png"])
         
         remarks = st.text_area("Technician Remarks / Parts Used")
@@ -317,8 +308,7 @@ with tab1:
                     "Services_Completed": services_completed,
                     "Remarks": remarks,
                     "Job_Sheet_Photo_Base64": base64_photo,
-                    "Contract_Status": contract_status,
-                    "Contract_Value": contract_value
+                    "Contract_Status": contract_status
                 }
                 
                 if save_visit_to_gsheets(sheet, record):
@@ -382,7 +372,6 @@ with tab2:
                         st.markdown(f"**Next Service Due:** {row.get('Next_Service_Due_Date', 'N/A')}")
                         st.markdown(f"**Contract End Date:** {row.get('Contract_End_Date', 'N/A')}")
                         st.markdown(f"**Services Progress:** {row.get('Services_Completed', 0)} / {row.get('Total_Services_Included', 0)}")
-                        st.markdown(f"**Contract Value:** ₹{row.get('Contract_Value', 0)}")
                         st.markdown(f"**Remarks:** {row.get('Remarks', 'N/A')}")
                     
                     # Display Photo ONLY for searched Visit ID
