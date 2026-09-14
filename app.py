@@ -154,11 +154,6 @@ today = pd.Timestamp.today().normalize()
 
 # Process automated expiry & due logic safely
 if not df.empty:
-    if 'Contract_End_Date' in df.columns:
-        df['Contract_End_Date_DT'] = pd.to_datetime(df['Contract_End_Date'], errors='coerce')
-    else:
-        df['Contract_End_Date_DT'] = pd.NaT
-
     if 'Next_Service_Due_Date' in df.columns:
         df['Next_Service_Due_Date_DT'] = pd.to_datetime(df['Next_Service_Due_Date'], errors='coerce')
     else:
@@ -167,15 +162,7 @@ if not df.empty:
     # Calculate Statuses
     active_count = len(df[df['Contract_Status'] == 'Active']) if 'Contract_Status' in df.columns else 0
     inactive_count = len(df[df['Contract_Status'] == 'Inactive']) if 'Contract_Status' in df.columns else 0
-    
-    # Auto-flag Expiring Soon (End Date within 30 days)
-    expiring_df = df[
-        (df.get('Contract_Status') == 'Expiring Soon') | 
-        ((df['Contract_End_Date_DT'].notna()) & 
-         (df['Contract_End_Date_DT'] >= today) & 
-         (df['Contract_End_Date_DT'] <= today + pd.Timedelta(days=30)))
-    ]
-    expiring_count = len(expiring_df)
+    expiring_count = len(df[df['Contract_Status'] == 'Expiring Soon']) if 'Contract_Status' in df.columns else 0
 
     # Auto-flag Pending Services (Due Date <= Today or Status == Pending Service)
     pending_df = df[
@@ -192,65 +179,25 @@ if not df.empty:
         breakdown_df = pd.DataFrame()
     breakdown_count = len(breakdown_df)
 
-    # Total & Active Revenue Calculations
-    if 'Contract_Value' in df.columns:
-        numeric_rev = pd.to_numeric(df['Contract_Value'], errors='coerce').fillna(0)
-        df['Contract_Value_Num'] = numeric_rev
-        total_rev_val = numeric_rev.sum()
-        active_rev_val = numeric_rev[df['Contract_Status'] == 'Active'].sum()
-        avg_contract_val = numeric_rev[numeric_rev > 0].mean() if len(numeric_rev[numeric_rev > 0]) > 0 else 0
-        
-        total_rev_str = f"₹{total_rev_val:,.2f}"
-        active_rev_str = f"₹{active_rev_val:,.2f}"
-        avg_rev_str = f"₹{avg_contract_val:,.2f}"
-    else:
-        total_rev_str, active_rev_str, avg_rev_str = "₹0.00", "₹0.00", "₹0.00"
-
 else:
     active_count, inactive_count, expiring_count, pending_count, breakdown_count = 0, 0, 0, 0, 0
-    total_rev_str, active_rev_str, avg_rev_str = "₹0.00", "₹0.00", "₹0.00"
-    expiring_df, pending_df, breakdown_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+    pending_df, breakdown_df = pd.DataFrame(), pd.DataFrame()
 
-# Display Main Dashboard Metrics Cards
-c1, c2, c3, c4, c5 = st.columns(5)
+# Display Main Dashboard Metrics Cards (Total Value Removed)
+c1, c2, c3, c4 = st.columns(4)
 c1.metric("Active Contracts", active_count)
 c2.metric("Pending Services", pending_count)
 c3.metric("Expiring Soon", expiring_count)
 c4.metric("Breakdown Calls", breakdown_count)
-c5.metric("Total Revenue", total_rev_str)
 
 st.write("")
 
-# Expanded Revenue Analytics Details Row
-with st.expander("💰 Financial Overview & Additional Details", expanded=False):
-    r1, r2, r3 = st.columns(3)
-    r1.metric("Active Contracts Value", active_rev_str)
-    r2.metric("Average Contract Value", avg_rev_str)
-    
-    if not df.empty and 'Product_Name' in df.columns and 'Contract_Value_Num' in df.columns:
-        product_totals = df.groupby('Product_Name')['Contract_Value_Num'].sum()
-        if not product_totals.empty and product_totals.max() > 0:
-            top_product = product_totals.idxmax()
-        else:
-            top_product = "N/A"
-        r3.metric("Top Revenue Product", top_product)
-    else:
-        r3.metric("Top Revenue Product", "N/A")
-
-# Action Alert Expanders
-if not pending_df.empty or not expiring_df.empty:
-    with st.expander("🚨 Action Required: Service & Expiry Alerts", expanded=False):
-        ac1, ac2 = st.columns(2)
-        with ac1:
-            st.warning(f"**Services Pending ({len(pending_df)})**")
-            if not pending_df.empty:
-                cols_to_show = [c for c in ['Visit_ID', 'Client_Name', 'Product_Name', 'Next_Service_Due_Date', 'Phone_Number'] if c in pending_df.columns]
-                st.dataframe(pending_df[cols_to_show], use_container_width=True)
-        with ac2:
-            st.error(f"**Contracts Expiring Soon ({len(expiring_df)})**")
-            if not expiring_df.empty:
-                cols_to_show = [c for c in ['Visit_ID', 'Client_Name', 'Contract_End_Date', 'Phone_Number', 'Contract_Value'] if c in expiring_df.columns]
-                st.dataframe(expiring_df[cols_to_show], use_container_width=True)
+# Action Alert Expander
+if not pending_df.empty:
+    with st.expander("🚨 Action Required: Pending Service Alerts", expanded=False):
+        st.warning(f"**Services Pending ({len(pending_df)})**")
+        cols_to_show = [c for c in ['Visit_ID', 'Client_Name', 'Product_Name', 'Next_Service_Due_Date', 'Phone_Number'] if c in pending_df.columns]
+        st.dataframe(pending_df[cols_to_show], use_container_width=True)
 
 st.divider()
 
@@ -272,7 +219,6 @@ with tab1:
         with col_left:
             client_name = st.text_input("Client Name *")
             company_name = st.text_input("Company Name")
-            customer_name = st.text_input("Customer Name")
             phone_number = st.text_input("Phone Number")
             address = st.text_area("Client Address")
             
@@ -287,31 +233,27 @@ with tab1:
             technician_name = st.text_input("Technician Name *")
             date_of_visit = st.date_input("Date of Visit", today.date())
             
-            # Product Selection with Defaults
+            # Product Selection
             product_name = st.selectbox(
                 "Product Name *",
                 ["Motorized Rolling Shutter", "Automatic Boom Barrier", "High-Speed Industrial Door", "Sliding Gate / Fire Door", "Other"]
             )
             
-            # Contract Automation Parameters
-            contract_start = st.date_input("Contract Start Date", today.date())
-            contract_end = st.date_input("Contract End Date", (today + pd.Timedelta(days=365)).date())
+            # Service Frequency Options: 2, 3, 4
+            service_freq = st.selectbox("Service Frequency (Visits/Year)", [2, 3, 4], index=2)
             
-            service_freq = st.selectbox("Service Frequency", ["Quarterly (4/yr)", "Monthly (12/yr)", "Bi-Monthly (6/yr)", "Bi-Annual (2/yr)"])
-            
-            # Auto-calculate default Next Due Date based on frequency selection
-            freq_days_map = {"Quarterly (4/yr)": 90, "Monthly (12/yr)": 30, "Bi-Monthly (6/yr)": 60, "Bi-Annual (2/yr)": 180}
+            # Auto-calculate default Next Due Date based on frequency selection (365 / frequency)
+            freq_days_map = {2: 180, 3: 120, 4: 90}
             default_next_due = date_of_visit + datetime.timedelta(days=freq_days_map.get(service_freq, 90))
             next_service_due = st.date_input("Next Service Due Date", default_next_due)
             
             fc1, fc2 = st.columns(2)
             with fc1:
-                total_services = st.number_input("Total Services Included", min_value=1, value=4, step=1)
+                total_services = st.number_input("Total Services Included", min_value=1, value=int(service_freq), step=1)
             with fc2:
                 services_completed = st.number_input("Services Completed To Date", min_value=0, value=1, step=1)
                 
             contract_status = st.selectbox("Contract Status", ["Active", "Inactive", "Expiring Soon", "Pending Service"])
-            contract_value = st.number_input("Contract Value (₹)", min_value=0.0, value=0.0, step=500.0)
             uploaded_photo = st.file_uploader("Upload Job Sheet Photo", type=["jpg", "jpeg", "png"])
         
         remarks = st.text_area("Technician Remarks / Parts Used")
@@ -331,7 +273,6 @@ with tab1:
                     "Visit_ID": auto_id,
                     "Client_Name": client_name,
                     "Company_Name": company_name,
-                    "Customer_Name": customer_name,
                     "Date_of_Visit": str(date_of_visit),
                     "Address": address,
                     "Phone_Number": phone_number,
@@ -339,16 +280,13 @@ with tab1:
                     "Visit_Type": visit_type,
                     "Reason_for_Visit": reason_for_visit,
                     "Product_Name": product_name,
-                    "Contract_Start_Date": str(contract_start),
-                    "Contract_End_Date": str(contract_end),
                     "Service_Frequency": service_freq,
                     "Next_Service_Due_Date": str(next_service_due),
                     "Total_Services_Included": total_services,
                     "Services_Completed": services_completed,
                     "Remarks": remarks,
                     "Job_Sheet_Photo_Base64": base64_photo,
-                    "Contract_Status": contract_status,
-                    "Contract_Value": contract_value
+                    "Contract_Status": contract_status
                 }
                 
                 if save_visit_to_gsheets(sheet, record):
@@ -377,8 +315,8 @@ with tab2:
         if search_visit_id:
             filtered_df = filtered_df[filtered_df['Visit_ID'].astype(str).str.contains(search_visit_id, case=False, na=False)]
 
-        # Display Table excluding raw Base64 image & helper columns
-        display_cols = [c for c in filtered_df.columns if c not in ['Job_Sheet_Photo_Base64', 'Contract_End_Date_DT', 'Next_Service_Due_Date_DT', 'Contract_Value_Num']]
+        # Display Table excluding raw Base64 image & internal helper columns
+        display_cols = [c for c in filtered_df.columns if c not in ['Job_Sheet_Photo_Base64', 'Next_Service_Due_Date_DT']]
         st.dataframe(filtered_df[display_cols], use_container_width=True)
 
         # Detailed Inspection Section
@@ -399,7 +337,6 @@ with tab2:
                     with d_col1:
                         st.markdown(f"**Client Name:** {row.get('Client_Name', 'N/A')}")
                         st.markdown(f"**Company Name:** {row.get('Company_Name', 'N/A')}")
-                        st.markdown(f"**Customer Name:** {row.get('Customer_Name', 'N/A')}")
                         st.markdown(f"**Date of Visit:** {row.get('Date_of_Visit', 'N/A')}")
                         st.markdown(f"**Phone Number:** {row.get('Phone_Number', 'N/A')}")
                         st.markdown(f"**Address:** {row.get('Address', 'N/A')}")
@@ -410,9 +347,7 @@ with tab2:
                         st.markdown(f"**Product Name:** {row.get('Product_Name', 'N/A')}")
                         st.markdown(f"**Contract Status:** {row.get('Contract_Status', 'N/A')}")
                         st.markdown(f"**Next Service Due:** {row.get('Next_Service_Due_Date', 'N/A')}")
-                        st.markdown(f"**Contract End Date:** {row.get('Contract_End_Date', 'N/A')}")
                         st.markdown(f"**Services Progress:** {row.get('Services_Completed', 0)} / {row.get('Total_Services_Included', 0)}")
-                        st.markdown(f"**Contract Value:** ₹{row.get('Contract_Value', 0)}")
                         st.markdown(f"**Remarks:** {row.get('Remarks', 'N/A')}")
                     
                     # Display Photo ONLY for searched Visit ID
