@@ -4,6 +4,7 @@ import datetime
 import base64
 import uuid
 import io
+import os
 from PIL import Image
 import gspread
 from google.oauth2.service_account import Credentials
@@ -12,7 +13,7 @@ from google.oauth2.service_account import Credentials
 # 1. PAGE CONFIGURATION
 # ==========================================
 st.set_page_config(
-    page_title="AMC Field Visit Tracker",
+    page_title="Sidharth Shutter & Automation - AMC Tracker",
     page_icon="🔧",
     layout="wide"
 )
@@ -86,28 +87,45 @@ sheet = get_gspread_client()
 df = fetch_all_visits(sheet)
 
 # ==========================================
-# 3. HEADER & METRIC DASHBOARD
+# 3. BRANDED HEADER & METRIC DASHBOARD
 # ==========================================
-st.title("🔧 AMC Field Visit & Contract Tracker")
+header_col1, header_col2 = st.columns([1, 4])
+
+with header_col1:
+    # Looks for local file 'Company Logo.jpeg' in root directory
+    if os.path.exists("Company Logo.jpeg"):
+        st.image("Company Logo.jpeg", use_container_width=True)
+    elif os.path.exists("Company Logo.jpg"):
+        st.image("Company Logo.jpg", use_container_width=True)
+    elif os.path.exists("Company Logo.png"):
+        st.image("Company Logo.png", use_container_width=True)
+    else:
+        st.title("🔧")
+
+with header_col2:
+    st.title("Sidharth Shutter & Automation")
+    st.subheader("AMC Field Visit & Contract Tracker")
+
 st.caption("Connected to Google Sheets Database")
 
-active_count = len(df[df['Contract_Status'] == 'Active']) if not df.empty and 'Contract_Status' in df.columns else 3
-expiring_count = len(df[df['Contract_Status'] == 'Expiring Soon']) if not df.empty and 'Contract_Status' in df.columns else 2
-pending_count = len(df[df['Contract_Status'] == 'Pending Service']) if not df.empty and 'Contract_Status' in df.columns else 5
+# Compute live metrics with updated status names
+active_count = len(df[df['Contract_Status'] == 'Active']) if not df.empty and 'Contract_Status' in df.columns else 0
+inactive_count = len(df[df['Contract_Status'] == 'Inactive']) if not df.empty and 'Contract_Status' in df.columns else 0
+expiring_count = len(df[df['Contract_Status'] == 'Expiring Soon']) if not df.empty and 'Contract_Status' in df.columns else 0
 
 if not df.empty and 'Contract_Value' in df.columns:
     try:
         total_rev_val = pd.to_numeric(df['Contract_Value'], errors='coerce').sum()
         total_rev_str = f"₹{total_rev_val:,.2f}"
     except Exception:
-        total_rev_str = "₹1,46,500"
+        total_rev_str = "₹0.00"
 else:
-    total_rev_str = "₹1,46,500"
+    total_rev_str = "₹0.00"
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Active Contracts", active_count)
-col2.metric("Expiring Soon", expiring_count)
-col3.metric("Pending Service", pending_count)
+col2.metric("Inactive Contracts", inactive_count)
+col3.metric("Expiring Soon", expiring_count)
 col4.metric("Total Revenue", total_rev_str)
 
 st.divider()
@@ -139,9 +157,11 @@ with tab1:
             technician_name = st.text_input("Technician Name *")
             reason_for_visit = st.text_input("Reason for Visit")
             product_name = st.text_input("Product Name")
+            
+            # Updated Status options as requested
             contract_status = st.selectbox(
                 "Contract Status", 
-                ["Active", "Expiring Soon", "Pending Service", "Expired"]
+                ["Active", "Inactive", "Expiring Soon"]
             )
             contract_value = st.number_input("Contract Value (₹)", min_value=0.0, value=0.0, step=100.0)
             uploaded_photo = st.file_uploader("Upload Job Sheet Photo", type=["jpg", "jpeg", "png"])
@@ -188,13 +208,12 @@ with tab2:
     if df.empty:
         st.info("No records currently stored in Google Sheets.")
     else:
-        # Search & Status Filter Controls
+        # Search & Filter Controls with requested Status options
         f_col1, f_col2 = st.columns([2, 1])
         with f_col1:
             search_visit_id = st.text_input("🔍 Search by Visit ID (e.g., AMC-2026-XXXXX)", "").strip()
         with f_col2:
-            available_statuses = ["All"] + list(df['Contract_Status'].unique()) if 'Contract_Status' in df.columns else ["All"]
-            status_filter = st.selectbox("Filter Status", available_statuses)
+            status_filter = st.selectbox("Filter Status", ["All", "Active", "Inactive", "Expiring Soon"])
 
         # Apply Filters
         filtered_df = df.copy()
@@ -221,7 +240,7 @@ with tab2:
             else:
                 row = exact_match.iloc[0]
                 
-                # Render Full Visit Details Card
+                # Render Detailed Card
                 with st.expander(f"📌 Complete Details for Visit ID: {row['Visit_ID']}", expanded=True):
                     d_col1, d_col2 = st.columns(2)
                     
