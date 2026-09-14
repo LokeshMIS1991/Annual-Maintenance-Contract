@@ -34,7 +34,7 @@ def get_gspread_client():
         client = gspread.authorize(creds)
         spreadsheet_url = st.secrets["gsheets"]["spreadsheet_url"]
         
-        # get_worksheet(0) fetches the first sheet automatically, avoiding tab name errors
+        # get_worksheet(0) fetches the first sheet automatically
         sheet = client.open_by_url(spreadsheet_url).get_worksheet(0)
         return sheet
     else:
@@ -98,11 +98,11 @@ pending_count = len(df[df['Contract_Status'] == 'Pending Service']) if not df.em
 if not df.empty and 'Contract_Value' in df.columns:
     try:
         total_rev_val = pd.to_numeric(df['Contract_Value'], errors='coerce').sum()
-        total_rev_str = f"${total_rev_val:,.2f}"
+        total_rev_str = f"₹{total_rev_val:,.2f}"
     except Exception:
-        total_rev_str = "$146.5k"
+        total_rev_str = "₹1,46,500"
 else:
-    total_rev_str = "$146.5k"
+    total_rev_str = "₹1,46,500"
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Active Contracts", active_count)
@@ -143,7 +143,7 @@ with tab1:
                 "Contract Status", 
                 ["Active", "Expiring Soon", "Pending Service", "Expired"]
             )
-            contract_value = st.number_input("Contract Value ($)", min_value=0.0, value=0.0, step=10.0)
+            contract_value = st.number_input("Contract Value (₹)", min_value=0.0, value=0.0, step=100.0)
             uploaded_photo = st.file_uploader("Upload Job Sheet Photo", type=["jpg", "jpeg", "png"])
         
         remarks = st.text_area("Remarks")
@@ -181,37 +181,77 @@ with tab1:
                     st.cache_resource.clear()
                     st.rerun()
 
-# --- TAB 2: VISIT HISTORY & FILTERS ---
+# --- TAB 2: VISIT HISTORY & SEARCH BY VISIT ID ---
 with tab2:
-    st.subheader("Filter & Inspect Visits")
+    st.subheader("🔍 Visit Search & History")
     
     if df.empty:
         st.info("No records currently stored in Google Sheets.")
     else:
-        available_statuses = ["All"] + list(df['Contract_Status'].unique()) if 'Contract_Status' in df.columns else ["All"]
-        status_filter = st.selectbox("View Option / Filter Status", available_statuses)
+        # Search & Status Filter Controls
+        f_col1, f_col2 = st.columns([2, 1])
+        with f_col1:
+            search_visit_id = st.text_input("🔍 Search by Visit ID (e.g., AMC-2026-XXXXX)", "").strip()
+        with f_col2:
+            available_statuses = ["All"] + list(df['Contract_Status'].unique()) if 'Contract_Status' in df.columns else ["All"]
+            status_filter = st.selectbox("Filter Status", available_statuses)
+
+        # Apply Filters
+        filtered_df = df.copy()
         
-        filtered_df = df if status_filter == "All" else df[df['Contract_Status'] == status_filter]
-        
+        if status_filter != "All":
+            filtered_df = filtered_df[filtered_df['Contract_Status'] == status_filter]
+
+        if search_visit_id:
+            filtered_df = filtered_df[filtered_df['Visit_ID'].astype(str).str.contains(search_visit_id, case=False, na=False)]
+
+        # Display Summary Table (Excluding heavy Base64 image column)
         display_cols = [c for c in filtered_df.columns if c != 'Job_Sheet_Photo_Base64']
         st.dataframe(filtered_df[display_cols], use_container_width=True)
-        
+
+        # --- DETAILED SINGLE VISIT INSPECTION ---
         st.divider()
-        st.subheader("🖼️ View Job Sheet Photo")
-        
-        if 'Job_Sheet_Photo_Base64' in filtered_df.columns:
-            records_with_photo = filtered_df[filtered_df['Job_Sheet_Photo_Base64'].astype(str).str.len() > 10]
+        st.subheader("📋 Detailed Visit Inspection & Job Sheet")
+
+        if search_visit_id:
+            exact_match = df[df['Visit_ID'].astype(str).str.lower() == search_visit_id.lower()]
             
-            if not records_with_photo.empty:
-                selected_id = st.selectbox("Select Visit ID to view uploaded Job Sheet", records_with_photo['Visit_ID'])
-                photo_b64 = records_with_photo[records_with_photo['Visit_ID'] == selected_id]['Job_Sheet_Photo_Base64'].values[0]
-                
-                if photo_b64:
-                    try:
-                        img_data = base64.b64decode(photo_b64)
-                        img = Image.open(io.BytesIO(img_data))
-                        st.image(img, caption=f"Job Sheet for Visit ID: {selected_id}", width=450)
-                    except Exception as e:
-                        st.error(f"Error rendering image: {e}")
+            if exact_match.empty:
+                st.warning(f"No visit record found matching Visit ID: `{search_visit_id}`")
             else:
-                st.caption("No job sheet photos uploaded for current selection.")
+                row = exact_match.iloc[0]
+                
+                # Render Full Visit Details Card
+                with st.expander(f"📌 Complete Details for Visit ID: {row['Visit_ID']}", expanded=True):
+                    d_col1, d_col2 = st.columns(2)
+                    
+                    with d_col1:
+                        st.markdown(f"**Client Name:** {row.get('Client_Name', 'N/A')}")
+                        st.markdown(f"**Company Name:** {row.get('Company_Name', 'N/A')}")
+                        st.markdown(f"**Customer Name:** {row.get('Customer_Name', 'N/A')}")
+                        st.markdown(f"**Date of Visit:** {row.get('Date_of_Visit', 'N/A')}")
+                        st.markdown(f"**Phone Number:** {row.get('Phone_Number', 'N/A')}")
+                        st.markdown(f"**Address:** {row.get('Address', 'N/A')}")
+                        
+                    with d_col2:
+                        st.markdown(f"**Technician Name:** {row.get('Technician_Name', 'N/A')}")
+                        st.markdown(f"**Product Name:** {row.get('Product_Name', 'N/A')}")
+                        st.markdown(f"**Reason for Visit:** {row.get('Reason_for_Visit', 'N/A')}")
+                        st.markdown(f"**Contract Status:** {row.get('Contract_Status', 'N/A')}")
+                        st.markdown(f"**Contract Value:** ₹{row.get('Contract_Value', 0)}")
+                        st.markdown(f"**Remarks:** {row.get('Remarks', 'N/A')}")
+                    
+                    # Render Photo ONLY for this searched Visit ID
+                    photo_b64 = str(row.get('Job_Sheet_Photo_Base64', ''))
+                    if len(photo_b64) > 10:
+                        st.subheader("🖼️ Job Sheet Photo")
+                        try:
+                            img_data = base64.b64decode(photo_b64)
+                            img = Image.open(io.BytesIO(img_data))
+                            st.image(img, caption=f"Job Sheet Photo for {row['Visit_ID']}", width=450)
+                        except Exception as e:
+                            st.error(f"Error rendering image: {e}")
+                    else:
+                        st.info("No job sheet photo was uploaded for this visit.")
+        else:
+            st.caption("👈 Enter a specific **Visit ID** in the search bar above to view complete visit details and its associated Job Sheet photo.")
