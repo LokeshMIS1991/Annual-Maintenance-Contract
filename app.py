@@ -97,27 +97,15 @@ def get_gspread_client():
 def fetch_all_visits(sheet):
     """Retrieves all records from Google Sheets into a DataFrame safely."""
     try:
-        # Expected header order matching the sheet structure
-        expected_cols = [
-            "Visit_ID", "Client_Name", "Company_Name", "Date_of_Visit", 
-            "Address", "Phone_Number", "Technician_Name", "Visit_Type", 
-            "Reason_for_Visit", "Product_Name", "Service_Frequency", 
-            "Next_Service_Due_Date", "Total_Services_Included", 
-            "Services_Completed", "Remarks", "Job_Sheet_Photo_Base64", "Contract_Status"
-        ]
-        
-        # Read raw data values to avoid duplicate header dict errors
         all_values = sheet.get_all_values()
         if not all_values or len(all_values) < 2:
-            return pd.DataFrame(columns=expected_cols)
+            return pd.DataFrame()
         
-        # Use row 1 as headers, but drop duplicates automatically
         headers = all_values[0]
         data = all_values[1:]
         
         df = pd.DataFrame(data, columns=headers)
-        
-        # Deduplicate column names if Google Sheet has duplicate columns
+        # Remove duplicate column headers if any exist
         df = df.loc[:, ~df.columns.duplicated()]
         return df
 
@@ -144,7 +132,7 @@ def generate_visit_id():
 sheet = get_gspread_client()
 df = fetch_all_visits(sheet)
 
-# Ensure essential numerical types on data read
+# Ensure numeric conversions for calculations
 if not df.empty:
     df['Total_Services_Included'] = pd.to_numeric(df.get('Total_Services_Included', 0), errors='coerce').fillna(0).astype(int)
     df['Services_Completed'] = pd.to_numeric(df.get('Services_Completed', 0), errors='coerce').fillna(0).astype(int)
@@ -183,12 +171,10 @@ if not df.empty:
     else:
         df['Next_Service_Due_Date_DT'] = pd.NaT
 
-    # Status Counts
     active_count = len(df[df['Contract_Status'] == 'Active']) if 'Contract_Status' in df.columns else 0
     inactive_count = len(df[df['Contract_Status'] == 'Inactive']) if 'Contract_Status' in df.columns else 0
     expiring_count = len(df[df['Contract_Status'] == 'Expiring Soon']) if 'Contract_Status' in df.columns else 0
 
-    # Auto-flag Pending Services (Due Date <= Today or Status == Pending Service OR Pending_Services > 0)
     pending_df = df[
         (df.get('Contract_Status') == 'Pending Service') | 
         (df['Pending_Services'] > 0) |
@@ -196,7 +182,6 @@ if not df.empty:
          (df['Next_Service_Due_Date_DT'] <= today))
     ].copy()
     
-    # Keep only the latest record per client to calculate accurate pending counts
     if not pending_df.empty and 'Client_Name' in pending_df.columns:
         latest_pending_per_client = pending_df.sort_values('Date_of_Visit').groupby(['Client_Name', 'Product_Name']).last().reset_index()
     else:
@@ -214,7 +199,7 @@ else:
     active_count, inactive_count, expiring_count, pending_count, breakdown_count = 0, 0, 0, 0, 0
     pending_df, breakdown_df, latest_pending_per_client = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-# Main Metrics
+# Main Metrics Cards
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Active Contracts", active_count)
 c2.metric("Clients Pending Services", pending_count)
@@ -223,7 +208,7 @@ c4.metric("Breakdown Calls", breakdown_count)
 
 st.write("")
 
-# Action Alert Expander (Per-Client Pending Breakdown)
+# Action Alert Expander
 if not latest_pending_per_client.empty:
     with st.expander("🚨 Action Required: Client Pending Service Breakdown", expanded=False):
         st.warning(f"**Clients with Remaining Pending Visits ({len(latest_pending_per_client)})**")
@@ -254,22 +239,18 @@ with tab1:
     
     col_left, col_right = st.columns(2)
     
-    # Extract Client list for quick lookup automation
-    existing_clients = sorted(df['Client_Name'].dropna().unique().tolist()) if not df.empty and 'Client_Name' in df.columns else []
-    
     with col_left:
-        client_selection_mode = st.radio("Client Input Mode", ["Existing Client", "New Client"], horizontal=True)
+        # Mandatory Manual Text Input for Client Name
+        client_name = st.text_input("Client Name *", placeholder="Enter client/customer name")
         
-        if client_selection_mode == "Existing Client" and existing_clients:
-            client_name = st.selectbox("Select Client Name *", existing_clients)
-            client_records = df[df['Client_Name'] == client_name] if not df.empty else pd.DataFrame()
-            
-            default_company = client_records['Company_Name'].iloc[-1] if not client_records.empty and 'Company_Name' in client_records.columns else ""
-            default_phone = client_records['Phone_Number'].iloc[-1] if not client_records.empty and 'Phone_Number' in client_records.columns else ""
-            default_address = client_records['Address'].iloc[-1] if not client_records.empty and 'Address' in client_records.columns else ""
-        else:
-            client_name = st.text_input("Client Name *")
-            default_company, default_phone, default_address = "", "", ""
+        # Auto-fill company/address/phone details if client exists in records
+        default_company, default_phone, default_address = "", "", ""
+        if not df.empty and client_name.strip() and 'Client_Name' in df.columns:
+            matched_client = df[df['Client_Name'].astype(str).str.strip().str.lower() == client_name.strip().lower()]
+            if not matched_client.empty:
+                default_company = matched_client['Company_Name'].iloc[-1] if 'Company_Name' in matched_client.columns else ""
+                default_phone = matched_client['Phone_Number'].iloc[-1] if 'Phone_Number' in matched_client.columns else ""
+                default_address = matched_client['Address'].iloc[-1] if 'Address' in matched_client.columns else ""
 
         company_name = st.text_input("Company Name", value=default_company)
         phone_number = st.text_input("Phone Number", value=default_phone)
@@ -294,10 +275,11 @@ with tab1:
         service_freq = st.selectbox("Service Frequency (Visits/Year)", [2, 3, 4], index=2)
         total_services = int(service_freq)
         
-        # Calculate Automated Progress Lookup based on Client + Product
+        # Calculate Client-Specific Progress Lookup
         prev_completed = 0
-        if not df.empty and client_name and 'Client_Name' in df.columns and 'Product_Name' in df.columns:
-            matched = df[(df['Client_Name'].str.lower() == client_name.lower()) & (df['Product_Name'] == product_name)]
+        if not df.empty and client_name.strip() and 'Client_Name' in df.columns and 'Product_Name' in df.columns:
+            matched = df[(df['Client_Name'].astype(str).str.strip().str.lower() == client_name.strip().lower()) & 
+                         (df['Product_Name'] == product_name)]
             if not matched.empty:
                 prev_completed = int(matched['Services_Completed'].iloc[-1])
         
@@ -305,9 +287,13 @@ with tab1:
         if auto_completed > total_services:
             auto_completed = total_services
             
-        auto_pending = total_services - auto_completed
+        auto_pending = max(0, total_services - auto_completed)
         
-        st.write(f"📊 **Automated Progress Status:** Completed `{auto_completed}` of `{total_services}` services (`{auto_pending}` Pending)")
+        # Display specific status for entered client
+        if client_name.strip():
+            st.info(f"📊 **Automated Progress Status for {client_name.strip()}:** Completed `{auto_completed}` of `{total_services}` services (`{auto_pending}` Pending)")
+        else:
+            st.caption("👈 Enter a Client Name on the left to view their automated service progress status.")
         
         freq_days_map = {2: 180, 3: 120, 4: 90}
         default_next_due = date_of_visit + datetime.timedelta(days=freq_days_map.get(service_freq, 90))
@@ -319,7 +305,7 @@ with tab1:
     remarks = st.text_area("Technician Remarks / Parts Used")
     
     if st.button("Save Record to Google Sheets"):
-        if not client_name or not technician_name:
+        if not client_name.strip() or not technician_name.strip():
             st.warning("⚠️ Client Name and Technician Name are required!")
         else:
             base64_photo = ""
@@ -329,12 +315,12 @@ with tab1:
             
             record = {
                 "Visit_ID": auto_id,
-                "Client_Name": client_name,
+                "Client_Name": client_name.strip(),
                 "Company_Name": company_name,
                 "Date_of_Visit": str(date_of_visit),
                 "Address": address,
                 "Phone_Number": phone_number,
-                "Technician_Name": technician_name,
+                "Technician_Name": technician_name.strip(),
                 "Visit_Type": visit_type,
                 "Reason_for_Visit": reason_for_visit,
                 "Product_Name": product_name,
@@ -348,7 +334,7 @@ with tab1:
             }
             
             if save_visit_to_gsheets(sheet, record):
-                st.success(f"✅ Visit `{auto_id}` registered! ({auto_completed}/{total_services} Completed - {auto_pending} Pending)")
+                st.success(f"✅ Visit `{auto_id}` registered for {client_name.strip()}! ({auto_completed}/{total_services} Completed - {auto_pending} Pending)")
                 st.cache_resource.clear()
                 st.rerun()
 
@@ -406,7 +392,7 @@ with tab2:
                         st.markdown(f"**Product Name:** {row.get('Product_Name', 'N/A')}")
                         st.markdown(f"**Contract Status:** {row.get('Contract_Status', 'N/A')}")
                         st.markdown(f"**Next Service Due:** {row.get('Next_Service_Due_Date', 'N/A')}")
-                        st.markdown(f"**Services Breakdown:** {comp} Completed / {pend} Pending (Total {tot})")
+                        st.markdown(f"**Services Breakdown:** Completed {comp} of {tot} services ({pend} Pending)")
                         st.markdown(f"**Remarks:** {row.get('Remarks', 'N/A')}")
                     
                     photo_b64 = str(row.get('Job_Sheet_Photo_Base64', ''))
