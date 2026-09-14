@@ -10,7 +10,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # ==========================================
-# 1. PAGE CONFIGURATION & CUSTOM BRANDING CSS
+# 1. PAGE CONFIGURATION & CUSTOM CSS
 # ==========================================
 st.set_page_config(
     page_title="Annual Maintenance Contract Tracker",
@@ -18,21 +18,16 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS matching Sidharth Shutter & Automation Logo (Navy Blue & Emerald Green accents)
+# Custom Corporate CSS matching Sidharth Shutter & Automation Logo
 st.markdown("""
 <style>
-    /* Main Background & Fonts */
     .stApp {
         background-color: #F8FAFC;
     }
-    
-    /* Headers & Branding Colors */
     h1, h2, h3 {
         color: #0F2C59 !important;
         font-weight: 700 !important;
     }
-    
-    /* Primary Buttons */
     .stButton > button {
         background: linear-gradient(135deg, #0F2C59 0%, #1E56A0 100%) !important;
         color: white !important;
@@ -46,8 +41,6 @@ st.markdown("""
         background: linear-gradient(135deg, #1E56A0 0%, #0F2C59 100%) !important;
         box-shadow: 0 4px 12px rgba(15, 44, 89, 0.25) !important;
     }
-
-    /* Metric KPI Card Styling */
     [data-testid="stMetric"] {
         background-color: #FFFFFF !important;
         border-left: 5px solid #10B981 !important;
@@ -63,8 +56,6 @@ st.markdown("""
         color: #0F2C59 !important;
         font-weight: 800 !important;
     }
-
-    /* Tabs Styling */
     .stTabs [data-baseweb="tab-list"] {
         gap: 12px;
     }
@@ -78,11 +69,6 @@ st.markdown("""
     .stTabs [aria-selected="true"] {
         background-color: #0F2C59 !important;
         color: white !important;
-    }
-
-    /* Info & Alert Boxes */
-    .stAlert {
-        border-radius: 8px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -104,7 +90,7 @@ def get_gspread_client():
         client = gspread.authorize(creds)
         spreadsheet_url = st.secrets["gsheets"]["spreadsheet_url"]
         
-        # get_worksheet(0) fetches the first sheet automatically
+        # Uses first worksheet to avoid tab name errors
         sheet = client.open_by_url(spreadsheet_url).get_worksheet(0)
         return sheet
     else:
@@ -112,7 +98,7 @@ def get_gspread_client():
         st.stop()
 
 def fetch_all_visits(sheet):
-    """Retrieves all records from the Google Sheet into a DataFrame."""
+    """Retrieves all records from Google Sheets into a DataFrame."""
     try:
         data = sheet.get_all_records()
         df = pd.DataFrame(data)
@@ -122,25 +108,10 @@ def fetch_all_visits(sheet):
         return pd.DataFrame()
 
 def save_visit_to_gsheets(sheet, record_dict):
-    """Appends a new record row to the Google Sheet."""
+    """Appends dynamic record fields to the Google Sheet."""
     try:
-        row = [
-            record_dict["Visit_ID"],
-            record_dict["Client_Name"],
-            record_dict["Company_Name"],
-            record_dict["Customer_Name"],
-            str(record_dict["Date_of_Visit"]),
-            record_dict["Address"],
-            record_dict["Phone_Number"],
-            record_dict["Technician_Name"],
-            record_dict["Reason_for_Visit"],
-            record_dict["Product_Name"],
-            record_dict["Remarks"],
-            record_dict["Job_Sheet_Photo_Base64"],
-            record_dict["Contract_Status"],
-            record_dict["Contract_Value"],
-            datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        ]
+        headers = sheet.row_values(1)
+        row = [str(record_dict.get(h, "")) for h in headers]
         sheet.append_row(row)
         return True
     except Exception as e:
@@ -156,7 +127,7 @@ sheet = get_gspread_client()
 df = fetch_all_visits(sheet)
 
 # ==========================================
-# 3. BRANDED HEADER (LOGO ON THE RIGHT SIDE)
+# 3. BRANDED HEADER (LOGO RIGHT ALIGNED)
 # ==========================================
 header_title_col, header_logo_col = st.columns([3, 1])
 
@@ -165,7 +136,6 @@ with header_title_col:
     st.markdown("<p style='color: #475569; font-size: 1.1rem; margin-top: -10px;'>Sidharth Shutter & Automation — Service Portal</p>", unsafe_allow_html=True)
 
 with header_logo_col:
-    # Display logo aligned to the right side
     logo_path = None
     for ext in ["Company Logo.jpeg", "Company Logo.jpg", "Company Logo.png"]:
         if os.path.exists(ext):
@@ -178,67 +148,145 @@ with header_logo_col:
 st.divider()
 
 # ==========================================
-# 4. METRIC DASHBOARD
+# 4. AUTOMATED BUSINESS METRICS & DASHBOARD
 # ==========================================
-active_count = len(df[df['Contract_Status'] == 'Active']) if not df.empty and 'Contract_Status' in df.columns else 0
-inactive_count = len(df[df['Contract_Status'] == 'Inactive']) if not df.empty and 'Contract_Status' in df.columns else 0
-expiring_count = len(df[df['Contract_Status'] == 'Expiring Soon']) if not df.empty and 'Contract_Status' in df.columns else 0
+today = datetime.date.today()
 
-if not df.empty and 'Contract_Value' in df.columns:
-    try:
+# Process automated expiry & due logic
+if not df.empty:
+    if 'Contract_End_Date' in df.columns:
+        df['Contract_End_Date_DT'] = pd.to_datetime(df['Contract_End_Date'], errors='coerce').dt.date
+    else:
+        df['Contract_End_Date_DT'] = None
+
+    if 'Next_Service_Due_Date' in df.columns:
+        df['Next_Service_Due_Date_DT'] = pd.to_datetime(df['Next_Service_Due_Date'], errors='coerce').dt.date
+    else:
+        df['Next_Service_Due_Date_DT'] = None
+
+    # Calculate Statuses
+    active_count = len(df[df['Contract_Status'] == 'Active']) if 'Contract_Status' in df.columns else 0
+    inactive_count = len(df[df['Contract_Status'] == 'Inactive']) if 'Contract_Status' in df.columns else 0
+    
+    # Auto-flag Expiring Soon (End Date within 30 days)
+    expiring_df = df[
+        (df['Contract_Status'] == 'Expiring Soon') | 
+        ((df['Contract_End_Date_DT'].notna()) & (df['Contract_End_Date_DT'] >= today) & (df['Contract_End_Date_DT'] <= today + datetime.timedelta(days=30)))
+    ]
+    expiring_count = len(expiring_df)
+
+    # Auto-flag Pending Services (Due Date <= Today or Status == Pending Service)
+    pending_df = df[
+        (df['Contract_Status'] == 'Pending Service') | 
+        ((df['Next_Service_Due_Date_DT'].notna()) & (df['Next_Service_Due_Date_DT'] <= today))
+    ]
+    pending_count = len(pending_df)
+
+    # Active Breakdown Calls
+    breakdown_df = df[df.get('Visit_Type', pd.Series()) == 'Breakdown Call / Emergency Repair'] if 'Visit_Type' in df.columns else pd.DataFrame()
+    breakdown_count = len(breakdown_df)
+
+    # Total Revenue calculation
+    if 'Contract_Value' in df.columns:
         total_rev_val = pd.to_numeric(df['Contract_Value'], errors='coerce').sum()
         total_rev_str = f"₹{total_rev_val:,.2f}"
-    except Exception:
+    else:
         total_rev_str = "₹0.00"
 else:
+    active_count, inactive_count, expiring_count, pending_count, breakdown_count = 0, 0, 0, 0, 0
     total_rev_str = "₹0.00"
+    expiring_df, pending_df, breakdown_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Active Contracts", active_count)
-col2.metric("Inactive Contracts", inactive_count)
-col3.metric("Expiring Soon", expiring_count)
-col4.metric("Total Revenue", total_rev_str)
+# Display Dashboard Cards
+c1, c2, c3, c4, c5 = st.columns(5)
+c1.metric("Active Contracts", active_count)
+c2.metric("Pending Services", pending_count)
+c3.metric("Expiring Soon", expiring_count)
+c4.metric("Breakdown Calls", breakdown_count)
+c5.metric("Total Revenue", total_rev_str)
 
 st.write("")
+
+# Action Alert Expanders
+if not pending_df.empty or not expiring_df.empty:
+    with st.expander("🚨 Action Required: Service & Expiry Alerts", expanded=False):
+        ac1, ac2 = st.columns(2)
+        with ac1:
+            st.warning(f"**Services Pending ({len(pending_df)})**")
+            if not pending_df.empty:
+                cols_to_show = [c for c in ['Visit_ID', 'Client_Name', 'Product_Name', 'Next_Service_Due_Date', 'Phone_Number'] if c in pending_df.columns]
+                st.dataframe(pending_df[cols_to_show], use_container_width=True)
+        with ac2:
+            st.error(f"**Contracts Expiring Soon ({len(expiring_df)})**")
+            if not expiring_df.empty:
+                cols_to_show = [c for c in ['Visit_ID', 'Client_Name', 'Contract_End_Date', 'Phone_Number'] if c in expiring_df.columns]
+                st.dataframe(expiring_df[cols_to_show], use_container_width=True)
+
+st.divider()
 
 # ==========================================
 # 5. ENTRY FORM & RECORDS HISTORY TABS
 # ==========================================
 tab1, tab2 = st.tabs(["📝 Add New Field Visit", "📊 Visit History & Records"])
 
-# --- TAB 1: FORM ENTRY ---
+# --- TAB 1: AUTOMATED FORM ENTRY ---
 with tab1:
-    st.subheader("Register New AMC Field Visit")
+    st.subheader("Register AMC Visit / Emergency Call")
     
     auto_id = generate_visit_id()
     st.info(f"**Automated Visit ID:** `{auto_id}`")
     
     with st.form("amc_visit_form", clear_on_submit=True):
-        c1, c2 = st.columns(2)
+        col_left, col_right = st.columns(2)
         
-        with c1:
+        with col_left:
             client_name = st.text_input("Client Name *")
             company_name = st.text_input("Company Name")
             customer_name = st.text_input("Customer Name")
-            date_of_visit = st.date_input("Date of Visit", datetime.date.today())
             phone_number = st.text_input("Phone Number")
             address = st.text_area("Client Address")
             
-        with c2:
-            technician_name = st.text_input("Technician Name *")
-            reason_for_visit = st.text_input("Reason for Visit")
-            product_name = st.text_input("Product Name")
-            
-            contract_status = st.selectbox(
-                "Contract Status", 
-                ["Active", "Inactive", "Expiring Soon"]
+            st.markdown("---")
+            visit_type = st.selectbox(
+                "Visit Type *",
+                ["Preventive Maintenance (PM)", "Breakdown Call / Emergency Repair", "Installation / Retrofit"]
             )
-            contract_value = st.number_input("Contract Value (₹)", min_value=0.0, value=0.0, step=100.0)
+            reason_for_visit = st.text_input("Reason / Reported Issue", value="Routine Maintenance")
+            
+        with col_right:
+            technician_name = st.text_input("Technician Name *")
+            date_of_visit = st.date_input("Date of Visit", today)
+            
+            # Product Selection with Defaults
+            product_name = st.selectbox(
+                "Product Name *",
+                ["Motorized Rolling Shutter", "Automatic Boom Barrier", "High-Speed Industrial Door", "Sliding Gate / Fire Door", "Other"]
+            )
+            
+            # Contract Automation Parameters
+            contract_start = st.date_input("Contract Start Date", today)
+            contract_end = st.date_input("Contract End Date", today + datetime.timedelta(days=365))
+            
+            service_freq = st.selectbox("Service Frequency", ["Quarterly (4/yr)", "Monthly (12/yr)", "Bi-Monthly (6/yr)", "Bi-Annual (2/yr)"])
+            
+            # Auto-calculate default Next Due Date based on frequency selection
+            freq_days_map = {"Quarterly (4/yr)": 90, "Monthly (12/yr)": 30, "Bi-Monthly (6/yr)": 60, "Bi-Annual (2/yr)": 180}
+            default_next_due = date_of_visit + datetime.timedelta(days=freq_days_map.get(service_freq, 90))
+            next_service_due = st.date_input("Next Service Due Date", default_next_due)
+            
+            fc1, fc2 = st.columns(2)
+            with fc1:
+                total_services = st.number_input("Total Services Included", min_value=1, value=4, step=1)
+            with fc2:
+                services_completed = st.number_input("Services Completed To Date", min_value=0, value=1, step=1)
+                
+            contract_status = st.selectbox("Contract Status", ["Active", "Inactive", "Expiring Soon", "Pending Service"])
+            contract_value = st.number_input("Contract Value (₹)", min_value=0.0, value=0.0, step=500.0)
             uploaded_photo = st.file_uploader("Upload Job Sheet Photo", type=["jpg", "jpeg", "png"])
         
-        remarks = st.text_area("Remarks")
+        remarks = st.text_area("Technician Remarks / Parts Used")
         
-        submitted = st.form_submit_button("Save Visit Entry")
+        submitted = st.form_submit_button("Save Record to Google Sheets")
         
         if submitted:
             if not client_name or not technician_name:
@@ -254,12 +302,19 @@ with tab1:
                     "Client_Name": client_name,
                     "Company_Name": company_name,
                     "Customer_Name": customer_name,
-                    "Date_of_Visit": date_of_visit,
+                    "Date_of_Visit": str(date_of_visit),
                     "Address": address,
                     "Phone_Number": phone_number,
                     "Technician_Name": technician_name,
+                    "Visit_Type": visit_type,
                     "Reason_for_Visit": reason_for_visit,
                     "Product_Name": product_name,
+                    "Contract_Start_Date": str(contract_start),
+                    "Contract_End_Date": str(contract_end),
+                    "Service_Frequency": service_freq,
+                    "Next_Service_Due_Date": str(next_service_due),
+                    "Total_Services_Included": total_services,
+                    "Services_Completed": services_completed,
                     "Remarks": remarks,
                     "Job_Sheet_Photo_Base64": base64_photo,
                     "Contract_Status": contract_status,
@@ -267,25 +322,23 @@ with tab1:
                 }
                 
                 if save_visit_to_gsheets(sheet, record):
-                    st.success(f"✅ Visit `{auto_id}` successfully saved to Google Sheets!")
+                    st.success(f"✅ Visit `{auto_id}` successfully registered!")
                     st.cache_resource.clear()
                     st.rerun()
 
-# --- TAB 2: VISIT HISTORY & SEARCH BY VISIT ID ---
+# --- TAB 2: HISTORY & SEARCH BY VISIT ID ---
 with tab2:
-    st.subheader("🔍 Visit Search & History")
+    st.subheader("🔍 Visit Search & Historical Records")
     
     if df.empty:
         st.info("No records currently stored in Google Sheets.")
     else:
-        # Search & Filter Controls
         f_col1, f_col2 = st.columns([2, 1])
         with f_col1:
             search_visit_id = st.text_input("🔍 Search by Visit ID (e.g., AMC-2026-XXXXX)", "").strip()
         with f_col2:
-            status_filter = st.selectbox("Filter Status", ["All", "Active", "Inactive", "Expiring Soon"])
+            status_filter = st.selectbox("Filter Status", ["All", "Active", "Inactive", "Expiring Soon", "Pending Service"])
 
-        # Apply Filters
         filtered_df = df.copy()
         
         if status_filter != "All":
@@ -294,8 +347,8 @@ with tab2:
         if search_visit_id:
             filtered_df = filtered_df[filtered_df['Visit_ID'].astype(str).str.contains(search_visit_id, case=False, na=False)]
 
-        # Summary Table View
-        display_cols = [c for c in filtered_df.columns if c != 'Job_Sheet_Photo_Base64']
+        # Display Table excluding raw Base64 image
+        display_cols = [c for c in filtered_df.columns if c not in ['Job_Sheet_Photo_Base64', 'Contract_End_Date_DT', 'Next_Service_Due_Date_DT']]
         st.dataframe(filtered_df[display_cols], use_container_width=True)
 
         # Detailed Inspection Section
@@ -320,19 +373,22 @@ with tab2:
                         st.markdown(f"**Date of Visit:** {row.get('Date_of_Visit', 'N/A')}")
                         st.markdown(f"**Phone Number:** {row.get('Phone_Number', 'N/A')}")
                         st.markdown(f"**Address:** {row.get('Address', 'N/A')}")
+                        st.markdown(f"**Visit Type:** {row.get('Visit_Type', 'N/A')}")
                         
                     with d_col2:
                         st.markdown(f"**Technician Name:** {row.get('Technician_Name', 'N/A')}")
                         st.markdown(f"**Product Name:** {row.get('Product_Name', 'N/A')}")
-                        st.markdown(f"**Reason for Visit:** {row.get('Reason_for_Visit', 'N/A')}")
                         st.markdown(f"**Contract Status:** {row.get('Contract_Status', 'N/A')}")
+                        st.markdown(f"**Next Service Due:** {row.get('Next_Service_Due_Date', 'N/A')}")
+                        st.markdown(f"**Contract End Date:** {row.get('Contract_End_Date', 'N/A')}")
+                        st.markdown(f"**Services Progress:** {row.get('Services_Completed', 0)} / {row.get('Total_Services_Included', 0)}")
                         st.markdown(f"**Contract Value:** ₹{row.get('Contract_Value', 0)}")
                         st.markdown(f"**Remarks:** {row.get('Remarks', 'N/A')}")
                     
-                    # Job Sheet Photo Display
+                    # Display Photo ONLY for searched Visit ID
                     photo_b64 = str(row.get('Job_Sheet_Photo_Base64', ''))
                     if len(photo_b64) > 10:
-                        st.subheader("🖼️ Job Sheet Photo")
+                        st.subheader("🖼️ Uploaded Job Sheet Photo")
                         try:
                             img_data = base64.b64decode(photo_b64)
                             img = Image.open(io.BytesIO(img_data))
