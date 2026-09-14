@@ -150,19 +150,20 @@ st.divider()
 # ==========================================
 # 4. AUTOMATED BUSINESS METRICS & DASHBOARD
 # ==========================================
-today = datetime.date.today()
+today = pd.Timestamp.today().normalize()
 
-# Process automated expiry & due logic
+# Process automated expiry & due logic safely
 if not df.empty:
+    # Ensure date columns exist and are parsed as Datetime Timestamps
     if 'Contract_End_Date' in df.columns:
-        df['Contract_End_Date_DT'] = pd.to_datetime(df['Contract_End_Date'], errors='coerce').dt.date
+        df['Contract_End_Date_DT'] = pd.to_datetime(df['Contract_End_Date'], errors='coerce')
     else:
-        df['Contract_End_Date_DT'] = None
+        df['Contract_End_Date_DT'] = pd.NaT
 
     if 'Next_Service_Due_Date' in df.columns:
-        df['Next_Service_Due_Date_DT'] = pd.to_datetime(df['Next_Service_Due_Date'], errors='coerce').dt.date
+        df['Next_Service_Due_Date_DT'] = pd.to_datetime(df['Next_Service_Due_Date'], errors='coerce')
     else:
-        df['Next_Service_Due_Date_DT'] = None
+        df['Next_Service_Due_Date_DT'] = pd.NaT
 
     # Calculate Statuses
     active_count = len(df[df['Contract_Status'] == 'Active']) if 'Contract_Status' in df.columns else 0
@@ -170,35 +171,32 @@ if not df.empty:
     
     # Auto-flag Expiring Soon (End Date within 30 days)
     expiring_df = df[
-        (df['Contract_Status'] == 'Expiring Soon') | 
-        ((df['Contract_End_Date_DT'].notna()) & (df['Contract_End_Date_DT'] >= today) & (df['Contract_End_Date_DT'] <= today + datetime.timedelta(days=30)))
+        (df.get('Contract_Status') == 'Expiring Soon') | 
+        ((df['Contract_End_Date_DT'].notna()) & 
+         (df['Contract_End_Date_DT'] >= today) & 
+         (df['Contract_End_Date_DT'] <= today + pd.Timedelta(days=30)))
     ]
     expiring_count = len(expiring_df)
 
     # Auto-flag Pending Services (Due Date <= Today or Status == Pending Service)
     pending_df = df[
-        (df['Contract_Status'] == 'Pending Service') | 
-        ((df['Next_Service_Due_Date_DT'].notna()) & (df['Next_Service_Due_Date_DT'] <= today))
+        (df.get('Contract_Status') == 'Pending Service') | 
+        ((df['Next_Service_Due_Date_DT'].notna()) & 
+         (df['Next_Service_Due_Date_DT'] <= today))
     ]
     pending_count = len(pending_df)
 
     # Active Breakdown Calls
-    breakdown_df = df[df.get('Visit_Type', pd.Series()) == 'Breakdown Call / Emergency Repair'] if 'Visit_Type' in df.columns else pd.DataFrame()
+    if 'Visit_Type' in df.columns:
+        breakdown_df = df[df['Visit_Type'] == 'Breakdown Call / Emergency Repair']
+    else:
+        breakdown_df = pd.DataFrame()
     breakdown_count = len(breakdown_df)
 
 else:
-    active_count, inactive_count, expiring_count, pending_count, breakdown_count = 0, 0, 0, 0
+    active_count, inactive_count, expiring_count, pending_count, breakdown_count = 0, 0, 0, 0, 0
     expiring_df, pending_df, breakdown_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
-
-# Display Dashboard Cards (Revenue Removed)
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Active Contracts", active_count)
-c2.metric("Pending Services", pending_count)
-c3.metric("Expiring Soon", expiring_count)
-c4.metric("Breakdown Calls", breakdown_count)
-
-st.write("")
-
+    
 # Action Alert Expanders
 if not pending_df.empty or not expiring_df.empty:
     with st.expander("🚨 Action Required: Service & Expiry Alerts", expanded=False):
