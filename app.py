@@ -195,6 +195,7 @@ if not df.empty:
     # Total & Active Revenue Calculations
     if 'Contract_Value' in df.columns:
         numeric_rev = pd.to_numeric(df['Contract_Value'], errors='coerce').fillna(0)
+        df['Contract_Value_Num'] = numeric_rev
         total_rev_val = numeric_rev.sum()
         active_rev_val = numeric_rev[df['Contract_Status'] == 'Active'].sum()
         avg_contract_val = numeric_rev[numeric_rev > 0].mean() if len(numeric_rev[numeric_rev > 0]) > 0 else 0
@@ -226,8 +227,12 @@ with st.expander("💰 Financial Overview & Additional Details", expanded=False)
     r1.metric("Active Contracts Value", active_rev_str)
     r2.metric("Average Contract Value", avg_rev_str)
     
-    if not df.empty and 'Product_Name' in df.columns and 'Contract_Value' in df.columns:
-        top_product = df.groupby('Product_Name')['Contract_Value'].sum().idxmax()
+    if not df.empty and 'Product_Name' in df.columns and 'Contract_Value_Num' in df.columns:
+        product_totals = df.groupby('Product_Name')['Contract_Value_Num'].sum()
+        if not product_totals.empty and product_totals.max() > 0:
+            top_product = product_totals.idxmax()
+        else:
+            top_product = "N/A"
         r3.metric("Top Revenue Product", top_product)
     else:
         r3.metric("Top Revenue Product", "N/A")
@@ -280,7 +285,7 @@ with tab1:
             
         with col_right:
             technician_name = st.text_input("Technician Name *")
-            date_of_visit = st.date_input("Date of Visit", today)
+            date_of_visit = st.date_input("Date of Visit", today.date())
             
             # Product Selection with Defaults
             product_name = st.selectbox(
@@ -289,8 +294,8 @@ with tab1:
             )
             
             # Contract Automation Parameters
-            contract_start = st.date_input("Contract Start Date", today)
-            contract_end = st.date_input("Contract End Date", today + pd.Timedelta(days=365))
+            contract_start = st.date_input("Contract Start Date", today.date())
+            contract_end = st.date_input("Contract End Date", (today + pd.Timedelta(days=365)).date())
             
             service_freq = st.selectbox("Service Frequency", ["Quarterly (4/yr)", "Monthly (12/yr)", "Bi-Monthly (6/yr)", "Bi-Annual (2/yr)"])
             
@@ -372,8 +377,8 @@ with tab2:
         if search_visit_id:
             filtered_df = filtered_df[filtered_df['Visit_ID'].astype(str).str.contains(search_visit_id, case=False, na=False)]
 
-        # Display Table excluding raw Base64 image
-        display_cols = [c for c in filtered_df.columns if c not in ['Job_Sheet_Photo_Base64', 'Contract_End_Date_DT', 'Next_Service_Due_Date_DT']]
+        # Display Table excluding raw Base64 image & helper columns
+        display_cols = [c for c in filtered_df.columns if c not in ['Job_Sheet_Photo_Base64', 'Contract_End_Date_DT', 'Next_Service_Due_Date_DT', 'Contract_Value_Num']]
         st.dataframe(filtered_df[display_cols], use_container_width=True)
 
         # Detailed Inspection Section
