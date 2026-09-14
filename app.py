@@ -154,7 +154,6 @@ today = pd.Timestamp.today().normalize()
 
 # Process automated expiry & due logic safely
 if not df.empty:
-    # Ensure date columns exist and are parsed as Datetime Timestamps
     if 'Contract_End_Date' in df.columns:
         df['Contract_End_Date_DT'] = pd.to_datetime(df['Contract_End_Date'], errors='coerce')
     else:
@@ -193,10 +192,46 @@ if not df.empty:
         breakdown_df = pd.DataFrame()
     breakdown_count = len(breakdown_df)
 
+    # Total & Active Revenue Calculations
+    if 'Contract_Value' in df.columns:
+        numeric_rev = pd.to_numeric(df['Contract_Value'], errors='coerce').fillna(0)
+        total_rev_val = numeric_rev.sum()
+        active_rev_val = numeric_rev[df['Contract_Status'] == 'Active'].sum()
+        avg_contract_val = numeric_rev[numeric_rev > 0].mean() if len(numeric_rev[numeric_rev > 0]) > 0 else 0
+        
+        total_rev_str = f"₹{total_rev_val:,.2f}"
+        active_rev_str = f"₹{active_rev_val:,.2f}"
+        avg_rev_str = f"₹{avg_contract_val:,.2f}"
+    else:
+        total_rev_str, active_rev_str, avg_rev_str = "₹0.00", "₹0.00", "₹0.00"
+
 else:
     active_count, inactive_count, expiring_count, pending_count, breakdown_count = 0, 0, 0, 0, 0
+    total_rev_str, active_rev_str, avg_rev_str = "₹0.00", "₹0.00", "₹0.00"
     expiring_df, pending_df, breakdown_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+# Display Main Dashboard Metrics Cards
+c1, c2, c3, c4, c5 = st.columns(5)
+c1.metric("Active Contracts", active_count)
+c2.metric("Pending Services", pending_count)
+c3.metric("Expiring Soon", expiring_count)
+c4.metric("Breakdown Calls", breakdown_count)
+c5.metric("Total Revenue", total_rev_str)
+
+st.write("")
+
+# Expanded Revenue Analytics Details Row
+with st.expander("💰 Financial Overview & Additional Details", expanded=False):
+    r1, r2, r3 = st.columns(3)
+    r1.metric("Active Contracts Value", active_rev_str)
+    r2.metric("Average Contract Value", avg_rev_str)
     
+    if not df.empty and 'Product_Name' in df.columns and 'Contract_Value' in df.columns:
+        top_product = df.groupby('Product_Name')['Contract_Value'].sum().idxmax()
+        r3.metric("Top Revenue Product", top_product)
+    else:
+        r3.metric("Top Revenue Product", "N/A")
+
 # Action Alert Expanders
 if not pending_df.empty or not expiring_df.empty:
     with st.expander("🚨 Action Required: Service & Expiry Alerts", expanded=False):
@@ -209,7 +244,7 @@ if not pending_df.empty or not expiring_df.empty:
         with ac2:
             st.error(f"**Contracts Expiring Soon ({len(expiring_df)})**")
             if not expiring_df.empty:
-                cols_to_show = [c for c in ['Visit_ID', 'Client_Name', 'Contract_End_Date', 'Phone_Number'] if c in expiring_df.columns]
+                cols_to_show = [c for c in ['Visit_ID', 'Client_Name', 'Contract_End_Date', 'Phone_Number', 'Contract_Value'] if c in expiring_df.columns]
                 st.dataframe(expiring_df[cols_to_show], use_container_width=True)
 
 st.divider()
@@ -255,7 +290,7 @@ with tab1:
             
             # Contract Automation Parameters
             contract_start = st.date_input("Contract Start Date", today)
-            contract_end = st.date_input("Contract End Date", today + datetime.timedelta(days=365))
+            contract_end = st.date_input("Contract End Date", today + pd.Timedelta(days=365))
             
             service_freq = st.selectbox("Service Frequency", ["Quarterly (4/yr)", "Monthly (12/yr)", "Bi-Monthly (6/yr)", "Bi-Annual (2/yr)"])
             
@@ -271,6 +306,7 @@ with tab1:
                 services_completed = st.number_input("Services Completed To Date", min_value=0, value=1, step=1)
                 
             contract_status = st.selectbox("Contract Status", ["Active", "Inactive", "Expiring Soon", "Pending Service"])
+            contract_value = st.number_input("Contract Value (₹)", min_value=0.0, value=0.0, step=500.0)
             uploaded_photo = st.file_uploader("Upload Job Sheet Photo", type=["jpg", "jpeg", "png"])
         
         remarks = st.text_area("Technician Remarks / Parts Used")
@@ -306,7 +342,8 @@ with tab1:
                     "Services_Completed": services_completed,
                     "Remarks": remarks,
                     "Job_Sheet_Photo_Base64": base64_photo,
-                    "Contract_Status": contract_status
+                    "Contract_Status": contract_status,
+                    "Contract_Value": contract_value
                 }
                 
                 if save_visit_to_gsheets(sheet, record):
@@ -370,6 +407,7 @@ with tab2:
                         st.markdown(f"**Next Service Due:** {row.get('Next_Service_Due_Date', 'N/A')}")
                         st.markdown(f"**Contract End Date:** {row.get('Contract_End_Date', 'N/A')}")
                         st.markdown(f"**Services Progress:** {row.get('Services_Completed', 0)} / {row.get('Total_Services_Included', 0)}")
+                        st.markdown(f"**Contract Value:** ₹{row.get('Contract_Value', 0)}")
                         st.markdown(f"**Remarks:** {row.get('Remarks', 'N/A')}")
                     
                     # Display Photo ONLY for searched Visit ID
