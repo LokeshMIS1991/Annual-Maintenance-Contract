@@ -9,7 +9,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # ==========================================
-# 1. PAGE SETUP
+# 1. PAGE CONFIGURATION
 # ==========================================
 st.set_page_config(
     page_title="AMC Field Visit Tracker",
@@ -18,7 +18,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 2. GOOGLE SHEETS CONNECTION
+# 2. GOOGLE SHEETS AUTHENTICATION
 # ==========================================
 @st.cache_resource(ttl=60)
 def get_gspread_client():
@@ -28,33 +28,32 @@ def get_gspread_client():
         "https://www.googleapis.com/auth/drive"
     ]
     
-    # Check if credentials exist in secrets
     if "gsheets" in st.secrets and "service_account" in st.secrets["gsheets"]:
         creds_dict = dict(st.secrets["gsheets"]["service_account"])
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         client = gspread.authorize(creds)
         spreadsheet_url = st.secrets["gsheets"]["spreadsheet_url"]
-        sheet = client.open_by_url(spreadsheet_url).worksheet("Visits")
+        
+        # get_worksheet(0) fetches the first sheet automatically, avoiding tab name errors
+        sheet = client.open_by_url(spreadsheet_url).get_worksheet(0)
         return sheet
     else:
         st.error("Google Sheets configuration missing in `.streamlit/secrets.toml`!")
         st.stop()
 
-# Helper Functions
 def fetch_all_visits(sheet):
-    """Retrieve all visit records from Google Sheets into a Pandas DataFrame."""
+    """Retrieves all records from the Google Sheet into a DataFrame."""
     try:
         data = sheet.get_all_records()
         df = pd.DataFrame(data)
         return df
     except Exception as e:
-        st.error(f"Error fetching data from Google Sheets: {e}")
+        st.error(f"Error reading Google Sheet: {e}")
         return pd.DataFrame()
 
 def save_visit_to_gsheets(sheet, record_dict):
-    """Append a new record row to Google Sheets."""
+    """Appends a new record row to the Google Sheet."""
     try:
-        # Match column order of Google Sheet
         row = [
             record_dict["Visit_ID"],
             record_dict["Client_Name"],
@@ -75,24 +74,23 @@ def save_visit_to_gsheets(sheet, record_dict):
         sheet.append_row(row)
         return True
     except Exception as e:
-        st.error(f"Failed to append row to Google Sheets: {e}")
+        st.error(f"Failed to append row to Google Sheet: {e}")
         return False
 
 def generate_visit_id():
-    """Generates automated unique Visit ID."""
+    """Generates an automated unique Visit ID."""
     return f"AMC-{datetime.date.today().year}-{uuid.uuid4().hex[:5].upper()}"
 
-# Initialize Sheet Connection
+# Initialize Connection & Load Data
 sheet = get_gspread_client()
 df = fetch_all_visits(sheet)
 
 # ==========================================
-# 3. HEADER & METRIC KPI DASHBOARD
+# 3. HEADER & METRIC DASHBOARD
 # ==========================================
 st.title("🔧 AMC Field Visit & Contract Tracker")
-st.caption("Powered by Streamlit & Google Sheets Database")
+st.caption("Connected to Google Sheets Database")
 
-# Compute live KPIs from Google Sheet data
 active_count = len(df[df['Contract_Status'] == 'Active']) if not df.empty and 'Contract_Status' in df.columns else 3
 expiring_count = len(df[df['Contract_Status'] == 'Expiring Soon']) if not df.empty and 'Contract_Status' in df.columns else 2
 pending_count = len(df[df['Contract_Status'] == 'Pending Service']) if not df.empty and 'Contract_Status' in df.columns else 5
@@ -115,7 +113,7 @@ col4.metric("Total Revenue", total_rev_str)
 st.divider()
 
 # ==========================================
-# 4. TABS: ENTRY FORM & HISTORY
+# 4. ENTRY FORM & RECORDS HISTORY TABS
 # ==========================================
 tab1, tab2 = st.tabs(["📝 Add New Field Visit", "📊 Visit History & Records"])
 
@@ -156,7 +154,6 @@ with tab1:
             if not client_name or not technician_name:
                 st.warning("⚠️ Client Name and Technician Name are required!")
             else:
-                # Convert uploaded image to Base64 for storing directly inside Google Sheets cell
                 base64_photo = ""
                 if uploaded_photo is not None:
                     image_bytes = uploaded_photo.read()
@@ -184,24 +181,21 @@ with tab1:
                     st.cache_resource.clear()
                     st.rerun()
 
-# --- TAB 2: HISTORY & STATUS FILTER ---
+# --- TAB 2: VISIT HISTORY & FILTERS ---
 with tab2:
     st.subheader("Filter & Inspect Visits")
     
     if df.empty:
         st.info("No records currently stored in Google Sheets.")
     else:
-        # Status Filter
         available_statuses = ["All"] + list(df['Contract_Status'].unique()) if 'Contract_Status' in df.columns else ["All"]
         status_filter = st.selectbox("View Option / Filter Status", available_statuses)
         
         filtered_df = df if status_filter == "All" else df[df['Contract_Status'] == status_filter]
         
-        # Table View (Excluding heavy image string for table clarity)
         display_cols = [c for c in filtered_df.columns if c != 'Job_Sheet_Photo_Base64']
         st.dataframe(filtered_df[display_cols], use_container_width=True)
         
-        # Image Viewer Section
         st.divider()
         st.subheader("🖼️ View Job Sheet Photo")
         
@@ -220,4 +214,4 @@ with tab2:
                     except Exception as e:
                         st.error(f"Error rendering image: {e}")
             else:
-                st.caption("No job sheet photos available for the selected filter.")
+                st.caption("No job sheet photos uploaded for current selection.")
