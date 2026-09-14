@@ -18,7 +18,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom Corporate CSS matching Sidharth Shutter & Automation Logo
 st.markdown("""
 <style>
     .stApp {
@@ -89,8 +88,6 @@ def get_gspread_client():
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         client = gspread.authorize(creds)
         spreadsheet_url = st.secrets["gsheets"]["spreadsheet_url"]
-        
-        # Uses first worksheet to avoid tab name errors
         sheet = client.open_by_url(spreadsheet_url).get_worksheet(0)
         return sheet
     else:
@@ -126,8 +123,15 @@ def generate_visit_id():
 sheet = get_gspread_client()
 df = fetch_all_visits(sheet)
 
+# Ensure essential numerical types on data read
+if not df.empty:
+    df['Total_Services_Included'] = pd.to_numeric(df.get('Total_Services_Included', 0), errors='coerce').fillna(0).astype(int)
+    df['Services_Completed'] = pd.to_numeric(df.get('Services_Completed', 0), errors='coerce').fillna(0).astype(int)
+    df['Pending_Services'] = df['Total_Services_Included'] - df['Services_Completed']
+    df['Pending_Services'] = df['Pending_Services'].apply(lambda x: max(0, x))
+
 # ==========================================
-# 3. BRANDED HEADER (LOGO RIGHT ALIGNED)
+# 3. BRANDED HEADER
 # ==========================================
 header_title_col, header_logo_col = st.columns([3, 1])
 
@@ -152,27 +156,33 @@ st.divider()
 # ==========================================
 today = pd.Timestamp.today().normalize()
 
-# Process automated expiry & due logic safely
 if not df.empty:
     if 'Next_Service_Due_Date' in df.columns:
         df['Next_Service_Due_Date_DT'] = pd.to_datetime(df['Next_Service_Due_Date'], errors='coerce')
     else:
         df['Next_Service_Due_Date_DT'] = pd.NaT
 
-    # Calculate Statuses
+    # Status Counts
     active_count = len(df[df['Contract_Status'] == 'Active']) if 'Contract_Status' in df.columns else 0
     inactive_count = len(df[df['Contract_Status'] == 'Inactive']) if 'Contract_Status' in df.columns else 0
     expiring_count = len(df[df['Contract_Status'] == 'Expiring Soon']) if 'Contract_Status' in df.columns else 0
 
-    # Auto-flag Pending Services (Due Date <= Today or Status == Pending Service)
+    # Auto-flag Pending Services (Due Date <= Today or Status == Pending Service OR Pending_Services > 0)
     pending_df = df[
         (df.get('Contract_Status') == 'Pending Service') | 
+        (df['Pending_Services'] > 0) |
         ((df['Next_Service_Due_Date_DT'].notna()) & 
          (df['Next_Service_Due_Date_DT'] <= today))
-    ]
-    pending_count = len(pending_df)
+    ].copy()
+    
+    # Keep only the latest record per client to calculate accurate pending counts
+    if not pending_df.empty and 'Client_Name' in pending_df.columns:
+        latest_pending_per_client = pending_df.sort_values('Date_of_Visit').groupby(['Client_Name', 'Product_Name']).last().reset_index()
+    else:
+        latest_pending_per_client = pd.DataFrame()
 
-    # Active Breakdown Calls
+    pending_count = len(latest_pending_per_client)
+
     if 'Visit_Type' in df.columns:
         breakdown_df = df[df['Visit_Type'] == 'Breakdown Call / Emergency Repair']
     else:
@@ -181,23 +191,31 @@ if not df.empty:
 
 else:
     active_count, inactive_count, expiring_count, pending_count, breakdown_count = 0, 0, 0, 0, 0
-    pending_df, breakdown_df = pd.DataFrame(), pd.DataFrame()
+    pending_df, breakdown_df, latest_pending_per_client = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-# Display Main Dashboard Metrics Cards (Total Value Removed)
+# Main Metrics
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Active Contracts", active_count)
-c2.metric("Pending Services", pending_count)
+c2.metric("Clients Pending Services", pending_count)
 c3.metric("Expiring Soon", expiring_count)
 c4.metric("Breakdown Calls", breakdown_count)
 
 st.write("")
 
-# Action Alert Expander
-if not pending_df.empty:
-    with st.expander("🚨 Action Required: Pending Service Alerts", expanded=False):
-        st.warning(f"**Services Pending ({len(pending_df)})**")
-        cols_to_show = [c for c in ['Visit_ID', 'Client_Name', 'Product_Name', 'Next_Service_Due_Date', 'Phone_Number'] if c in pending_df.columns]
-        st.dataframe(pending_df[cols_to_show], use_container_width=True)
+# Action Alert Expander (Per-Client Pending Breakdown)
+if not latest_pending_per_client.empty:
+    with st.expander("🚨 Action Required: Client Pending Service Breakdown", expanded=False):
+        st.warning(f"**Clients with Remaining Pending Visits ({len(latest_pending_per_client)})**")
+        
+        display_cols = [c for c in ['Client_Name', 'Company_Name', 'Product_Name', 'Next_Service_Due_Date', 'Services_Completed', 'Total_Services_Included', 'Pending_Services', 'Phone_Number'] if c in latest_pending_per_client.columns]
+        st.dataframe(
+            latest_pending_per_client[display_cols].rename(columns={
+                'Services_Completed': 'Completed',
+                'Total_Services_Included': 'Total Contracted',
+                'Pending_Services': 'Remaining Pending Visits'
+            }), 
+            use_container_width=True
+        )
 
 st.divider()
 
@@ -213,86 +231,105 @@ with tab1:
     auto_id = generate_visit_id()
     st.info(f"**Automated Visit ID:** `{auto_id}`")
     
-    with st.form("amc_visit_form", clear_on_submit=True):
-        col_left, col_right = st.columns(2)
+    col_left, col_right = st.columns(2)
+    
+    # Extract Client list for quick lookup automation
+    existing_clients = sorted(df['Client_Name'].dropna().unique().tolist()) if not df.empty and 'Client_Name' in df.columns else []
+    
+    with col_left:
+        client_selection_mode = st.radio("Client Input Mode", ["Existing Client", "New Client"], horizontal=True)
         
-        with col_left:
+        if client_selection_mode == "Existing Client" and existing_clients:
+            client_name = st.selectbox("Select Client Name *", existing_clients)
+            client_records = df[df['Client_Name'] == client_name] if not df.empty else pd.DataFrame()
+            
+            default_company = client_records['Company_Name'].iloc[-1] if not client_records.empty and 'Company_Name' in client_records.columns else ""
+            default_phone = client_records['Phone_Number'].iloc[-1] if not client_records.empty and 'Phone_Number' in client_records.columns else ""
+            default_address = client_records['Address'].iloc[-1] if not client_records.empty and 'Address' in client_records.columns else ""
+        else:
             client_name = st.text_input("Client Name *")
-            company_name = st.text_input("Company Name")
-            phone_number = st.text_input("Phone Number")
-            address = st.text_area("Client Address")
-            
-            st.markdown("---")
-            visit_type = st.selectbox(
-                "Visit Type *",
-                ["Preventive Maintenance (PM)", "Breakdown Call / Emergency Repair", "Installation / Retrofit"]
-            )
-            reason_for_visit = st.text_input("Reason / Reported Issue", value="Routine Maintenance")
-            
-        with col_right:
-            technician_name = st.text_input("Technician Name *")
-            date_of_visit = st.date_input("Date of Visit", today.date())
-            
-            # Product Selection
-            product_name = st.selectbox(
-                "Product Name *",
-                ["Motorized Rolling Shutter", "Automatic Boom Barrier", "High-Speed Industrial Door", "Sliding Gate / Fire Door", "Other"]
-            )
-            
-            # Service Frequency Options: 2, 3, 4
-            service_freq = st.selectbox("Service Frequency (Visits/Year)", [2, 3, 4], index=2)
-            
-            # Auto-calculate default Next Due Date based on frequency selection (365 / frequency)
-            freq_days_map = {2: 180, 3: 120, 4: 90}
-            default_next_due = date_of_visit + datetime.timedelta(days=freq_days_map.get(service_freq, 90))
-            next_service_due = st.date_input("Next Service Due Date", default_next_due)
-            
-            fc1, fc2 = st.columns(2)
-            with fc1:
-                total_services = st.number_input("Total Services Included", min_value=1, value=int(service_freq), step=1)
-            with fc2:
-                services_completed = st.number_input("Services Completed To Date", min_value=0, value=1, step=1)
-                
-            contract_status = st.selectbox("Contract Status", ["Active", "Inactive", "Expiring Soon", "Pending Service"])
-            uploaded_photo = st.file_uploader("Upload Job Sheet Photo", type=["jpg", "jpeg", "png"])
+            default_company, default_phone, default_address = "", "", ""
+
+        company_name = st.text_input("Company Name", value=default_company)
+        phone_number = st.text_input("Phone Number", value=default_phone)
+        address = st.text_area("Client Address", value=default_address)
         
-        remarks = st.text_area("Technician Remarks / Parts Used")
+        st.markdown("---")
+        visit_type = st.selectbox(
+            "Visit Type *",
+            ["Preventive Maintenance (PM)", "Breakdown Call / Emergency Repair", "Installation / Retrofit"]
+        )
+        reason_for_visit = st.text_input("Reason / Reported Issue", value="Routine Maintenance")
         
-        submitted = st.form_submit_button("Save Record to Google Sheets")
+    with col_right:
+        technician_name = st.text_input("Technician Name *")
+        date_of_visit = st.date_input("Date of Visit", today.date())
         
-        if submitted:
-            if not client_name or not technician_name:
-                st.warning("⚠️ Client Name and Technician Name are required!")
-            else:
-                base64_photo = ""
-                if uploaded_photo is not None:
-                    image_bytes = uploaded_photo.read()
-                    base64_photo = base64.b64encode(image_bytes).decode('utf-8')
-                
-                record = {
-                    "Visit_ID": auto_id,
-                    "Client_Name": client_name,
-                    "Company_Name": company_name,
-                    "Date_of_Visit": str(date_of_visit),
-                    "Address": address,
-                    "Phone_Number": phone_number,
-                    "Technician_Name": technician_name,
-                    "Visit_Type": visit_type,
-                    "Reason_for_Visit": reason_for_visit,
-                    "Product_Name": product_name,
-                    "Service_Frequency": service_freq,
-                    "Next_Service_Due_Date": str(next_service_due),
-                    "Total_Services_Included": total_services,
-                    "Services_Completed": services_completed,
-                    "Remarks": remarks,
-                    "Job_Sheet_Photo_Base64": base64_photo,
-                    "Contract_Status": contract_status
-                }
-                
-                if save_visit_to_gsheets(sheet, record):
-                    st.success(f"✅ Visit `{auto_id}` successfully registered!")
-                    st.cache_resource.clear()
-                    st.rerun()
+        product_name = st.selectbox(
+            "Product Name *",
+            ["Motorized Rolling Shutter", "Automatic Boom Barrier", "High-Speed Industrial Door", "Sliding Gate / Fire Door", "Other"]
+        )
+        
+        service_freq = st.selectbox("Service Frequency (Visits/Year)", [2, 3, 4], index=2)
+        total_services = int(service_freq)
+        
+        # Calculate Automated Progress Lookup based on Client + Product
+        prev_completed = 0
+        if not df.empty and client_name and 'Client_Name' in df.columns and 'Product_Name' in df.columns:
+            matched = df[(df['Client_Name'].str.lower() == client_name.lower()) & (df['Product_Name'] == product_name)]
+            if not matched.empty:
+                prev_completed = int(matched['Services_Completed'].iloc[-1])
+        
+        auto_completed = prev_completed + 1
+        if auto_completed > total_services:
+            auto_completed = total_services
+            
+        auto_pending = total_services - auto_completed
+        
+        st.write(f"📊 **Automated Progress Status:** Completed `{auto_completed}` of `{total_services}` services (`{auto_pending}` Pending)")
+        
+        freq_days_map = {2: 180, 3: 120, 4: 90}
+        default_next_due = date_of_visit + datetime.timedelta(days=freq_days_map.get(service_freq, 90))
+        next_service_due = st.date_input("Next Service Due Date", default_next_due)
+        
+        contract_status = st.selectbox("Contract Status", ["Active", "Inactive", "Expiring Soon", "Pending Service"])
+        uploaded_photo = st.file_uploader("Upload Job Sheet Photo", type=["jpg", "jpeg", "png"])
+    
+    remarks = st.text_area("Technician Remarks / Parts Used")
+    
+    if st.button("Save Record to Google Sheets"):
+        if not client_name or not technician_name:
+            st.warning("⚠️ Client Name and Technician Name are required!")
+        else:
+            base64_photo = ""
+            if uploaded_photo is not None:
+                image_bytes = uploaded_photo.read()
+                base64_photo = base64.b64encode(image_bytes).decode('utf-8')
+            
+            record = {
+                "Visit_ID": auto_id,
+                "Client_Name": client_name,
+                "Company_Name": company_name,
+                "Date_of_Visit": str(date_of_visit),
+                "Address": address,
+                "Phone_Number": phone_number,
+                "Technician_Name": technician_name,
+                "Visit_Type": visit_type,
+                "Reason_for_Visit": reason_for_visit,
+                "Product_Name": product_name,
+                "Service_Frequency": service_freq,
+                "Next_Service_Due_Date": str(next_service_due),
+                "Total_Services_Included": total_services,
+                "Services_Completed": auto_completed,
+                "Remarks": remarks,
+                "Job_Sheet_Photo_Base64": base64_photo,
+                "Contract_Status": contract_status
+            }
+            
+            if save_visit_to_gsheets(sheet, record):
+                st.success(f"✅ Visit `{auto_id}` registered! ({auto_completed}/{total_services} Completed - {auto_pending} Pending)")
+                st.cache_resource.clear()
+                st.rerun()
 
 # --- TAB 2: HISTORY & SEARCH BY VISIT ID ---
 with tab2:
@@ -315,11 +352,9 @@ with tab2:
         if search_visit_id:
             filtered_df = filtered_df[filtered_df['Visit_ID'].astype(str).str.contains(search_visit_id, case=False, na=False)]
 
-        # Display Table excluding raw Base64 image & internal helper columns
         display_cols = [c for c in filtered_df.columns if c not in ['Job_Sheet_Photo_Base64', 'Next_Service_Due_Date_DT']]
         st.dataframe(filtered_df[display_cols], use_container_width=True)
 
-        # Detailed Inspection Section
         st.divider()
         st.subheader("📋 Detailed Visit Inspection & Job Sheet")
 
@@ -330,6 +365,9 @@ with tab2:
                 st.warning(f"No visit record found matching Visit ID: `{search_visit_id}`")
             else:
                 row = exact_match.iloc[0]
+                tot = int(row.get('Total_Services_Included', 0))
+                comp = int(row.get('Services_Completed', 0))
+                pend = max(0, tot - comp)
                 
                 with st.expander(f"📌 Complete Details for Visit ID: {row['Visit_ID']}", expanded=True):
                     d_col1, d_col2 = st.columns(2)
@@ -347,10 +385,9 @@ with tab2:
                         st.markdown(f"**Product Name:** {row.get('Product_Name', 'N/A')}")
                         st.markdown(f"**Contract Status:** {row.get('Contract_Status', 'N/A')}")
                         st.markdown(f"**Next Service Due:** {row.get('Next_Service_Due_Date', 'N/A')}")
-                        st.markdown(f"**Services Progress:** {row.get('Services_Completed', 0)} / {row.get('Total_Services_Included', 0)}")
+                        st.markdown(f"**Services Breakdown:** {comp} Completed / {pend} Pending (Total {tot})")
                         st.markdown(f"**Remarks:** {row.get('Remarks', 'N/A')}")
                     
-                    # Display Photo ONLY for searched Visit ID
                     photo_b64 = str(row.get('Job_Sheet_Photo_Base64', ''))
                     if len(photo_b64) > 10:
                         st.subheader("🖼️ Uploaded Job Sheet Photo")
