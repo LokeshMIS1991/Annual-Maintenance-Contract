@@ -325,7 +325,10 @@ if st.session_state.user["Role"] == "Technician":
         
         c_city = str(curr_rec["Current_City"].values[0]) if not curr_rec.empty and "Current_City" in curr_rec.columns else ""
         c_pin = str(curr_rec["Current_Pincode"].values[0]) if not curr_rec.empty and "Current_Pincode" in curr_rec.columns else ""
-        c_status = str(curr_rec["Current_Status"].values[0]) if not curr_rec.empty and "Current_Status" in curr_rec.columns else "Available"
+        
+        # Clean current status input for reliable dropdown selection
+        c_status_raw = str(curr_rec["Current_Status"].values[0]).strip().title() if not curr_rec.empty and "Current_Status" in curr_rec.columns else "Available"
+        
         n_city = str(curr_rec["Next_City"].values[0]) if not curr_rec.empty and "Next_City" in curr_rec.columns else ""
         n_pin = str(curr_rec["Next_Pincode"].values[0]) if not curr_rec.empty and "Next_Pincode" in curr_rec.columns else ""
         eta_val = str(curr_rec["ETA"].values[0]) if not curr_rec.empty and "ETA" in curr_rec.columns else ""
@@ -336,8 +339,11 @@ if st.session_state.user["Role"] == "Technician":
             with c1:
                 input_curr_city = st.text_input("Current City", value=c_city)
                 input_curr_pin = st.text_input("Current Pin Code", value=c_pin, max_chars=6)
+                
+                # Corrected Current Activity selection matching
                 status_options = ["Available", "On Site", "In Transit"]
-                input_status = st.selectbox("Current Activity", status_options, index=status_options.index(c_status) if c_status in status_options else 0)
+                selected_idx = status_options.index(c_status_raw) if c_status_raw in status_options else 0
+                input_status = st.selectbox("Current Activity", status_options, index=selected_idx)
                 
             with c2:
                 input_next_city = st.text_input("Next Target Destination City", value=n_city)
@@ -347,6 +353,7 @@ if st.session_state.user["Role"] == "Technician":
             submit_broadcast = st.form_submit_button("Broadcast Location Update")
             
             if submit_broadcast:
+                # Dynamically fetch real-time clock at button click (e.g., 02:15 PM)
                 now_str = datetime.now().strftime("%I:%M %p")
                 
                 if tech_id in st.session_state.tech_status_db["Tech_ID"].astype(str).values:
