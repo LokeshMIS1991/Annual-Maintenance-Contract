@@ -41,7 +41,6 @@ def load_sheet_data(worksheet_name):
         records = ws.get_all_records()
         return pd.DataFrame(records)
     except Exception:
-        # Create worksheet if missing
         try:
             ws = sh.add_worksheet(title=worksheet_name, rows="100", cols="20")
             return pd.DataFrame()
@@ -271,26 +270,9 @@ if st.session_state.user["Role"] == "Technician":
     tech_id = str(st.session_state.user["User_ID"])
     tech_name = st.session_state.user["Full_Name"]
     
-    # Check 4-Hour Overdue Rule
     curr_rec = st.session_state.tech_status_db[
         st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id
     ]
-    last_updated_str = str(curr_rec["Last_Updated"].values[0]) if not curr_rec.empty and "Last_Updated" in curr_rec.columns else ""
-    
-    is_overdue = False
-    hours_since_update = 0.0
-    if last_updated_str and last_updated_str != "nan":
-        try:
-            last_time = datetime.strptime(last_updated_str, "%I:%M %p").time()
-            now_dt = datetime.now()
-            last_dt = datetime.combine(now_dt.date(), last_time)
-            if last_dt > now_dt:
-                last_dt -= pd.Timedelta(days=1)
-            hours_since_update = (now_dt - last_dt).total_seconds() / 3600
-            if hours_since_update >= 4.0:
-                is_overdue = True
-        except Exception:
-            is_overdue = False
 
     st.markdown(f"""
     <div style='display: flex; align-items: center; gap: 12px; margin-bottom: 10px;'>
@@ -299,61 +281,55 @@ if st.session_state.user["Role"] == "Technician":
     </div>
     """, unsafe_allow_html=True)
 
-    if is_overdue:
-        st.error(f"🚨 **STATUS UPDATE OVERDUE!** Your last broadcast was **{hours_since_update:.1f} hours ago** ({last_updated_str}). Company policy requires an update every 4 hours. Please update your status to unlock tasks.")
-
     tech_tab1, tech_tab2, tech_tab3, tech_tab4 = st.tabs([
         "📋 Assigned Work Orders", 
         "📝 Submit Client Service Report",
-        "📍 Update Status & Destination" + (" ⚠️" if is_overdue else ""), 
+        "📍 Update Status & Destination", 
         "📜 Service History"
     ])
 
     # TAB 1: Assigned Jobs
     with tech_tab1:
-        if is_overdue:
-            st.warning("🔒 **Work Orders Locked**: Broadcast your location in **'Update Status & Destination'** tab to unlock.")
+        st.subheader("Assigned Maintenance Tasks")
+        tech_jobs = st.session_state.jobs_db[
+            (st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id) & 
+            (st.session_state.jobs_db["Status"] != "Completed")
+        ]
+        
+        if tech_jobs.empty:
+            st.info("🎉 No pending maintenance visits assigned to you.")
         else:
-            st.subheader("Assigned Maintenance Tasks")
-            tech_jobs = st.session_state.jobs_db[
-                (st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id) & 
-                (st.session_state.jobs_db["Status"] != "Completed")
-            ]
-            
-            if tech_jobs.empty:
-                st.info("🎉 No pending maintenance visits assigned to you.")
-            else:
-                for idx, job in tech_jobs.iterrows():
-                    pincode_str = f" - {job['Pincode']}" if "Pincode" in job and pd.notna(job["Pincode"]) else ""
-                    with st.expander(f"🔵 [{job['Job_ID']}] {job['Client_Name']} — {job['City']}{pincode_str} ({job['Status']})", expanded=True):
-                        col_a, col_b = st.columns([2, 1])
-                        with col_a:
-                            st.markdown(f"**Address:** {job['Address']}, {job['City']} {pincode_str}")
-                            st.markdown(f"**Client Contact:** [{job['Client_Phone']}](tel:{job['Client_Phone']})")
-                            st.markdown(f"**Task Description:** {job['Issue_Description']}")
-                            st.markdown(f"**Scheduled Time:** {job['Scheduled_Time']}")
-                            
-                            maps_url = make_google_maps_link(job['Address'], job['City'], job.get('Pincode', ''))
-                            st.markdown(f"[📍 **Open Route in Google Maps**]({maps_url})")
+            for idx, job in tech_jobs.iterrows():
+                pincode_str = f" - {job['Pincode']}" if "Pincode" in job and pd.notna(job["Pincode"]) else ""
+                with st.expander(f"🔵 [{job['Job_ID']}] {job['Client_Name']} — {job['City']}{pincode_str} ({job['Status']})", expanded=True):
+                    col_a, col_b = st.columns([2, 1])
+                    with col_a:
+                        st.markdown(f"**Address:** {job['Address']}, {job['City']} {pincode_str}")
+                        st.markdown(f"**Client Contact:** [{job['Client_Phone']}](tel:{job['Client_Phone']})")
+                        st.markdown(f"**Task Description:** {job['Issue_Description']}")
+                        st.markdown(f"**Scheduled Time:** {job['Scheduled_Time']}")
+                        
+                        maps_url = make_google_maps_link(job['Address'], job['City'], job.get('Pincode', ''))
+                        st.markdown(f"[📍 **Open Route in Google Maps**]({maps_url})")
 
-                        with col_b:
-                            st.markdown("### Update Progress")
-                            status_list = ["Assigned", "In Transit", "On Site", "Completed"]
-                            current_status = job["Status"] if job["Status"] in status_list else "Assigned"
-                            
-                            new_status = st.selectbox(
-                                "Job Status",
-                                status_list,
-                                index=status_list.index(current_status),
-                                key=f"status_{job['Job_ID']}"
-                            )
-                            if st.button("Save Status", key=f"btn_{job['Job_ID']}"):
-                                st.session_state.jobs_db.loc[
-                                    st.session_state.jobs_db["Job_ID"] == job["Job_ID"], "Status"
-                                ] = new_status
-                                save_sheet_data(st.session_state.jobs_db, "Jobs")
-                                st.toast(f"✅ Status updated for {job['Job_ID']}!")
-                                st.rerun()
+                    with col_b:
+                        st.markdown("### Update Progress")
+                        status_list = ["Assigned", "In Transit", "On Site", "Completed"]
+                        current_status = job["Status"] if job["Status"] in status_list else "Assigned"
+                        
+                        new_status = st.selectbox(
+                            "Job Status",
+                            status_list,
+                            index=status_list.index(current_status),
+                            key=f"status_{job['Job_ID']}"
+                        )
+                        if st.button("Save Status", key=f"btn_{job['Job_ID']}"):
+                            st.session_state.jobs_db.loc[
+                                st.session_state.jobs_db["Job_ID"] == job["Job_ID"], "Status"
+                            ] = new_status
+                            save_sheet_data(st.session_state.jobs_db, "Jobs")
+                            st.toast(f"✅ Status updated for {job['Job_ID']}!")
+                            st.rerun()
 
     # TAB 2: CLIENT SERVICE REPORT FORM
     with tech_tab2:
@@ -513,12 +489,11 @@ elif st.session_state.user["Role"] == "Manager":
         st.caption("Logs of which technician visited which client site and work performed.")
         st.dataframe(st.session_state.service_reports_db, use_container_width=True)
 
-    # TAB 3: AMC Contract Manager (Date Edit & Visit Limit)
+    # TAB 3: AMC Contract Manager
     with mgr_tab3:
         st.subheader("🗓️ AMC Client Contracts Management")
         st.caption("View and manage AMC Contract Start/End Dates and annual allowed visit limits.")
         
-        # Display Current Contracts
         st.dataframe(st.session_state.amc_contracts_db, use_container_width=True)
         
         st.divider()
