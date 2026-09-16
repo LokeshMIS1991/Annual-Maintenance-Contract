@@ -143,7 +143,7 @@ st.markdown("""
 
     /* Compact Login Screen Form */
     .login-container div[data-testid="stForm"] {
-        padding: 18px 24px !important;
+        padding: 16px 24px !important;
         max-width: 380px;
         margin: 0 auto;
     }
@@ -169,8 +169,9 @@ if st.session_state.user is None:
             else:
                 st.markdown("<h2 style='text-align: center; color: #0D47A1; margin:0;'>⚙️ SIDHARTH</h2>", unsafe_allow_html=True)
             
-            st.markdown("<h3 style='text-align:center; color:#0D47A1; margin-top:6px; margin-bottom:2px; font-size:1.2rem;'>AMC Tracker</h3>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align:center; color:#10B981; font-weight:700; font-size:0.8rem; margin-bottom:12px;'>● SIGN IN</p>", unsafe_allow_html=True)
+            # Refined Alignment & Spacing
+            st.markdown("<h3 style='text-align:center; color:#0D47A1; margin-top:-8px; margin-bottom:4px; font-size:1.25rem;'>AMC Tracker</h3>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#10B981; font-weight:700; font-size:0.85rem; margin-bottom:16px;'>● SIGN IN</div>", unsafe_allow_html=True)
 
             user_id_input = st.text_input("User ID / Tech ID", placeholder="e.g. TECH01").strip().upper()
             password_input = st.text_input("Password", type="password", placeholder="Enter password").strip()
@@ -310,6 +311,7 @@ if st.session_state.user["Role"] == "Technician":
             submit_broadcast = st.form_submit_button("Broadcast Location Update")
             
             if submit_broadcast:
+                # Automate capturing live time at submission
                 now_str = datetime.now().strftime("%I:%M %p")
                 
                 if tech_id in st.session_state.tech_status_db["Tech_ID"].astype(str).values:
@@ -331,7 +333,7 @@ if st.session_state.user["Role"] == "Technician":
                     st.session_state.tech_status_db = pd.concat([st.session_state.tech_status_db, pd.DataFrame([new_row])], ignore_index=True)
                 
                 save_sheet_data(st.session_state.tech_status_db, "TechStatus")
-                st.toast(f"📍 Location Updated Successfully at {now_str}!", icon="✅")
+                st.toast(f"📍 Location Broadcast Updated at {now_str}!", icon="✅")
                 st.rerun()
 
     # TAB 3: History
