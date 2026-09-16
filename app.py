@@ -47,7 +47,6 @@ def save_sheet_data(df, worksheet_name):
     try:
         ws = sh.worksheet(worksheet_name)
         ws.clear()
-        # Convert DataFrame to string format to prevent JSON serialization issues
         clean_df = df.fillna("").astype(str)
         ws.update([clean_df.columns.values.tolist()] + clean_df.values.tolist())
     except Exception as e:
@@ -116,15 +115,15 @@ st.markdown("""
         width: 100%;
     }
 
-    /* Primary Action Buttons */
-    .stButton > button {
+    /* Primary Action Buttons & Form Submit Buttons in Blue */
+    .stButton > button, div[data-testid="stForm"] button {
         background-color: #1565C0 !important;
         color: #FFFFFF !important;
         border-radius: 8px !important;
         border: none !important;
         font-weight: 600 !important;
     }
-    .stButton > button:hover {
+    .stButton > button:hover, div[data-testid="stForm"] button:hover {
         background-color: #0D47A1 !important;
         box-shadow: 0 4px 12px rgba(13, 71, 161, 0.3) !important;
     }
@@ -133,13 +132,20 @@ st.markdown("""
         color: #1565C0 !important;
     }
 
-    /* Form Container Styling */
+    /* General Form Container Styling */
     div[data-testid="stForm"] {
         background-color: #FFFFFF;
         border: 2px solid #1565C0;
         border-radius: 16px;
-        padding: 30px;
+        padding: 24px;
         box-shadow: 0 10px 25px rgba(21, 101, 192, 0.1);
+    }
+
+    /* Compact Login Screen Form */
+    .login-container div[data-testid="stForm"] {
+        padding: 18px 24px !important;
+        max-width: 380px;
+        margin: 0 auto;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -152,23 +158,24 @@ if "user" not in st.session_state:
     st.session_state.user = None
 
 if st.session_state.user is None:
-    col_left, col_center, col_right = st.columns([1, 2.2, 1])
+    col_left, col_center, col_right = st.columns([1.2, 1.3, 1.2])
 
     with col_center:
+        st.markdown("<div class='login-container'>", unsafe_allow_html=True)
         with st.form("login_form"):
             logo_path = get_logo_path()
             if logo_path:
                 st.image(logo_path, use_container_width=True)
             else:
-                st.markdown("<h1 style='text-align: center; color: #0D47A1;'>⚙️ SIDHARTH</h1>", unsafe_allow_html=True)
+                st.markdown("<h2 style='text-align: center; color: #0D47A1; margin:0;'>⚙️ SIDHARTH</h2>", unsafe_allow_html=True)
             
-            st.markdown("<h2 style='text-align:center; color:#0D47A1; margin-top:10px;'>AMC Annual Maintenance Tracker</h2>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align:center; color:#10B981; font-weight:700;'>● SIGN IN</p>", unsafe_allow_html=True)
+            st.markdown("<h3 style='text-align:center; color:#0D47A1; margin-top:6px; margin-bottom:2px; font-size:1.2rem;'>AMC Tracker</h3>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align:center; color:#10B981; font-weight:700; font-size:0.8rem; margin-bottom:12px;'>● SIGN IN</p>", unsafe_allow_html=True)
 
             user_id_input = st.text_input("User ID / Tech ID", placeholder="e.g. TECH01").strip().upper()
-            password_input = st.text_input("Password", type="password", placeholder="Enter your password").strip()
+            password_input = st.text_input("Password", type="password", placeholder="Enter password").strip()
             
-            submit_login = st.form_submit_button("Sign In")
+            submit_login = st.form_submit_button("Sign In", use_container_width=True)
 
             if submit_login:
                 user_df = st.session_state.users_db
@@ -180,11 +187,12 @@ if st.session_state.user is None:
                     st.rerun()
                 else:
                     st.error("❌ Invalid User ID or Password")
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.stop()
 
 # -----------------------------------------------------------------------------
-# 5. SIDEBAR SETUP (CENTERED LOGO + "AMC TRACKER")
+# 5. SIDEBAR SETUP
 # -----------------------------------------------------------------------------
 
 with st.sidebar:
@@ -223,7 +231,7 @@ if st.session_state.user["Role"] == "Technician":
 
     tech_tab1, tech_tab2, tech_tab3 = st.tabs(["📋 My Assigned Work Orders", "📍 Update Status & Destination", "📜 Service History"])
 
-    # TAB 1: Assigned Jobs (Supports Multiple Tasks)
+    # TAB 1: Assigned Jobs
     with tech_tab1:
         st.subheader("Assigned Maintenance Tasks")
         
@@ -266,12 +274,11 @@ if st.session_state.user["Role"] == "Technician":
                                 st.session_state.jobs_db["Job_ID"] == job["Job_ID"], "Status"
                             ] = new_status
                             
-                            # PERSIST TO GOOGLE SHEETS
                             save_sheet_data(st.session_state.jobs_db, "Jobs")
                             st.toast(f"✅ Status updated for {job['Job_ID']} in Google Sheets!")
                             st.rerun()
 
-    # TAB 2: Location & Destination Broadcast (With Working Toast & Google Sheets Sync)
+    # TAB 2: Location Broadcast
     with tech_tab2:
         st.subheader("Broadcast Live Location & Next Travel City")
         
@@ -323,11 +330,8 @@ if st.session_state.user["Role"] == "Technician":
                     }
                     st.session_state.tech_status_db = pd.concat([st.session_state.tech_status_db, pd.DataFrame([new_row])], ignore_index=True)
                 
-                # PERSIST TO GOOGLE SHEETS
                 save_sheet_data(st.session_state.tech_status_db, "TechStatus")
-                
-                # Pop-up Toast
-                st.toast("📍 Location Updated Successfully!", icon="✅")
+                st.toast(f"📍 Location Updated Successfully at {now_str}!", icon="✅")
                 st.rerun()
 
     # TAB 3: History
@@ -396,7 +400,6 @@ elif st.session_state.user["Role"] == "Manager":
                 }
                 st.session_state.jobs_db = pd.concat([st.session_state.jobs_db, pd.DataFrame([new_job_entry])], ignore_index=True)
                 
-                # PERSIST TO GOOGLE SHEETS
                 save_sheet_data(st.session_state.jobs_db, "Jobs")
                 st.toast(f"✅ Work Order {j_id} assigned and saved to Google Sheets!")
                 st.rerun()
@@ -419,7 +422,6 @@ elif st.session_state.user["Role"] == "Manager":
                     user_entry = {"User_ID": new_uid, "Full_Name": new_name, "Role": new_role, "Password": new_pass}
                     st.session_state.users_db = pd.concat([st.session_state.users_db, pd.DataFrame([user_entry])], ignore_index=True)
                     
-                    # PERSIST TO GOOGLE SHEETS
                     save_sheet_data(st.session_state.users_db, "Users")
                     st.toast(f"✅ Account for {new_name} saved to Google Sheets!")
                     st.rerun()
