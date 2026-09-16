@@ -40,7 +40,7 @@ def load_sheet_data(worksheet_name):
         "Users": ["User_ID", "Full_Name", "Role", "Password"],
         "Jobs": ["Job_ID", "Assigned_Tech_ID", "Client_Name", "Client_Phone", "Address", "City", "Pincode", "Issue_Description", "Status", "Scheduled_Time"],
         "TechStatus": ["Tech_ID", "Current_City", "Current_Pincode", "Current_Status", "Next_City", "Next_Pincode", "ETA", "Last_Updated"],
-        "ServiceReports": ["Report_ID", "Tech_ID", "Tech_Name", "Client_Name", "Site_Location", "AMC_Contract_No", "Category", "Equipment_Type", "Make_Model", "Door_Size", "Qty", "Condition", "Checklist_Data", "Service_Date", "Visit_Number", "Next_Service_Due_Date", "Remarks", "Submitted_At"],
+        "ServiceReports": ["Report_ID", "Job_ID", "Tech_ID", "Tech_Name", "Client_Name", "Site_Location", "AMC_Contract_No", "Category", "Equipment_Type", "Make_Model", "Door_Size", "Qty", "Condition", "Checklist_Data", "Service_Date", "Visit_Number", "Next_Service_Due_Date", "Remarks", "Submitted_At"],
         "AMCContracts": ["AMC_Contract_No", "Client_Name", "Start_Date", "End_Date", "Allowed_Visits"]
     }
     
@@ -87,6 +87,9 @@ if "service_reports_db" not in st.session_state:
 
 if "amc_contracts_db" not in st.session_state:
     st.session_state.amc_contracts_db = load_sheet_data("AMCContracts")
+
+if "selected_job_for_report" not in st.session_state:
+    st.session_state.selected_job_for_report = None
 
 # -----------------------------------------------------------------------------
 # 2. CHECKLIST DATA CONFIGURATION
@@ -305,39 +308,65 @@ if st.session_state.user["Role"] == "Technician":
                     current_status = job["Status"] if job["Status"] in status_list else "Assigned"
                     new_status = st.selectbox("Job Status", status_list, index=status_list.index(current_status), key=f"status_{job['Job_ID']}")
                     
-                    if st.button("Save Status", key=f"btn_{job['Job_ID']}"):
-                        st.session_state.jobs_db.loc[st.session_state.jobs_db["Job_ID"] == job["Job_ID"], "Status"] = new_status
-                        save_sheet_data(st.session_state.jobs_db, "Jobs")
-                        st.toast(f"✅ Status updated for {job['Job_ID']}!")
-                        st.rerun()
+                    btn_save, btn_report = st.columns(2)
+                    with btn_save:
+                        if st.button("Save Status", key=f"btn_{job['Job_ID']}"):
+                            st.session_state.jobs_db.loc[st.session_state.jobs_db["Job_ID"] == job["Job_ID"], "Status"] = new_status
+                            save_sheet_data(st.session_state.jobs_db, "Jobs")
+                            st.toast(f"✅ Status updated for {job['Job_ID']}!")
+                            st.rerun()
+                    with btn_report:
+                        if st.button("📝 Submit Report", key=f"btn_rpt_{job['Job_ID']}"):
+                            st.session_state.selected_job_for_report = job["Job_ID"]
+                            st.toast(f"Selected {job['Job_ID']} for service report!")
                 st.divider()
 
-    # TAB 2: Dynamic Categorized Service Report Form
+    # TAB 2: Service Report Form Linked to Pending/Assigned Jobs
     with tech_tab2:
         st.subheader("📝 Submit Client Service Report")
         
-        contracts_df = st.session_state.amc_contracts_db
-        if contracts_df.empty:
-            st.warning("⚠️ No active AMC contracts found in the database.")
+        # Filter assigned/pending jobs specifically for this technician
+        pending_tech_jobs = st.session_state.jobs_db[
+            (st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id) & 
+            (st.session_state.jobs_db["Status"] != "Completed")
+        ]
+        
+        if pending_tech_jobs.empty:
+            st.info("🎉 No pending or assigned tasks found for you to submit a report for.")
         else:
-            contract_options = contracts_df["AMC_Contract_No"].astype(str).tolist()
+            job_options = pending_tech_jobs["Job_ID"].tolist()
             
+            # Default to previously selected job if available
+            default_index = 0
+            if st.session_state.selected_job_for_report in job_options:
+                default_index = job_options.index(st.session_state.selected_job_for_report)
+                
+            selected_job_id = st.selectbox(
+                "Select Assigned Job / Task*", 
+                job_options, 
+                index=default_index,
+                format_func=lambda x: f"{x} — {pending_tech_jobs[pending_tech_jobs['Job_ID'] == x]['Client_Name'].values[0]} ({pending_tech_jobs[pending_tech_jobs['Job_ID'] == x]['City'].values[0]})"
+            )
+            
+            # Pre-fill client & location details from selected job
+            selected_job = pending_tech_jobs[pending_tech_jobs["Job_ID"] == selected_job_id].iloc[0]
+            auto_client_name = str(selected_job.get("Client_Name", ""))
+            auto_address = f"{selected_job.get('Address', '')}, {selected_job.get('City', '')}".strip(", ")
+            if selected_job.get("Pincode"):
+                auto_address += f" - {selected_job.get('Pincode')}"
+
+            # Optional AMC Contract linkage
+            contracts_df = st.session_state.amc_contracts_db
+            contract_options = ["N/A"] + contracts_df["AMC_Contract_No"].astype(str).tolist() if not contracts_df.empty else ["N/A"]
+
             c_header1, c_header2 = st.columns(2)
             with c_header1:
-                selected_contract_no = st.selectbox("Select AMC Contract Number*", contract_options)
-                selected_contract_info = contracts_df[contracts_df["AMC_Contract_No"].astype(str) == selected_contract_no].iloc[0]
-                client_name_val = selected_contract_info.get("Client_Name", "")
-                st.text_input("Client Name", value=client_name_val, disabled=True)
+                st.text_input("Client Name", value=auto_client_name, disabled=True)
+                selected_contract_no = st.selectbox("Link AMC Contract Number (Optional)", contract_options)
             
             with c_header2:
-                # Category selection driving dynamic checklist fields
                 selected_category = st.selectbox("Equipment Category*", ["Rolling Shutter", "High Speed Door"])
-                try:
-                    allowed_visits_max = int(selected_contract_info.get("Allowed_Visits", 4))
-                except Exception:
-                    allowed_visits_max = 4
-                visit_choices = [f"Visit {i} of {allowed_visits_max}" for i in range(1, allowed_visits_max + 1)]
-                rpt_visit_num_str = st.selectbox("AMC Visit Sequence*", visit_choices)
+                rpt_visit_num_str = st.selectbox("AMC Visit Sequence*", ["Visit 1 of 4", "Visit 2 of 4", "Visit 3 of 4", "Visit 4 of 4"])
 
             st.divider()
 
@@ -345,7 +374,7 @@ if st.session_state.user["Role"] == "Technician":
                 st.markdown("### General Visit Details")
                 c_det1, c_det2 = st.columns(2)
                 with c_det1:
-                    rpt_site_location = st.text_input("Site / Location*", placeholder="e.g. Unit 4, GIDC Estate")
+                    rpt_site_location = st.text_input("Site / Location*", value=auto_address)
                     rpt_service_date = st.date_input("Service Date", value=date.today())
                 with c_det2:
                     rpt_next_due = st.date_input("Next Service Due Date", value=date.today() + pd.Timedelta(days=90))
@@ -370,7 +399,6 @@ if st.session_state.user["Role"] == "Technician":
                 checklist_results = {}
                 checklist_items = EQUIPMENT_DATA[selected_category]["checklist"]
                 
-                # Render 18 Points
                 for idx, point in enumerate(checklist_items, 1):
                     col_num, col_point, col_status, col_remark = st.columns([0.5, 4.5, 3, 4])
                     with col_num:
@@ -413,9 +441,10 @@ if st.session_state.user["Role"] == "Technician":
 
                         report_entry = {
                             "Report_ID": f"RPT-{len(st.session_state.service_reports_db) + 1001}",
+                            "Job_ID": selected_job_id,
                             "Tech_ID": tech_id,
                             "Tech_Name": tech_name,
-                            "Client_Name": client_name_val,
+                            "Client_Name": auto_client_name,
                             "Site_Location": rpt_site_location,
                             "AMC_Contract_No": selected_contract_no,
                             "Category": selected_category,
@@ -432,9 +461,15 @@ if st.session_state.user["Role"] == "Technician":
                             "Submitted_At": submit_time_str
                         }
                         
+                        # Save Report & auto-mark job completed
                         st.session_state.service_reports_db = pd.concat([st.session_state.service_reports_db, pd.DataFrame([report_entry])], ignore_index=True)
                         save_sheet_data(st.session_state.service_reports_db, "ServiceReports")
-                        st.toast("✅ Categorized Service report saved successfully!", icon="📄")
+                        
+                        st.session_state.jobs_db.loc[st.session_state.jobs_db["Job_ID"] == selected_job_id, "Status"] = "Completed"
+                        save_sheet_data(st.session_state.jobs_db, "Jobs")
+                        
+                        st.session_state.selected_job_for_report = None
+                        st.toast(f"✅ Service report submitted for {selected_job_id}!", icon="📄")
                         st.rerun()
 
     # TAB 3: Broadcast Location
