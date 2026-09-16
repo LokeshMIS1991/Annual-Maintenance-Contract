@@ -139,12 +139,14 @@ if not df.empty:
     df['Pending_Services'] = df['Pending_Services'].apply(lambda x: max(0, x))
 
 # ==========================================
-# 3. SIDEBAR & ROLE-BASED ACCESS CONTROL
+# 3. SIDEBAR & 3-TIER ROLE ACCESS CONTROL
 # ==========================================
 st.sidebar.title("🔐 Role Access Mode")
-user_role = st.sidebar.radio("Select Your Role:", ["Technician Entry", "Admin Dashboard"])
+user_role = st.sidebar.radio("Select Your Role:", ["Technician Entry", "Manager Portal", "Admin Dashboard"])
 
 is_admin = False
+is_manager = False
+
 if user_role == "Admin Dashboard":
     admin_password_secret = st.secrets.get("admin_password", "admin123")
     pwd_input = st.sidebar.text_input("Enter Admin Password", type="password")
@@ -153,10 +155,24 @@ if user_role == "Admin Dashboard":
         is_admin = True
         st.sidebar.success("🔓 Authenticated as Administrator")
     elif pwd_input:
-        st.sidebar.error("❌ Incorrect Password")
+        st.sidebar.error("❌ Incorrect Admin Password")
         st.stop()
     else:
         st.sidebar.warning("⚠️ Enter password to unlock Admin controls.")
+        st.stop()
+
+elif user_role == "Manager Portal":
+    manager_password_secret = st.secrets.get("manager_password", "manager123")
+    pwd_input = st.sidebar.text_input("Enter Manager Password", type="password")
+    
+    if pwd_input == manager_password_secret:
+        is_manager = True
+        st.sidebar.success("🔓 Authenticated as Manager")
+    elif pwd_input:
+        st.sidebar.error("❌ Incorrect Manager Password")
+        st.stop()
+    else:
+        st.sidebar.warning("⚠️ Enter password to unlock Manager controls.")
         st.stop()
 
 # ==========================================
@@ -219,7 +235,7 @@ else:
     pending_df, breakdown_df, latest_pending_per_client = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
 # Dynamic Metrics Cards based on Access Level
-if is_admin:
+if is_admin or is_manager:
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Active Contracts", active_count)
     c2.metric("Clients Pending Services", pending_count)
@@ -232,12 +248,12 @@ else:
 
 st.write("")
 
-# Action Alert Expander (Admin Only)
-if is_admin and not latest_pending_per_client.empty:
-    with st.expander("🚨 Admin Alert: Client Pending Service Breakdown", expanded=False):
+# Action Alert Expander (Admin & Manager)
+if (is_admin or is_manager) and not latest_pending_per_client.empty:
+    with st.expander("🚨 Action Alert: Client Pending Service Breakdown", expanded=False):
         st.warning(f"**Clients with Remaining Pending Visits ({len(latest_pending_per_client)})**")
         
-        display_cols = [c for c in ['Client_Name', 'Company_Name', 'Product_Name', 'Next_Service_Due_Date', 'Services_Completed', 'Total_Services_Included', 'Pending_Services', 'Phone_Number'] if c in latest_pending_per_client.columns]
+        display_cols = [c for c in ['Client_Name', 'Company_Name', 'Product_Name', 'Contract_Start_Date', 'Contract_End_Date', 'Next_Service_Due_Date', 'Services_Completed', 'Total_Services_Included', 'Pending_Services', 'Phone_Number'] if c in latest_pending_per_client.columns]
         st.dataframe(
             latest_pending_per_client[display_cols].rename(columns={
                 'Services_Completed': 'Completed',
@@ -250,11 +266,13 @@ if is_admin and not latest_pending_per_client.empty:
 st.divider()
 
 # ==========================================
-# 6. ROLE-BASED INTERFACE & TABS
+# 6. ROLE-BASED INTERFACE ROUTING
 # ==========================================
 
+# ------------------------------------------
+# A. ADMIN DASHBOARD VIEW
+# ------------------------------------------
 if is_admin:
-    # ADMIN VIEW: Display History and Analytics (Form Entry Removed)
     st.subheader("📊 Administrative History & Record Controls")
     
     if df.empty:
@@ -307,6 +325,8 @@ if is_admin:
                         st.markdown(f"**Product Name:** {row.get('Product_Name', 'N/A')}")
                         st.markdown(f"**Services Breakdown:** Completed {comp} of {tot} services ({pend} Pending)")
                         st.markdown(f"**Remarks:** {row.get('Remarks', 'N/A')}")
+                        st.markdown(f"🔒 **Contract Start Date:** {row.get('Contract_Start_Date', 'N/A')}")
+                        st.markdown(f"🔒 **Contract End Date:** {row.get('Contract_End_Date', 'N/A')}")
                         st.markdown(f"🔒 **Next Service Due:** {row.get('Next_Service_Due_Date', 'N/A')}")
                         st.markdown(f"🔒 **Contract Status:** {row.get('Contract_Status', 'N/A')}")
                     
@@ -324,12 +344,16 @@ if is_admin:
         else:
             st.caption("👈 Enter a specific **Visit ID** in the search bar above to view complete visit details and its associated Job Sheet photo.")
 
+# ------------------------------------------
+# B. MANAGER PORTAL & TECHNICIAN ENTRY VIEWS
+# ------------------------------------------
 else:
-    # TECHNICIAN VIEW: Entry Form & Basic History
-    tab1, tab2 = st.tabs(["📝 Add New Field Visit", "📊 Recent Visit History"])
+    tab1, tab2 = st.tabs(["📝 Add New Field Visit", "📊 Visit History & Records"])
 
     with tab1:
         st.subheader("Register AMC Visit / Emergency Call")
+        if is_manager:
+            st.caption("💼 **Manager Mode Enabled:** Contract Start/End Dates & Status Management are unlocked.")
         
         auto_id = generate_visit_id()
         st.info(f"**Automated Visit ID:** `{auto_id}`")
@@ -340,17 +364,39 @@ else:
             client_name = st.text_input("Client Name *", placeholder="Enter client/customer name")
             
             default_company, default_phone, default_address = "", "", ""
+            default_c_start = today.date()
+            default_c_end = today.date() + datetime.timedelta(days=365)
+
             if not df.empty and client_name.strip() and 'Client_Name' in df.columns:
                 matched_client = df[df['Client_Name'].astype(str).str.strip().str.lower() == client_name.strip().lower()]
                 if not matched_client.empty:
                     default_company = matched_client['Company_Name'].iloc[-1] if 'Company_Name' in matched_client.columns else ""
                     default_phone = matched_client['Phone_Number'].iloc[-1] if 'Phone_Number' in matched_client.columns else ""
                     default_address = matched_client['Address'].iloc[-1] if 'Address' in matched_client.columns else ""
+                    
+                    if 'Contract_Start_Date' in matched_client.columns and pd.notna(matched_client['Contract_Start_Date'].iloc[-1]):
+                        try:
+                            default_c_start = pd.to_datetime(matched_client['Contract_Start_Date'].iloc[-1]).date()
+                        except: pass
+                    if 'Contract_End_Date' in matched_client.columns and pd.notna(matched_client['Contract_End_Date'].iloc[-1]):
+                        try:
+                            default_c_end = pd.to_datetime(matched_client['Contract_End_Date'].iloc[-1]).date()
+                        except: pass
 
             company_name = st.text_input("Company Name", value=default_company)
             phone_number = st.text_input("Phone Number", value=default_phone)
             address = st.text_area("Client Address", value=default_address)
             
+            # MANAGER ONLY: CONTRACT START & END DATES
+            if is_manager:
+                st.markdown("---")
+                st.markdown("🔒 **Manager Contract Details**")
+                contract_start_date = st.date_input("Contract Start Date", default_c_start)
+                contract_end_date = st.date_input("Contract End Date", default_c_end)
+            else:
+                contract_start_date = default_c_start
+                contract_end_date = default_c_end
+
             st.markdown("---")
             visit_type = st.selectbox(
                 "Visit Type *",
@@ -389,9 +435,12 @@ else:
             freq_days_map = {2: 180, 3: 120, 4: 90}
             default_next_due = date_of_visit + datetime.timedelta(days=freq_days_map.get(service_freq, 90))
             
-            # Default contract values auto-assigned without exposing to technician
-            next_service_due = default_next_due
-            contract_status = "Active"
+            if is_manager:
+                next_service_due = st.date_input("Next Service Due Date", default_next_due)
+                contract_status = st.selectbox("Contract Status", ["Active", "Inactive", "Expiring Soon", "Pending Service"])
+            else:
+                next_service_due = default_next_due
+                contract_status = "Active"
                 
             uploaded_photo = st.file_uploader("Upload Job Sheet Photo", type=["jpg", "jpeg", "png"])
         
@@ -418,6 +467,8 @@ else:
                     "Reason_for_Visit": reason_for_visit,
                     "Product_Name": product_name,
                     "Service_Frequency": service_freq,
+                    "Contract_Start_Date": str(contract_start_date),
+                    "Contract_End_Date": str(contract_end_date),
                     "Next_Service_Due_Date": str(next_service_due),
                     "Total_Services_Included": total_services,
                     "Services_Completed": auto_completed,
@@ -432,7 +483,7 @@ else:
                     st.rerun()
 
     with tab2:
-        st.subheader("🔍 Search Recent Records")
+        st.subheader("🔍 Search Historical Records")
         if df.empty:
             st.info("No records currently stored.")
         else:
@@ -441,7 +492,20 @@ else:
             if search_visit_id:
                 filtered_df = filtered_df[filtered_df['Visit_ID'].astype(str).str.contains(search_visit_id, case=False, na=False)]
             
-            # Hide contract timing/status columns from technician history
-            tech_hidden = ['Job_Sheet_Photo_Base64', 'Next_Service_Due_Date_DT', 'Next_Service_Due_Date', 'Contract_Status']
-            display_cols = [c for c in filtered_df.columns if c not in tech_hidden]
+            # Hide contract sensitive columns for Technicians
+            hidden_cols = ['Job_Sheet_Photo_Base64', 'Next_Service_Due_Date_DT']
+            if not is_manager:
+                hidden_cols.extend(['Contract_Start_Date', 'Contract_End_Date', 'Next_Service_Due_Date', 'Contract_Status'])
+                
+            display_cols = [c for c in filtered_df.columns if c not in hidden_cols]
             st.dataframe(filtered_df[display_cols], use_container_width=True)
+
+            if search_visit_id and is_manager:
+                exact_match = df[df['Visit_ID'].astype(str).str.lower() == search_visit_id.lower()]
+                if not exact_match.empty:
+                    row = exact_match.iloc[0]
+                    with st.expander(f"📌 Manager Detailed Inspection for Visit ID: {row['Visit_ID']}", expanded=True):
+                        st.markdown(f"**Contract Start Date:** {row.get('Contract_Start_Date', 'N/A')}")
+                        st.markdown(f"**Contract End Date:** {row.get('Contract_End_Date', 'N/A')}")
+                        st.markdown(f"**Next Service Due:** {row.get('Next_Service_Due_Date', 'N/A')}")
+                        st.markdown(f"**Contract Status:** {row.get('Contract_Status', 'N/A')}")
