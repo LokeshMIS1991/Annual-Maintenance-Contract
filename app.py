@@ -105,7 +105,6 @@ def fetch_all_visits(sheet):
         data = all_values[1:]
         
         df = pd.DataFrame(data, columns=headers)
-        # Remove duplicate column headers if any exist
         df = df.loc[:, ~df.columns.duplicated()]
         return df
 
@@ -140,7 +139,29 @@ if not df.empty:
     df['Pending_Services'] = df['Pending_Services'].apply(lambda x: max(0, x))
 
 # ==========================================
-# 3. BRANDED HEADER
+# 3. SIDEBAR & ROLE-BASED ACCESS CONTROL
+# ==========================================
+st.sidebar.title("🔐 Role Access Mode")
+user_role = st.sidebar.radio("Select Your Role:", ["Technician Entry", "Admin Dashboard"])
+
+is_admin = False
+if user_role == "Admin Dashboard":
+    # Retrieve admin password from secrets or default to "admin123"
+    admin_password_secret = st.secrets.get("admin_password", "admin123")
+    pwd_input = st.sidebar.text_input("Enter Admin Password", type="password")
+    
+    if pwd_input == admin_password_secret:
+        is_admin = True
+        st.sidebar.success("🔓 Authenticated as Administrator")
+    elif pwd_input:
+        st.sidebar.error("❌ Incorrect Password")
+        st.stop()
+    else:
+        st.sidebar.warning("⚠️ Enter password to unlock Admin controls.")
+        st.stop()
+
+# ==========================================
+# 4. BRANDED HEADER
 # ==========================================
 header_title_col, header_logo_col = st.columns([3, 1])
 
@@ -161,7 +182,7 @@ with header_logo_col:
 st.divider()
 
 # ==========================================
-# 4. AUTOMATED BUSINESS METRICS & DASHBOARD
+# 5. BUSINESS METRICS & DASHBOARD
 # ==========================================
 today = pd.Timestamp.today().normalize()
 
@@ -172,7 +193,6 @@ if not df.empty:
         df['Next_Service_Due_Date_DT'] = pd.NaT
 
     active_count = len(df[df['Contract_Status'] == 'Active']) if 'Contract_Status' in df.columns else 0
-    inactive_count = len(df[df['Contract_Status'] == 'Inactive']) if 'Contract_Status' in df.columns else 0
     expiring_count = len(df[df['Contract_Status'] == 'Expiring Soon']) if 'Contract_Status' in df.columns else 0
 
     pending_df = df[
@@ -196,21 +216,26 @@ if not df.empty:
     breakdown_count = len(breakdown_df)
 
 else:
-    active_count, inactive_count, expiring_count, pending_count, breakdown_count = 0, 0, 0, 0, 0
+    active_count, expiring_count, pending_count, breakdown_count = 0, 0, 0, 0
     pending_df, breakdown_df, latest_pending_per_client = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-# Main Metrics Cards
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Active Contracts", active_count)
-c2.metric("Clients Pending Services", pending_count)
-c3.metric("Expiring Soon", expiring_count)
-c4.metric("Breakdown Calls", breakdown_count)
+# Dynamic Metrics Cards based on Access Level
+if is_admin:
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Active Contracts", active_count)
+    c2.metric("Clients Pending Services", pending_count)
+    c3.metric("Expiring Soon", expiring_count)
+    c4.metric("Breakdown Calls", breakdown_count)
+else:
+    c1, c2 = st.columns(2)
+    c1.metric("Clients Pending Services", pending_count)
+    c2.metric("Breakdown Calls", breakdown_count)
 
 st.write("")
 
-# Action Alert Expander
-if not latest_pending_per_client.empty:
-    with st.expander("🚨 Action Required: Client Pending Service Breakdown", expanded=False):
+# Action Alert Expander (Admin Only)
+if is_admin and not latest_pending_per_client.empty:
+    with st.expander("🚨 Admin Alert: Client Pending Service Breakdown", expanded=False):
         st.warning(f"**Clients with Remaining Pending Visits ({len(latest_pending_per_client)})**")
         
         display_cols = [c for c in ['Client_Name', 'Company_Name', 'Product_Name', 'Next_Service_Due_Date', 'Services_Completed', 'Total_Services_Included', 'Pending_Services', 'Phone_Number'] if c in latest_pending_per_client.columns]
@@ -226,11 +251,11 @@ if not latest_pending_per_client.empty:
 st.divider()
 
 # ==========================================
-# 5. ENTRY FORM & RECORDS HISTORY TABS
+# 6. ENTRY FORM & RECORDS HISTORY TABS
 # ==========================================
 tab1, tab2 = st.tabs(["📝 Add New Field Visit", "📊 Visit History & Records"])
 
-# --- TAB 1: AUTOMATED FORM ENTRY ---
+# --- TAB 1: FORM ENTRY ---
 with tab1:
     st.subheader("Register AMC Visit / Emergency Call")
     
@@ -240,10 +265,8 @@ with tab1:
     col_left, col_right = st.columns(2)
     
     with col_left:
-        # Mandatory Manual Text Input for Client Name
         client_name = st.text_input("Client Name *", placeholder="Enter client/customer name")
         
-        # Auto-fill company/address/phone details if client exists in records
         default_company, default_phone, default_address = "", "", ""
         if not df.empty and client_name.strip() and 'Client_Name' in df.columns:
             matched_client = df[df['Client_Name'].astype(str).str.strip().str.lower() == client_name.strip().lower()]
@@ -275,7 +298,6 @@ with tab1:
         service_freq = st.selectbox("Service Frequency (Visits/Year)", [2, 3, 4], index=2)
         total_services = int(service_freq)
         
-        # Calculate Client-Specific Progress Lookup
         prev_completed = 0
         if not df.empty and client_name.strip() and 'Client_Name' in df.columns and 'Product_Name' in df.columns:
             matched = df[(df['Client_Name'].astype(str).str.strip().str.lower() == client_name.strip().lower()) & 
@@ -289,15 +311,20 @@ with tab1:
             
         auto_pending = max(0, total_services - auto_completed)
         
-        # Display specific status ONLY when client name is entered
         if client_name.strip():
             st.info(f"📊 **Automated Progress Status for {client_name.strip()}:** Completed `{auto_completed}` of `{total_services}` services (`{auto_pending}` Pending)")
         
         freq_days_map = {2: 180, 3: 120, 4: 90}
         default_next_due = date_of_visit + datetime.timedelta(days=freq_days_map.get(service_freq, 90))
-        next_service_due = st.date_input("Next Service Due Date", default_next_due)
         
-        contract_status = st.selectbox("Contract Status", ["Active", "Inactive", "Expiring Soon", "Pending Service"])
+        # SENSITIVE CONTRACT FIELDS (RESTRICTED TO ADMIN)
+        if is_admin:
+            next_service_due = st.date_input("Next Service Due Date (Admin Only)", default_next_due)
+            contract_status = st.selectbox("Contract Status (Admin Only)", ["Active", "Inactive", "Expiring Soon", "Pending Service"])
+        else:
+            next_service_due = default_next_due
+            contract_status = "Active"
+            
         uploaded_photo = st.file_uploader("Upload Job Sheet Photo", type=["jpg", "jpeg", "png"])
     
     remarks = st.text_area("Technician Remarks / Parts Used")
@@ -335,7 +362,7 @@ with tab1:
                 st.success(f"✅ Visit `{auto_id}` registered for {client_name.strip()}! ({auto_completed}/{total_services} Completed - {auto_pending} Pending)")
                 st.cache_resource.clear()
                 st.rerun()
-                
+
 # --- TAB 2: HISTORY & SEARCH BY VISIT ID ---
 with tab2:
     st.subheader("🔍 Visit Search & Historical Records")
@@ -346,18 +373,25 @@ with tab2:
         f_col1, f_col2 = st.columns([2, 1])
         with f_col1:
             search_visit_id = st.text_input("🔍 Search by Visit ID (e.g., AMC-2026-XXXXX)", "").strip()
-        with f_col2:
-            status_filter = st.selectbox("Filter Status", ["All", "Active", "Inactive", "Expiring Soon", "Pending Service"])
-
+            
         filtered_df = df.copy()
         
-        if status_filter != "All":
-            filtered_df = filtered_df[filtered_df['Contract_Status'] == status_filter]
+        # Admin-only Status Filter
+        if is_admin:
+            with f_col2:
+                status_filter = st.selectbox("Filter Status", ["All", "Active", "Inactive", "Expiring Soon", "Pending Service"])
+            if status_filter != "All":
+                filtered_df = filtered_df[filtered_df['Contract_Status'] == status_filter]
 
         if search_visit_id:
             filtered_df = filtered_df[filtered_df['Visit_ID'].astype(str).str.contains(search_visit_id, case=False, na=False)]
 
-        display_cols = [c for c in filtered_df.columns if c not in ['Job_Sheet_Photo_Base64', 'Next_Service_Due_Date_DT']]
+        # Sensitive Columns Removal for Technicians
+        hidden_cols = ['Job_Sheet_Photo_Base64', 'Next_Service_Due_Date_DT']
+        if not is_admin:
+            hidden_cols.extend(['Next_Service_Due_Date', 'Contract_Status'])
+            
+        display_cols = [c for c in filtered_df.columns if c not in hidden_cols]
         st.dataframe(filtered_df[display_cols], use_container_width=True)
 
         st.divider()
@@ -388,10 +422,13 @@ with tab2:
                     with d_col2:
                         st.markdown(f"**Technician Name:** {row.get('Technician_Name', 'N/A')}")
                         st.markdown(f"**Product Name:** {row.get('Product_Name', 'N/A')}")
-                        st.markdown(f"**Contract Status:** {row.get('Contract_Status', 'N/A')}")
-                        st.markdown(f"**Next Service Due:** {row.get('Next_Service_Due_Date', 'N/A')}")
                         st.markdown(f"**Services Breakdown:** Completed {comp} of {tot} services ({pend} Pending)")
                         st.markdown(f"**Remarks:** {row.get('Remarks', 'N/A')}")
+                        
+                        # Sensitive Details Shown to Admin Only
+                        if is_admin:
+                            st.markdown(f"🔒 **Next Service Due:** {row.get('Next_Service_Due_Date', 'N/A')}")
+                            st.markdown(f"🔒 **Contract Status:** {row.get('Contract_Status', 'N/A')}")
                     
                     photo_b64 = str(row.get('Job_Sheet_Photo_Base64', ''))
                     if len(photo_b64) > 10:
