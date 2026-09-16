@@ -40,7 +40,7 @@ def load_sheet_data(worksheet_name):
         "Users": ["User_ID", "Full_Name", "Role", "Password"],
         "Jobs": ["Job_ID", "Assigned_Tech_ID", "Client_Name", "Client_Phone", "Address", "City", "Pincode", "Issue_Description", "Status", "Scheduled_Time"],
         "TechStatus": ["Tech_ID", "Current_City", "Current_Pincode", "Current_Status", "Next_City", "Next_Pincode", "ETA", "Last_Updated"],
-        "ServiceReports": ["Report_ID", "Tech_ID", "Tech_Name", "Client_Name", "Site_Location", "AMC_Contract_No", "Service_Date", "Visit_Number", "Next_Service_Due_Date", "Remarks", "Submitted_At"],
+        "ServiceReports": ["Report_ID", "Tech_ID", "Tech_Name", "Client_Name", "Site_Location", "AMC_Contract_No", "Category", "Equipment_Type", "Make_Model", "Door_Size", "Qty", "Condition", "Checklist_Data", "Service_Date", "Visit_Number", "Next_Service_Due_Date", "Remarks", "Submitted_At"],
         "AMCContracts": ["AMC_Contract_No", "Client_Name", "Start_Date", "End_Date", "Allowed_Visits"]
     }
     
@@ -89,7 +89,72 @@ if "amc_contracts_db" not in st.session_state:
     st.session_state.amc_contracts_db = load_sheet_data("AMCContracts")
 
 # -----------------------------------------------------------------------------
-# 2. HELPER FUNCTIONS
+# 2. CHECKLIST DATA CONFIGURATION
+# -----------------------------------------------------------------------------
+
+EQUIPMENT_DATA = {
+    "Rolling Shutter": {
+        "types": [
+            "Motorized Rolling Shutter (Central / Side Motor)",
+            "Manual Pull-Push / Gear Operated Shutter",
+            "Insulated / Double-Walled Slats Shutter",
+            "Perforated / Grill Type Rolling Shutter",
+            "Fire Rated Rolling Shutter"
+        ],
+        "checklist": [
+            "Shutter Curtain Slats, End Locks & Bottom Profile Alignment",
+            "Side Guide Channels (Tracks), Rubber Seals & Weather Strips Check",
+            "Main Shaft Pipe, Counterbalance Springs & Drum Bearings",
+            "Drive Motor (Central/Side Tubular), Gear Box & Mechanical Brake",
+            "Mechanical Electromechanical Limit Switches (Top & Bottom Cut-off)",
+            "Manual Override System (Hand Chain / Hand Crank Release)",
+            "Control Panel, Push Button Box, Wiring Connections & Relays",
+            "RF Remote Control Receiver, Handheld Transmitters & Key Switches",
+            "Safety Anti-Fall Brake / Parachute Safety Device Inspection",
+            "Safety Obstacle Infrared Sensors / Safety Edge Operation Check",
+            "Drive Sprockets, Drive Chains & Alignment Tension Adjustments",
+            "Fire Shutter Fusible Link & Auto-Closing Signal Drop Test (If App.)",
+            "Central Shaft Mechanical Spring Tension Adjustments",
+            "Hood Cover (Canopy Box) Structure & Brackets Rigidity",
+            "Greasing & Lubrication of Guide Tracks, Bearings & Chains",
+            "Smooth Up/Down Motion Check & Absence of Abnormal Noise",
+            "Mechanical Center Lock & Side Shoot Bolt Lock Verification",
+            "Complete Automatic & Manual Operation Cycle Test"
+        ]
+    },
+    "High Speed Door": {
+        "types": [
+            "High Speed Roll-Up Door (PVC Fabric)",
+            "Self-Repairing High Speed Door",
+            "Cold Room / Freezer High Speed Door",
+            "Cleanroom High Speed Door",
+            "High Speed Spiral / Aluminium Door"
+        ],
+        "checklist": [
+            "Door Curtain / Fabric Panel Condition & Vision Window Clarity",
+            "Side Guide Channels, Wind Stiffener Bars & Seals Integrity",
+            "Self-Repairing Zipper / Track Re-insertion Mechanism",
+            "High-Speed Drive Motor, Gearbox & Brake Assembly",
+            "VFD (Variable Frequency Drive) Speed Settings (Soft Start / Stop)",
+            "Digital Absolute Encoder / Limit Switch Settings",
+            "Multi-Beam Safety Light Curtain Barrier Operation",
+            "Bottom Edge Wireless/Wired Safety Sensor & Contact Edge",
+            "Radar Motion Sensors / Microwave Motion Activation",
+            "Induction Loop Sensors & Pull-Cord Switch Functions",
+            "Air Lock Interlocking System (Cleanroom / Cold Room Door)",
+            "Control Panel Connections, PLC / Microcontroller Display & Fuses",
+            "Counterbalance Springs / Tensioning Belts / Shaft Bearings",
+            "Emergency Manual Crank / Hand Lever Release Operation",
+            "UPS / Battery Backup Automatic Opening System",
+            "Greasing & Lubrication of Bearings, Guides & Drive Chains",
+            "Full Cycle High-Speed Opening & Closing Operation Check",
+            "Safety Reversing Test on Obstacle Detection"
+        ]
+    }
+}
+
+# -----------------------------------------------------------------------------
+# 3. HELPER FUNCTIONS
 # -----------------------------------------------------------------------------
 
 def make_google_maps_link(address, city, pincode=""):
@@ -103,7 +168,7 @@ def get_logo_path():
     return None
 
 # -----------------------------------------------------------------------------
-# 3. BRANDED UI STYLING
+# 4. BRANDED UI STYLING
 # -----------------------------------------------------------------------------
 
 st.markdown("""
@@ -111,10 +176,8 @@ st.markdown("""
     .stTabs [data-baseweb="tab-highlight"] { background-color: #1565C0 !important; }
     .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #1565C0 !important; font-weight: 700 !important; }
     [data-testid="stSidebar"] { background-color: #F8FAFC !important; }
-    .sidebar-logo-container { display: flex; flex-direction: column; align-items: center; width: 100%; margin-bottom: 10px; }
     .sidebar-logo-sub { color: #10B981; font-weight: 800; font-size: 0.95rem; letter-spacing: 1.5px; text-align: center; margin-top: 6px; }
     
-    /* Buttons Styling */
     .stButton > button, div[data-testid="stForm"] button { 
         background-color: #1565C0 !important; 
         color: #FFFFFF !important; 
@@ -125,7 +188,6 @@ st.markdown("""
     .stButton > button:hover, div[data-testid="stForm"] button:hover { background-color: #0D47A1 !important; }
     a { color: #1565C0 !important; }
     
-    /* Clean Form Outline */
     div[data-testid="stForm"] { 
         background-color: #FFFFFF; 
         border: 2px solid #1565C0; 
@@ -134,7 +196,6 @@ st.markdown("""
     }
     .login-container div[data-testid="stForm"] { padding: 20px 28px !important; max-width: 360px; margin: 0 auto; text-align: center; }
 
-    /* Override and reset selectbox styling to standard clean view */
     div[data-baseweb="select"] {
         background-color: transparent !important;
     }
@@ -147,7 +208,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 4. LOGIN SCREEN
+# 5. LOGIN SCREEN
 # -----------------------------------------------------------------------------
 
 if "user" not in st.session_state:
@@ -181,7 +242,7 @@ if st.session_state.user is None:
     st.stop()
 
 # -----------------------------------------------------------------------------
-# 5. SIDEBAR
+# 6. SIDEBAR
 # -----------------------------------------------------------------------------
 
 with st.sidebar:
@@ -199,7 +260,7 @@ with st.sidebar:
         st.rerun()
 
 # -----------------------------------------------------------------------------
-# 6. TECHNICIAN DASHBOARD
+# 7. TECHNICIAN DASHBOARD
 # -----------------------------------------------------------------------------
 
 if st.session_state.user["Role"] == "Technician":
@@ -251,42 +312,93 @@ if st.session_state.user["Role"] == "Technician":
                         st.rerun()
                 st.divider()
 
-    # TAB 2: Service Report Form
+    # TAB 2: Dynamic Categorized Service Report Form
     with tech_tab2:
-        st.subheader("📝 Submit Client Service & Inspection Form")
-        st.caption("Select the AMC contract below to automatically load the visit limit dropdown.")
+        st.subheader("📝 Submit Client Service Report")
         
         contracts_df = st.session_state.amc_contracts_db
-        
         if contracts_df.empty:
             st.warning("⚠️ No active AMC contracts found in the database.")
         else:
             contract_options = contracts_df["AMC_Contract_No"].astype(str).tolist()
-            selected_contract_no = st.selectbox("Select AMC Contract Number*", contract_options)
             
-            selected_contract_info = contracts_df[contracts_df["AMC_Contract_No"].astype(str) == selected_contract_no].iloc[0]
+            c_header1, c_header2 = st.columns(2)
+            with c_header1:
+                selected_contract_no = st.selectbox("Select AMC Contract Number*", contract_options)
+                selected_contract_info = contracts_df[contracts_df["AMC_Contract_No"].astype(str) == selected_contract_no].iloc[0]
+                client_name_val = selected_contract_info.get("Client_Name", "")
+                st.text_input("Client Name", value=client_name_val, disabled=True)
             
-            client_name_val = selected_contract_info.get("Client_Name", "")
-            try:
-                allowed_visits_max = int(selected_contract_info.get("Allowed_Visits", 4))
-            except Exception:
-                allowed_visits_max = 4
-                
-            visit_choices = [f"Visit {i} of {allowed_visits_max}" for i in range(1, allowed_visits_max + 1)]
-            
+            with c_header2:
+                # Category selection driving dynamic checklist fields
+                selected_category = st.selectbox("Equipment Category*", ["Rolling Shutter", "High Speed Door"])
+                try:
+                    allowed_visits_max = int(selected_contract_info.get("Allowed_Visits", 4))
+                except Exception:
+                    allowed_visits_max = 4
+                visit_choices = [f"Visit {i} of {allowed_visits_max}" for i in range(1, allowed_visits_max + 1)]
+                rpt_visit_num_str = st.selectbox("AMC Visit Sequence*", visit_choices)
+
+            st.divider()
+
             with st.form(f"service_report_form_{tech_id}"):
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.text_input("Client Name", value=client_name_val, disabled=True)
-                    rpt_site_location = st.text_input("Site Location / Address*", placeholder="e.g. Plot 42, GIDC Phase 2")
-                
-                with c2:
+                st.markdown("### General Visit Details")
+                c_det1, c_det2 = st.columns(2)
+                with c_det1:
+                    rpt_site_location = st.text_input("Site / Location*", placeholder="e.g. Unit 4, GIDC Estate")
                     rpt_service_date = st.date_input("Service Date", value=date.today())
-                    rpt_visit_num_str = st.selectbox("AMC Visit Sequence*", visit_choices)
+                with c_det2:
                     rpt_next_due = st.date_input("Next Service Due Date", value=date.today() + pd.Timedelta(days=90))
-                    
-                rpt_remarks = st.text_area("Technician Remarks & Actions Taken*", placeholder="Describe work performed...")
+
+                # Section 1: Equipment Details
+                st.markdown("### 1. Equipment Details")
+                eq_col1, eq_col2, eq_col3, eq_col4, eq_col5 = st.columns([3, 2, 2, 1, 2])
+                with eq_col1:
+                    eq_type = st.selectbox("Equipment Type", EQUIPMENT_DATA[selected_category]["types"])
+                with eq_col2:
+                    eq_make_model = st.text_input("Make / Model", placeholder="e.g. Sidharth / Standard")
+                with eq_col3:
+                    eq_size = st.text_input("Door Size (W x H)", placeholder="e.g. 4000x4500 mm")
+                with eq_col4:
+                    eq_qty = st.number_input("Qty", min_value=1, value=1)
+                with eq_col5:
+                    eq_condition = st.selectbox("Condition", ["Good", "Requires Repair", "Critical", "Replaced"])
+
+                # Section 2: Preventive Maintenance Checklist
+                st.markdown(f"### 2. Preventive Maintenance Checklist ({selected_category})")
                 
+                checklist_results = {}
+                checklist_items = EQUIPMENT_DATA[selected_category]["checklist"]
+                
+                # Render 18 Points
+                for idx, point in enumerate(checklist_items, 1):
+                    col_num, col_point, col_status, col_remark = st.columns([0.5, 4.5, 3, 4])
+                    with col_num:
+                        st.write(f"**{idx}.**")
+                    with col_point:
+                        st.write(point)
+                    with col_status:
+                        status = st.radio(
+                            "Status", 
+                            ["OK", "Not OK", "N/A"], 
+                            horizontal=True, 
+                            key=f"check_{selected_category}_{idx}",
+                            label_visibility="collapsed"
+                        )
+                    with col_remark:
+                        remark = st.text_input(
+                            "Remarks", 
+                            placeholder="Action taken / Remark", 
+                            key=f"rem_{selected_category}_{idx}",
+                            label_visibility="collapsed"
+                        )
+                    checklist_results[f"P{idx}_{point}"] = {"status": status, "remark": remark}
+                    st.divider()
+
+                # Section 3: Overall Remarks
+                st.markdown("### 3. Remarks / Recommendations")
+                rpt_remarks = st.text_area("General Remarks & Summary*", placeholder="Overall observations, recommendations...")
+
                 submit_report = st.form_submit_button("Submit Service Report")
                 
                 if submit_report:
@@ -306,6 +418,13 @@ if st.session_state.user["Role"] == "Technician":
                             "Client_Name": client_name_val,
                             "Site_Location": rpt_site_location,
                             "AMC_Contract_No": selected_contract_no,
+                            "Category": selected_category,
+                            "Equipment_Type": eq_type,
+                            "Make_Model": eq_make_model,
+                            "Door_Size": eq_size,
+                            "Qty": str(eq_qty),
+                            "Condition": eq_condition,
+                            "Checklist_Data": str(checklist_results),
                             "Service_Date": str(rpt_service_date),
                             "Visit_Number": rpt_visit_num_str,
                             "Next_Service_Due_Date": str(rpt_next_due),
@@ -315,7 +434,7 @@ if st.session_state.user["Role"] == "Technician":
                         
                         st.session_state.service_reports_db = pd.concat([st.session_state.service_reports_db, pd.DataFrame([report_entry])], ignore_index=True)
                         save_sheet_data(st.session_state.service_reports_db, "ServiceReports")
-                        st.toast("✅ Service report saved!", icon="📄")
+                        st.toast("✅ Categorized Service report saved successfully!", icon="📄")
                         st.rerun()
 
     # TAB 3: Broadcast Location
@@ -375,7 +494,7 @@ if st.session_state.user["Role"] == "Technician":
             st.info("📜 No service reports submitted yet.")
 
 # -----------------------------------------------------------------------------
-# 7. MANAGER COMMAND DASHBOARD
+# 8. MANAGER COMMAND DASHBOARD
 # -----------------------------------------------------------------------------
 
 elif st.session_state.user["Role"] in ["Manager", "Admin"]:
@@ -462,7 +581,6 @@ elif st.session_state.user["Role"] in ["Manager", "Admin"]:
                     format_func=lambda x: f"{x} - {tech_list[tech_list['User_ID']==x]['Full_Name'].values[0]}"
                 )
                 
-                # Calendar and Time Inputs
                 st.markdown("**Scheduled Date & Time**")
                 sched_col1, sched_col2 = st.columns(2)
                 with sched_col1:
@@ -471,7 +589,6 @@ elif st.session_state.user["Role"] in ["Manager", "Admin"]:
                     sched_time = st.time_input("Scheduled Time", value=time(14, 0))
                 
                 if st.form_submit_button("Task Created"):
-                    # Restrict selected time in the past
                     selected_datetime = datetime.combine(sched_date, sched_time)
                     if selected_datetime < datetime.now():
                         st.error("⚠️ Cannot schedule a task for a time that has already passed today.")
