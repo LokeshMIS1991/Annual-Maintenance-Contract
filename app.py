@@ -253,40 +253,12 @@ with st.sidebar:
         st.rerun()
 
 # -----------------------------------------------------------------------------
-# 6. TECHNICIAN DASHBOARD (WITH ENFORCED 4-HOUR UPDATE RULE)
+# 6. TECHNICIAN DASHBOARD
 # -----------------------------------------------------------------------------
 
 if st.session_state.user["Role"] == "Technician":
     tech_id = str(st.session_state.user["User_ID"])
     
-    # 1. Fetch Technician Record & Calculate Time Elapsed
-    curr_rec = st.session_state.tech_status_db[
-        st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id
-    ]
-    
-    last_updated_str = str(curr_rec["Last_Updated"].values[0]) if not curr_rec.empty and "Last_Updated" in curr_rec.columns else ""
-    
-    is_overdue = False
-    hours_since_update = 0.0
-    
-    if last_updated_str and last_updated_str != "nan":
-        try:
-            # Parse time string (e.g., "02:15 PM")
-            last_time = datetime.strptime(last_updated_str, "%I:%M %p").time()
-            now_dt = datetime.now()
-            last_dt = datetime.combine(now_dt.date(), last_time)
-            
-            # Handle overnight updates boundary
-            if last_dt > now_dt:
-                last_dt -= pd.Timedelta(days=1)
-                
-            hours_since_update = (now_dt - last_dt).total_seconds() / 3600
-            if hours_since_update >= 4.0:
-                is_overdue = True
-        except Exception:
-            is_overdue = False
-
-    # 2. Header & Overdue Alert Banner
     st.markdown(f"""
     <div style='display: flex; align-items: center; gap: 12px; margin-bottom: 10px;'>
         <h1 style='color: #0D47A1; margin: 0;'>🛠️ Technician Dashboard</h1>
@@ -294,134 +266,55 @@ if st.session_state.user["Role"] == "Technician":
     </div>
     """, unsafe_allow_html=True)
 
-    if is_overdue:
-        st.error(f"🚨 **STATUS UPDATE OVERDUE!** Your last broadcast was **{hours_since_update:.1f} hours ago** ({last_updated_str}). Company policy requires an update every 4 hours. Please broadcast your current status below to proceed.")
+    tech_tab1, tech_tab2, tech_tab3 = st.tabs(["📋 My Assigned Work Orders", "📍 Update Status & Destination", "📜 Service History"])
 
-    # Select default active tab based on overdue state
-    tech_tab1, tech_tab2, tech_tab3 = st.tabs([
-        "📋 My Assigned Work Orders", 
-        "📍 Update Status & Destination" + (" ⚠️" if is_overdue else ""), 
-        "📜 Service History"
-    ])
-
-    # TAB 1: Assigned Jobs (Locked if Overdue)
+    # TAB 1: Assigned Jobs
     with tech_tab1:
-        if is_overdue:
-            st.warning("🔒 **Work Orders Temporarily Locked**: Please navigate to the **'Update Status & Destination'** tab and broadcast your live location to unlock your assigned tasks.")
-        else:
-            st.subheader("Assigned Maintenance Tasks")
-            tech_jobs = st.session_state.jobs_db[
-                (st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id) & 
-                (st.session_state.jobs_db["Status"] != "Completed")
-            ]
-            
-            if tech_jobs.empty:
-                st.info("🎉 No pending maintenance visits assigned to you.")
-            else:
-                st.caption(f"📌 You have **{len(tech_jobs)} active task(s)** assigned.")
-                for idx, job in tech_jobs.iterrows():
-                    pincode_str = f" - {job['Pincode']}" if "Pincode" in job and pd.notna(job["Pincode"]) else ""
-                    with st.expander(f"🔵 [{job['Job_ID']}] {job['Client_Name']} — {job['City']}{pincode_str} ({job['Status']})", expanded=True):
-                        col_a, col_b = st.columns([2, 1])
-                        
-                        with col_a:
-                            st.markdown(f"**Address:** {job['Address']}, {job['City']} {pincode_str}")
-                            st.markdown(f"**Client Contact:** [{job['Client_Phone']}](tel:{job['Client_Phone']})")
-                            st.markdown(f"**Task Description:** {job['Issue_Description']}")
-                            st.markdown(f"**Scheduled Time:** {job['Scheduled_Time']}")
-                            
-                            maps_url = make_google_maps_link(job['Address'], job['City'], job.get('Pincode', ''))
-                            st.markdown(f"[📍 **Open Route in Google Maps**]({maps_url})")
-
-                        with col_b:
-                            st.markdown("### Update Progress")
-                            status_list = ["Assigned", "In Transit", "On Site", "Completed"]
-                            current_status = job["Status"] if job["Status"] in status_list else "Assigned"
-                            
-                            new_status = st.selectbox(
-                                "Job Status",
-                                status_list,
-                                index=status_list.index(current_status),
-                                key=f"status_{job['Job_ID']}"
-                            )
-                            if st.button("Save Status", key=f"btn_{job['Job_ID']}"):
-                                st.session_state.jobs_db.loc[
-                                    st.session_state.jobs_db["Job_ID"] == job["Job_ID"], "Status"
-                                ] = new_status
-                                
-                                save_sheet_data(st.session_state.jobs_db, "Jobs")
-                                st.toast(f"✅ Status updated for {job['Job_ID']} in Google Sheets!")
-                                st.rerun()
-
-    # TAB 2: Location Broadcast Form
-    with tech_tab2:
-        st.subheader("Broadcast Live Location & Next Travel City")
+        st.subheader("Assigned Maintenance Tasks")
         
-        c_city = str(curr_rec["Current_City"].values[0]) if not curr_rec.empty and "Current_City" in curr_rec.columns else ""
-        c_pin = str(curr_rec["Current_Pincode"].values[0]) if not curr_rec.empty and "Current_Pincode" in curr_rec.columns else ""
-        c_status_raw = str(curr_rec["Current_Status"].values[0]).strip().title() if not curr_rec.empty and "Current_Status" in curr_rec.columns else "Available"
-        
-        n_city = str(curr_rec["Next_City"].values[0]) if not curr_rec.empty and "Next_City" in curr_rec.columns else ""
-        n_pin = str(curr_rec["Next_Pincode"].values[0]) if not curr_rec.empty and "Next_Pincode" in curr_rec.columns else ""
-        eta_val = str(curr_rec["ETA"].values[0]) if not curr_rec.empty and "ETA" in curr_rec.columns else ""
-
-        with st.form("broadcast_location_form"):
-            c1, c2 = st.columns(2)
-            
-            with c1:
-                input_curr_city = st.text_input("Current City", value=c_city)
-                input_curr_pin = st.text_input("Current Pin Code", value=c_pin, max_chars=6)
-                
-                status_options = ["Available", "On Site", "In Transit"]
-                selected_idx = status_options.index(c_status_raw) if c_status_raw in status_options else 0
-                input_status = st.radio("Current Activity", status_options, index=selected_idx, horizontal=True)
-                
-            with c2:
-                input_next_city = st.text_input("Next Target Destination City", value=n_city)
-                input_next_pin = st.text_input("Next Target Pin Code", value=n_pin, max_chars=6)
-                input_eta = st.text_input("Estimated Arrival Time (ETA)", value=eta_val)
-                
-            submit_broadcast = st.form_submit_button("Broadcast Location Update")
-            
-            if submit_broadcast:
-                try:
-                    local_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
-                    now_str = datetime.now(local_tz).strftime("%I:%M %p")
-                except Exception:
-                    now_str = datetime.now().strftime("%I:%M %p")
-                
-                if tech_id in st.session_state.tech_status_db["Tech_ID"].astype(str).values:
-                    st.session_state.tech_status_db.loc[
-                        st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id,
-                        ["Current_City", "Current_Pincode", "Current_Status", "Next_City", "Next_Pincode", "ETA", "Last_Updated"]
-                    ] = [input_curr_city, input_curr_pin, input_status, input_next_city, input_next_pin, input_eta, now_str]
-                else:
-                    new_row = {
-                        "Tech_ID": tech_id,
-                        "Current_City": input_curr_city,
-                        "Current_Pincode": input_curr_pin,
-                        "Current_Status": input_status,
-                        "Next_City": input_next_city,
-                        "Next_Pincode": input_next_pin,
-                        "ETA": input_eta,
-                        "Last_Updated": now_str
-                    }
-                    st.session_state.tech_status_db = pd.concat([st.session_state.tech_status_db, pd.DataFrame([new_row])], ignore_index=True)
-                
-                save_sheet_data(st.session_state.tech_status_db, "TechStatus")
-                st.session_state.tech_status_db = load_sheet_data("TechStatus")
-                
-                st.toast(f"📍 Location Broadcast Updated at {now_str}!", icon="✅")
-                st.rerun()
-
-    # TAB 3: Service History
-    with tech_tab3:
-        st.subheader("My Service Record")
-        completed_jobs = st.session_state.jobs_db[
+        tech_jobs = st.session_state.jobs_db[
             (st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id) & 
-            (st.session_state.jobs_db["Status"] == "Completed")
+            (st.session_state.jobs_db["Status"] != "Completed")
         ]
-        st.dataframe(completed_jobs, use_container_width=True)
+        
+        if tech_jobs.empty:
+            st.info("🎉 No pending maintenance visits assigned to you.")
+        else:
+            st.caption(f"📌 You have **{len(tech_jobs)} active task(s)** assigned.")
+            for idx, job in tech_jobs.iterrows():
+                pincode_str = f" - {job['Pincode']}" if "Pincode" in job and pd.notna(job["Pincode"]) else ""
+                with st.expander(f"🔵 [{job['Job_ID']}] {job['Client_Name']} — {job['City']}{pincode_str} ({job['Status']})", expanded=True):
+                    col_a, col_b = st.columns([2, 1])
+                    
+                    with col_a:
+                        st.markdown(f"**Address:** {job['Address']}, {job['City']} {pincode_str}")
+                        st.markdown(f"**Client Contact:** [{job['Client_Phone']}](tel:{job['Client_Phone']})")
+                        st.markdown(f"**Task Description:** {job['Issue_Description']}")
+                        st.markdown(f"**Scheduled Time:** {job['Scheduled_Time']}")
+                        
+                        maps_url = make_google_maps_link(job['Address'], job['City'], job.get('Pincode', ''))
+                        st.markdown(f"[📍 **Open Route in Google Maps**]({maps_url})")
+
+                    with col_b:
+                        st.markdown("### Update Progress")
+                        status_list = ["Assigned", "In Transit", "On Site", "Completed"]
+                        current_status = job["Status"] if job["Status"] in status_list else "Assigned"
+                        
+                        new_status = st.selectbox(
+                            "Job Status",
+                            status_list,
+                            index=status_list.index(current_status),
+                            key=f"status_{job['Job_ID']}"
+                        )
+                        if st.button("Save Status", key=f"btn_{job['Job_ID']}"):
+                            st.session_state.jobs_db.loc[
+                                st.session_state.jobs_db["Job_ID"] == job["Job_ID"], "Status"
+                            ] = new_status
+                            
+                            save_sheet_data(st.session_state.jobs_db, "Jobs")
+                            st.toast(f"✅ Status updated for {job['Job_ID']} in Google Sheets!")
+                            st.rerun()
+
     # TAB 2: Location Broadcast
     with tech_tab2:
         st.subheader("Broadcast Live Location & Next Travel City")
