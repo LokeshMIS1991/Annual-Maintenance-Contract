@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import zoneinfo
 import urllib.parse
 import os
 import gspread
@@ -160,14 +161,14 @@ st.markdown("""
         text-align: center !important;
     }
 
-    /* Move eye icon significantly to the left */
+    /* Move eye icon to the left */
     .login-container div[data-baseweb="input"] button {
         margin-right: 28px !important;
         position: relative !important;
         right: 10px !important;
     }
 
-    /* Prevent input text from running under the shifted eye icon */
+    /* Prevent text from overlapping eye icon */
     .login-container input[type="password"], 
     .login-container input[type="text"] {
         padding-right: 65px !important;
@@ -185,6 +186,7 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
 # -----------------------------------------------------------------------------
 # 4. LOGIN SCREEN
 # -----------------------------------------------------------------------------
@@ -210,9 +212,6 @@ if st.session_state.user is None:
             user_id_input = st.text_input("User ID / Tech ID", placeholder="e.g. TECH01").strip().upper()
             password_input = st.text_input("Password", type="password", placeholder="Enter password").strip()
             
-            # Explicit helper label underneath input
-            st.markdown("<p style='text-align:center; color:#64748B; font-size:0.75rem; margin-top:-8px; margin-bottom:12px;'>Press Enter to Login</p>", unsafe_allow_html=True)
-            
             submit_login = st.form_submit_button("Sign In", use_container_width=True)
 
             if submit_login:
@@ -228,6 +227,7 @@ if st.session_state.user is None:
         st.markdown("</div>", unsafe_allow_html=True)
 
     st.stop()
+
 # -----------------------------------------------------------------------------
 # 5. SIDEBAR SETUP
 # -----------------------------------------------------------------------------
@@ -326,7 +326,6 @@ if st.session_state.user["Role"] == "Technician":
         c_city = str(curr_rec["Current_City"].values[0]) if not curr_rec.empty and "Current_City" in curr_rec.columns else ""
         c_pin = str(curr_rec["Current_Pincode"].values[0]) if not curr_rec.empty and "Current_Pincode" in curr_rec.columns else ""
         
-        # Clean current status input for reliable dropdown selection
         c_status_raw = str(curr_rec["Current_Status"].values[0]).strip().title() if not curr_rec.empty and "Current_Status" in curr_rec.columns else "Available"
         
         n_city = str(curr_rec["Next_City"].values[0]) if not curr_rec.empty and "Next_City" in curr_rec.columns else ""
@@ -340,10 +339,10 @@ if st.session_state.user["Role"] == "Technician":
                 input_curr_city = st.text_input("Current City", value=c_city)
                 input_curr_pin = st.text_input("Current Pin Code", value=c_pin, max_chars=6)
                 
-                # Corrected Current Activity selection matching
+                # Radio options without standard select dropdown box
                 status_options = ["Available", "On Site", "In Transit"]
                 selected_idx = status_options.index(c_status_raw) if c_status_raw in status_options else 0
-                input_status = st.selectbox("Current Activity", status_options, index=selected_idx)
+                input_status = st.radio("Current Activity", status_options, index=selected_idx, horizontal=True)
                 
             with c2:
                 input_next_city = st.text_input("Next Target Destination City", value=n_city)
@@ -353,8 +352,12 @@ if st.session_state.user["Role"] == "Technician":
             submit_broadcast = st.form_submit_button("Broadcast Location Update")
             
             if submit_broadcast:
-                # Dynamically fetch real-time clock at button click (e.g., 02:15 PM)
-                now_str = datetime.now().strftime("%I:%M %p")
+                # Force local Indian Standard Time zone for accurate current timestamp
+                try:
+                    local_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
+                    now_str = datetime.now(local_tz).strftime("%I:%M %p")
+                except Exception:
+                    now_str = datetime.now().strftime("%I:%M %p")
                 
                 if tech_id in st.session_state.tech_status_db["Tech_ID"].astype(str).values:
                     st.session_state.tech_status_db.loc[
@@ -375,6 +378,8 @@ if st.session_state.user["Role"] == "Technician":
                     st.session_state.tech_status_db = pd.concat([st.session_state.tech_status_db, pd.DataFrame([new_row])], ignore_index=True)
                 
                 save_sheet_data(st.session_state.tech_status_db, "TechStatus")
+                st.session_state.tech_status_db = load_sheet_data("TechStatus")
+                
                 st.toast(f"📍 Location Broadcast Updated at {now_str}!", icon="✅")
                 st.rerun()
 
