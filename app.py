@@ -122,6 +122,7 @@ st.markdown("""
         border-radius: 8px !important;
         border: none !important;
         font-weight: 600 !important;
+        width: 100% !important;
     }
     .stButton > button:hover, div[data-testid="stForm"] button:hover {
         background-color: #0D47A1 !important;
@@ -141,11 +142,35 @@ st.markdown("""
         box-shadow: 0 10px 25px rgba(21, 101, 192, 0.1);
     }
 
-    /* Compact Login Screen Form */
+    /* Compact & Centered Login Form Styling */
     .login-container div[data-testid="stForm"] {
-        padding: 16px 24px !important;
-        max-width: 380px;
+        padding: 20px 28px !important;
+        max-width: 360px;
         margin: 0 auto;
+        text-align: center;
+    }
+
+    /* Force Form Input Labels to Center */
+    .login-container div[data-testid="stWidgetLabel"] {
+        text-align: center !important;
+        justify-content: center !important;
+    }
+    
+    .login-container div[data-testid="stWidgetLabel"] label {
+        width: 100%;
+        text-align: center !important;
+    }
+
+    /* Hide Streamlit "Press Enter to Login" hint text overlay */
+    .login-container [data-testid="InputInstructions"] {
+        display: none !important;
+    }
+
+    /* Adjust Password Field Right Padding so Eye Icon stays clear of inputs */
+    .login-container input[type="password"], 
+    .login-container input[type="text"] {
+        padding-right: 42px !important;
+        text-align: center !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -169,9 +194,9 @@ if st.session_state.user is None:
             else:
                 st.markdown("<h2 style='text-align: center; color: #0D47A1; margin:0;'>⚙️ SIDHARTH</h2>", unsafe_allow_html=True)
             
-            # Refined Alignment & Spacing
-            st.markdown("<h3 style='text-align:center; color:#0D47A1; margin-top:-8px; margin-bottom:4px; font-size:1.25rem;'>AMC Tracker</h3>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center; color:#10B981; font-weight:700; font-size:0.85rem; margin-bottom:16px;'>● SIGN IN</div>", unsafe_allow_html=True)
+            # Centered Titles & Badges with tight line-height
+            st.markdown("<h3 style='text-align:center; color:#0D47A1; margin-top:-6px; margin-bottom:2px; font-size:1.2rem; font-weight:700;'>AMC Tracker</h3>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; color:#10B981; font-weight:800; font-size:0.8rem; margin-bottom:14px; letter-spacing:0.5px;'>● SIGN IN</div>", unsafe_allow_html=True)
 
             user_id_input = st.text_input("User ID / Tech ID", placeholder="e.g. TECH01").strip().upper()
             password_input = st.text_input("Password", type="password", placeholder="Enter password").strip()
