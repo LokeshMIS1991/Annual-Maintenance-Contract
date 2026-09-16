@@ -203,6 +203,9 @@ if st.session_state.user is None:
             user_id_input = st.text_input("User ID / Tech ID", placeholder="e.g. TECH01").strip().upper()
             password_input = st.text_input("Password", type="password", placeholder="Enter password").strip()
             
+            # Explicit helper label underneath input
+            st.markdown("<p style='text-align:center; color:#64748B; font-size:0.75rem; margin-top:-8px; margin-bottom:12px;'>Press Enter to Login</p>", unsafe_allow_html=True)
+            
             submit_login = st.form_submit_button("Sign In", use_container_width=True)
 
             if submit_login:
@@ -218,7 +221,6 @@ if st.session_state.user is None:
         st.markdown("</div>", unsafe_allow_html=True)
 
     st.stop()
-
 # -----------------------------------------------------------------------------
 # 5. SIDEBAR SETUP
 # -----------------------------------------------------------------------------
