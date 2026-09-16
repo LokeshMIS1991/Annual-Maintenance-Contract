@@ -3,6 +3,8 @@ import pandas as pd
 from datetime import datetime
 import urllib.parse
 import os
+import gspread
+from google.oauth2.service_account import Credentials
 
 st.set_page_config(
     page_title="AMC Annual Maintenance Tracker", 
@@ -11,91 +13,59 @@ st.set_page_config(
 )
 
 # -----------------------------------------------------------------------------
-# 1. DATABASE / PERSISTENCE SETUP
+# 1. GOOGLE SHEETS CONNECTION & PERSISTENCE
 # -----------------------------------------------------------------------------
 
+@st.cache_resource
+def get_gspread_client():
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    creds_dict = st.secrets["gcp_service_account"]
+    credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    return gspread.authorize(credentials)
+
+try:
+    gc = get_gspread_client()
+    SPREADSHEET_ID = st.secrets.get("spreadsheet_id", "12ppqL-NM7JhXbvUPZTJJQBK3Hapx_WbQ_K5Czc2VvBc")
+    sh = gc.open_by_key(SPREADSHEET_ID)
+except Exception as e:
+    st.error(f"⚠️ Could not connect to Google Sheets. Please check permissions and secrets.toml. Error: {e}")
+    st.stop()
+
+def load_sheet_data(worksheet_name):
+    try:
+        ws = sh.worksheet(worksheet_name)
+        records = ws.get_all_records()
+        return pd.DataFrame(records)
+    except Exception as e:
+        st.warning(f"Could not load '{worksheet_name}' tab. Returning empty table.")
+        return pd.DataFrame()
+
+def save_sheet_data(df, worksheet_name):
+    try:
+        ws = sh.worksheet(worksheet_name)
+        ws.clear()
+        # Convert DataFrame to string format to prevent JSON serialization issues
+        clean_df = df.fillna("").astype(str)
+        ws.update([clean_df.columns.values.tolist()] + clean_df.values.tolist())
+    except Exception as e:
+        st.error(f"❌ Failed to save data to Google Sheets ({worksheet_name}): {e}")
+
+# Load dynamic data from Google Sheets into session state on initial run
 if "users_db" not in st.session_state:
-    st.session_state.users_db = pd.DataFrame([
-        {"User_ID": "TECH01", "Full_Name": "Aaryan Sharma", "Role": "Technician", "Password": "123"},
-        {"User_ID": "TECH02", "Full_Name": "Rahul Verma", "Role": "Technician", "Password": "123"},
-        {"User_ID": "MGR01", "Full_Name": "Vikas Patel", "Role": "Manager", "Password": "admin"}
-    ])
+    st.session_state.users_db = load_sheet_data("Users")
 
 if "jobs_db" not in st.session_state:
-    st.session_state.jobs_db = pd.DataFrame([
-        {
-            "Job_ID": "JOB-101",
-            "Assigned_Tech_ID": "TECH01",
-            "Client_Name": "Apex Textiles",
-            "Client_Phone": "+919876543210",
-            "Address": "Plot 42, GIDC Phase 2",
-            "City": "Vadodara",
-            "Pincode": "390003",
-            "Issue_Description": "Automatic shutter motor maintenance and sensor calibration.",
-            "Status": "In Transit",
-            "Scheduled_Time": "2026-09-16 14:00"
-        },
-        {
-            "Job_ID": "JOB-104",
-            "Assigned_Tech_ID": "TECH01",
-            "Client_Name": "Baroda Polymers",
-            "Client_Phone": "+919876500000",
-            "Address": "GIDC Makarpura",
-            "City": "Vadodara",
-            "Pincode": "390010",
-            "Issue_Description": "Secondary rolling shutter alignment.",
-            "Status": "Assigned",
-            "Scheduled_Time": "2026-09-16 16:30"
-        },
-        {
-            "Job_ID": "JOB-102",
-            "Assigned_Tech_ID": "TECH02",
-            "Client_Name": "Gujarat Auto Ancillaries",
-            "Client_Phone": "+919123456789",
-            "Address": "Ring Road Sector 4",
-            "City": "Surat",
-            "Pincode": "395002",
-            "Issue_Description": "Hydraulic automation gear service.",
-            "Status": "Completed",
-            "Scheduled_Time": "2026-09-16 09:30"
-        },
-        {
-            "Job_ID": "JOB-103",
-            "Assigned_Tech_ID": "TECH02",
-            "Client_Name": "Lalita Chemicals",
-            "Client_Phone": "+919898001122",
-            "Address": "Sanand Industrial Estate",
-            "City": "Ahmedabad",
-            "Pincode": "382110",
-            "Issue_Description": "Rolling shutter control box inspection.",
-            "Status": "In Transit",
-            "Scheduled_Time": "2026-09-16 11:00"
-        }
-    ])
+    st.session_state.jobs_db = load_sheet_data("Jobs")
 
 if "tech_status_db" not in st.session_state:
-    st.session_state.tech_status_db = pd.DataFrame([
-        {
-            "Tech_ID": "TECH01",
-            "Current_City": "Surat",
-            "Current_Pincode": "395002",
-            "Current_Status": "In Transit",
-            "Next_City": "Vadodara",
-            "Next_Pincode": "390003",
-            "ETA": "14:00",
-            "Last_Updated": "10:30 AM"
-        },
-        {
-            "Tech_ID": "TECH02",
-            "Current_City": "Ahmedabad",
-            "Current_Pincode": "382110",
-            "Current_Status": "In Transit",
-            "Next_City": "Ahmedabad",
-            "Next_Pincode": "380001",
-            "ETA": "11:00",
-            "Last_Updated": "10:15 AM"
-        }
-    ])
+    st.session_state.tech_status_db = load_sheet_data("TechStatus")
+
+# -----------------------------------------------------------------------------
+# 2. HELPER FUNCTIONS
+# -----------------------------------------------------------------------------
 
 def make_google_maps_link(address, city, pincode=""):
     query = urllib.parse.quote(f"{address}, {city} {pincode}".strip())
@@ -108,7 +78,7 @@ def get_logo_path():
     return None
 
 # -----------------------------------------------------------------------------
-# 2. BRANDED UI STYLING
+# 3. BRANDED UI STYLING
 # -----------------------------------------------------------------------------
 
 st.markdown("""
@@ -175,7 +145,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 3. LOGIN SCREEN
+# 4. LOGIN SCREEN
 # -----------------------------------------------------------------------------
 
 if "user" not in st.session_state:
@@ -193,7 +163,7 @@ if st.session_state.user is None:
                 st.markdown("<h1 style='text-align: center; color: #0D47A1;'>⚙️ SIDHARTH</h1>", unsafe_allow_html=True)
             
             st.markdown("<h2 style='text-align:center; color:#0D47A1; margin-top:10px;'>AMC Annual Maintenance Tracker</h2>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align:center; color:#10B981; font-weight:700;'>● TECHNICIAN PORTAL SIGN IN</p>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align:center; color:#10B981; font-weight:700;'>● SIGN IN</p>", unsafe_allow_html=True)
 
             user_id_input = st.text_input("User ID / Tech ID", placeholder="e.g. TECH01").strip().upper()
             password_input = st.text_input("Password", type="password", placeholder="Enter your password").strip()
@@ -202,7 +172,7 @@ if st.session_state.user is None:
 
             if submit_login:
                 user_df = st.session_state.users_db
-                match = user_df[(user_df["User_ID"] == user_id_input) & (user_df["Password"] == password_input)]
+                match = user_df[(user_df["User_ID"].astype(str) == user_id_input) & (user_df["Password"].astype(str) == password_input)]
                 
                 if not match.empty:
                     st.session_state.user = match.iloc[0].to_dict()
@@ -214,7 +184,7 @@ if st.session_state.user is None:
     st.stop()
 
 # -----------------------------------------------------------------------------
-# 4. SIDEBAR SETUP (CENTERED LOGO + "AMC TRACKER")
+# 5. SIDEBAR SETUP (CENTERED LOGO + "AMC TRACKER")
 # -----------------------------------------------------------------------------
 
 with st.sidebar:
@@ -238,11 +208,11 @@ with st.sidebar:
         st.rerun()
 
 # -----------------------------------------------------------------------------
-# 5. TECHNICIAN DASHBOARD
+# 6. TECHNICIAN DASHBOARD
 # -----------------------------------------------------------------------------
 
 if st.session_state.user["Role"] == "Technician":
-    tech_id = st.session_state.user["User_ID"]
+    tech_id = str(st.session_state.user["User_ID"])
     
     st.markdown(f"""
     <div style='display: flex; align-items: center; gap: 12px; margin-bottom: 10px;'>
@@ -258,14 +228,14 @@ if st.session_state.user["Role"] == "Technician":
         st.subheader("Assigned Maintenance Tasks")
         
         tech_jobs = st.session_state.jobs_db[
-            (st.session_state.jobs_db["Assigned_Tech_ID"] == tech_id) & 
+            (st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id) & 
             (st.session_state.jobs_db["Status"] != "Completed")
         ]
         
         if tech_jobs.empty:
             st.info("🎉 No pending maintenance visits assigned to you.")
         else:
-            st.caption(f"📌 You have **{len(tech_jobs)} active tasks** assigned.")
+            st.caption(f"📌 You have **{len(tech_jobs)} active task(s)** assigned.")
             for idx, job in tech_jobs.iterrows():
                 pincode_str = f" - {job['Pincode']}" if "Pincode" in job and pd.notna(job["Pincode"]) else ""
                 with st.expander(f"🔵 [{job['Job_ID']}] {job['Client_Name']} — {job['City']}{pincode_str} ({job['Status']})", expanded=True):
@@ -282,32 +252,39 @@ if st.session_state.user["Role"] == "Technician":
 
                     with col_b:
                         st.markdown("### Update Progress")
+                        status_list = ["Assigned", "In Transit", "On Site", "Completed"]
+                        current_status = job["Status"] if job["Status"] in status_list else "Assigned"
+                        
                         new_status = st.selectbox(
                             "Job Status",
-                            ["Assigned", "In Transit", "On Site", "Completed"],
-                            index=["Assigned", "In Transit", "On Site", "Completed"].index(job["Status"]),
+                            status_list,
+                            index=status_list.index(current_status),
                             key=f"status_{job['Job_ID']}"
                         )
                         if st.button("Save Status", key=f"btn_{job['Job_ID']}"):
                             st.session_state.jobs_db.loc[
                                 st.session_state.jobs_db["Job_ID"] == job["Job_ID"], "Status"
                             ] = new_status
-                            st.toast(f"✅ Status updated for {job['Job_ID']}!")
+                            
+                            # PERSIST TO GOOGLE SHEETS
+                            save_sheet_data(st.session_state.jobs_db, "Jobs")
+                            st.toast(f"✅ Status updated for {job['Job_ID']} in Google Sheets!")
                             st.rerun()
 
-    # TAB 2: Location & Destination Broadcast (With Working Toast Popup & Pincodes)
+    # TAB 2: Location & Destination Broadcast (With Working Toast & Google Sheets Sync)
     with tech_tab2:
         st.subheader("Broadcast Live Location & Next Travel City")
         
-        # Load existing record if present
-        curr_rec = st.session_state.tech_status_db[st.session_state.tech_status_db["Tech_ID"] == tech_id]
+        curr_rec = st.session_state.tech_status_db[
+            st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id
+        ]
         
-        c_city = curr_rec["Current_City"].values[0] if not curr_rec.empty and "Current_City" in curr_rec.columns else ""
-        c_pin = curr_rec["Current_Pincode"].values[0] if not curr_rec.empty and "Current_Pincode" in curr_rec.columns else ""
-        c_status = curr_rec["Current_Status"].values[0] if not curr_rec.empty and "Current_Status" in curr_rec.columns else "Available"
-        n_city = curr_rec["Next_City"].values[0] if not curr_rec.empty and "Next_City" in curr_rec.columns else ""
-        n_pin = curr_rec["Next_Pincode"].values[0] if not curr_rec.empty and "Next_Pincode" in curr_rec.columns else ""
-        eta_val = curr_rec["ETA"].values[0] if not curr_rec.empty and "ETA" in curr_rec.columns else ""
+        c_city = str(curr_rec["Current_City"].values[0]) if not curr_rec.empty and "Current_City" in curr_rec.columns else ""
+        c_pin = str(curr_rec["Current_Pincode"].values[0]) if not curr_rec.empty and "Current_Pincode" in curr_rec.columns else ""
+        c_status = str(curr_rec["Current_Status"].values[0]) if not curr_rec.empty and "Current_Status" in curr_rec.columns else "Available"
+        n_city = str(curr_rec["Next_City"].values[0]) if not curr_rec.empty and "Next_City" in curr_rec.columns else ""
+        n_pin = str(curr_rec["Next_Pincode"].values[0]) if not curr_rec.empty and "Next_Pincode" in curr_rec.columns else ""
+        eta_val = str(curr_rec["ETA"].values[0]) if not curr_rec.empty and "ETA" in curr_rec.columns else ""
 
         with st.form("broadcast_location_form"):
             c1, c2 = st.columns(2)
@@ -328,10 +305,9 @@ if st.session_state.user["Role"] == "Technician":
             if submit_broadcast:
                 now_str = datetime.now().strftime("%I:%M %p")
                 
-                # Check if Tech already exists in DF
-                if tech_id in st.session_state.tech_status_db["Tech_ID"].values:
+                if tech_id in st.session_state.tech_status_db["Tech_ID"].astype(str).values:
                     st.session_state.tech_status_db.loc[
-                        st.session_state.tech_status_db["Tech_ID"] == tech_id,
+                        st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id,
                         ["Current_City", "Current_Pincode", "Current_Status", "Next_City", "Next_Pincode", "ETA", "Last_Updated"]
                     ] = [input_curr_city, input_curr_pin, input_status, input_next_city, input_next_pin, input_eta, now_str]
                 else:
@@ -347,7 +323,10 @@ if st.session_state.user["Role"] == "Technician":
                     }
                     st.session_state.tech_status_db = pd.concat([st.session_state.tech_status_db, pd.DataFrame([new_row])], ignore_index=True)
                 
-                # Pop-up Notification
+                # PERSIST TO GOOGLE SHEETS
+                save_sheet_data(st.session_state.tech_status_db, "TechStatus")
+                
+                # Pop-up Toast
                 st.toast("📍 Location Updated Successfully!", icon="✅")
                 st.rerun()
 
@@ -355,13 +334,13 @@ if st.session_state.user["Role"] == "Technician":
     with tech_tab3:
         st.subheader("My Service Record")
         completed_jobs = st.session_state.jobs_db[
-            (st.session_state.jobs_db["Assigned_Tech_ID"] == tech_id) & 
+            (st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id) & 
             (st.session_state.jobs_db["Status"] == "Completed")
         ]
         st.dataframe(completed_jobs, use_container_width=True)
 
 # -----------------------------------------------------------------------------
-# 6. MANAGER COMMAND DASHBOARD
+# 7. MANAGER COMMAND DASHBOARD
 # -----------------------------------------------------------------------------
 
 elif st.session_state.user["Role"] == "Manager":
@@ -372,7 +351,13 @@ elif st.session_state.user["Role"] == "Manager":
     # TAB 1: Live Radar
     with mgr_tab1:
         st.subheader("Technician Fleet Live Status")
-        full_radar = pd.merge(st.session_state.tech_status_db, st.session_state.users_db[["User_ID", "Full_Name"]], left_on="Tech_ID", right_on="User_ID", how="left")
+        full_radar = pd.merge(
+            st.session_state.tech_status_db, 
+            st.session_state.users_db[["User_ID", "Full_Name"]], 
+            left_on="Tech_ID", 
+            right_on="User_ID", 
+            how="left"
+        )
         st.dataframe(full_radar, use_container_width=True)
 
         st.divider()
@@ -403,14 +388,17 @@ elif st.session_state.user["Role"] == "Manager":
             
             if submit_job:
                 new_job_entry = {
-                    "Job_ID": j_id, "Assigned_Tech_ID": assigned_tech,
+                    "Job_ID": j_id, "Assigned_Tech_ID": str(assigned_tech),
                     "Client_Name": client_name, "Client_Phone": client_phone,
                     "Address": address, "City": city, "Pincode": pincode,
                     "Issue_Description": issue, "Status": "Assigned",
                     "Scheduled_Time": sched_time
                 }
                 st.session_state.jobs_db = pd.concat([st.session_state.jobs_db, pd.DataFrame([new_job_entry])], ignore_index=True)
-                st.toast(f"✅ Work Order {j_id} assigned to {assigned_tech}!")
+                
+                # PERSIST TO GOOGLE SHEETS
+                save_sheet_data(st.session_state.jobs_db, "Jobs")
+                st.toast(f"✅ Work Order {j_id} assigned and saved to Google Sheets!")
                 st.rerun()
 
     # TAB 3: User Accounts
@@ -425,12 +413,15 @@ elif st.session_state.user["Role"] == "Manager":
             submit_user = st.form_submit_button("Create Account")
             
             if submit_user:
-                if new_uid in st.session_state.users_db["User_ID"].values:
+                if new_uid in st.session_state.users_db["User_ID"].astype(str).values:
                     st.error("User ID already exists!")
                 else:
                     user_entry = {"User_ID": new_uid, "Full_Name": new_name, "Role": new_role, "Password": new_pass}
                     st.session_state.users_db = pd.concat([st.session_state.users_db, pd.DataFrame([user_entry])], ignore_index=True)
-                    st.toast(f"✅ Account for {new_name} ({new_uid}) created!")
+                    
+                    # PERSIST TO GOOGLE SHEETS
+                    save_sheet_data(st.session_state.users_db, "Users")
+                    st.toast(f"✅ Account for {new_name} saved to Google Sheets!")
                     st.rerun()
         
         st.subheader("Registered System Users")
