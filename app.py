@@ -5,7 +5,7 @@ import urllib.parse
 import os
 
 st.set_page_config(
-    page_title="AMC Annual Maintenance Tracker", 
+    page_title="Annual Maintenance Tracker", 
     page_icon="🛠️", 
     layout="wide"
 )
@@ -31,7 +31,7 @@ if "jobs_db" not in st.session_state:
             "Address": "Plot 42, GIDC Phase 2",
             "City": "Vadodara",
             "Issue_Description": "Automatic shutter motor maintenance and sensor calibration.",
-            "Status": "Assigned",
+            "Status": "In Transit",
             "Scheduled_Time": "2026-09-16 14:00"
         },
         {
@@ -63,7 +63,7 @@ if "tech_status_db" not in st.session_state:
         {
             "Tech_ID": "TECH01",
             "Current_City": "Surat",
-            "Current_Status": "Available",
+            "Current_Status": "In Transit",
             "Next_City": "Vadodara",
             "ETA": "14:00",
             "Last_Updated": "10:30 AM"
@@ -78,91 +78,111 @@ if "tech_status_db" not in st.session_state:
         }
     ])
 
-# Helper for Google Maps Route Link
 def make_google_maps_link(address, city):
     query = urllib.parse.quote(f"{address}, {city}")
     return f"https://www.google.com/maps/search/?api=1&query={query}"
 
+def get_logo_path():
+    for name in ["Company Logo.jpeg", "Company Logo.png", "Company Logo.jpg"]:
+        if os.path.exists(name):
+            return name
+    return None
+
 # -----------------------------------------------------------------------------
-# 2. BRANDED UI STYLING & CENTERED LOGIN SCREEN
+# 2. BRANDED UI STYLING (LOGOS, COLORS, BUTTONS, TABS)
+# -----------------------------------------------------------------------------
+
+st.markdown("""
+<style>
+    /* Global Color Overrides to Blue (#1565C0) & Green (#10B981) */
+    
+    /* Active Tab Line & Text Color Override */
+    .stTabs [data-baseweb="tab-highlight"] {
+        background-color: #1565C0 !important;
+    }
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        color: #1565C0 !important;
+        font-weight: 700 !important;
+    }
+    .stTabs [data-baseweb="tab"] {
+        font-weight: 600;
+    }
+
+    /* Sidebar Logo & Card Container Styling */
+    [data-testid="stSidebar"] {
+        background-color: #F8FAFC !important;
+    }
+    .sidebar-brand-box {
+        background-color: #FFFFFF;
+        border-radius: 12px;
+        padding: 12px;
+        border: 1px solid #E2E8F0;
+        margin-bottom: 15px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+    
+    /* Primary Action Buttons Override */
+    .stButton > button {
+        background-color: #1565C0 !important;
+        color: #FFFFFF !important;
+        border-radius: 8px !important;
+        border: none !important;
+        font-weight: 600 !important;
+        transition: all 0.2s ease;
+    }
+    .stButton > button:hover {
+        background-color: #0D47A1 !important;
+        box-shadow: 0 4px 12px rgba(13, 71, 161, 0.3) !important;
+    }
+
+    /* Links Color Override */
+    a {
+        color: #1565C0 !important;
+    }
+
+    /* Centered Login Screen Card Setup */
+    div[data-testid="stForm"] {
+        background-color: #FFFFFF;
+        border: 2px solid #1565C0;
+        border-radius: 16px;
+        padding: 35px 30px;
+        box-shadow: 0 12px 30px rgba(21, 101, 192, 0.12);
+    }
+    
+    .brand-title {
+        text-align: center;
+        color: #0D47A1;
+        font-weight: 800;
+        font-size: 1.6rem;
+        margin-top: 15px;
+        margin-bottom: 5px;
+    }
+    .brand-subtitle {
+        text-align: center;
+        color: #10B981;
+        font-weight: 700;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 25px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# -----------------------------------------------------------------------------
+# 3. AUTHENTICATION / LOGIN SCREEN
 # -----------------------------------------------------------------------------
 
 if "user" not in st.session_state:
     st.session_state.user = None
 
 if st.session_state.user is None:
-    # Custom CSS matching Sidharth Shutter & Automation Logo Theme
-    st.markdown("""
-    <style>
-        /* Overall background & centering container */
-        .block-container {
-            padding-top: 3rem !important;
-            max-width: 950px !important;
-        }
-        
-        /* Card Styling - Sidharth Corporate Blue Border & Modern Shadow */
-        div[data-testid="stForm"] {
-            background-color: #FFFFFF;
-            border: 2px solid #1565C0;
-            border-radius: 16px;
-            padding: 35px 30px;
-            box-shadow: 0 12px 30px rgba(21, 101, 192, 0.12);
-        }
-        
-        /* Primary Login Button - Deep Blue Gradient */
-        div[data-testid="stForm"] .stButton > button {
-            background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%) !important;
-            color: #FFFFFF !important;
-            font-weight: 700 !important;
-            font-size: 1.1rem !important;
-            width: 100% !important;
-            border-radius: 8px !important;
-            border: none !important;
-            padding: 0.65rem 0 !important;
-            margin-top: 12px !important;
-            box-shadow: 0 4px 14px rgba(21, 101, 192, 0.3) !important;
-            transition: all 0.2s ease-in-out;
-        }
-        
-        div[data-testid="stForm"] .stButton > button:hover {
-            background: linear-gradient(135deg, #0D47A1 0%, #0A3578 100%) !important;
-            box-shadow: 0 6px 18px rgba(13, 71, 161, 0.45) !important;
-        }
-        
-        /* Header typography */
-        .brand-title {
-            text-align: center;
-            color: #0D47A1;
-            font-weight: 800;
-            font-size: 1.6rem;
-            margin-top: 15px;
-            margin-bottom: 5px;
-            letter-spacing: -0.5px;
-        }
-        
-        .brand-subtitle {
-            text-align: center;
-            color: #10B981;
-            font-weight: 700;
-            font-size: 0.95rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 25px;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # Center Alignment Layout
     col_left, col_center, col_right = st.columns([1, 2.2, 1])
 
     with col_center:
         with st.form("login_form"):
-            # Load local logo file
-            logo_path = "Company Logo.jpeg"
-            if not os.path.exists(logo_path):
-                logo_path = "Company Logo.png"
-                
-            if os.path.exists(logo_path):
+            logo_path = get_logo_path()
+            if logo_path:
                 st.image(logo_path, use_container_width=True)
             else:
                 st.markdown("<h1 style='text-align: center; color: #0D47A1;'>⚙️ SIDHARTH</h1>", unsafe_allow_html=True)
@@ -189,37 +209,41 @@ if st.session_state.user is None:
     st.stop()
 
 # -----------------------------------------------------------------------------
-# 3. GLOBAL APP CUSTOM STYLING (ACTIVE SESSION)
+# 4. SIDEBAR SETUP WITH LOGO ON TOP-LEFT
 # -----------------------------------------------------------------------------
 
-st.markdown("""
-<style>
-    /* Accent elements & tab header colors */
-    .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {
-        color: #1565C0 !important;
-        border-bottom-color: #10B981 !important;
-    }
-    div[data-testid="stSidebarHeader"] {
-        background-color: #F8FAFC;
-    }
-</style>
-""", unsafe_allow_html=True)
+with st.sidebar:
+    # Display logo at top-left of sidebar
+    logo_path = get_logo_path()
+    if logo_path:
+        st.image(logo_path, use_container_width=True)
+    else:
+        st.markdown("<h3 style='color: #0D47A1; margin: 0;'>⚙️ SIDHARTH</h3>", unsafe_allow_html=True)
+    
+    st.markdown("<p style='color: #10B981; font-weight: 700; font-size: 0.8rem; letter-spacing: 0.5px; margin-top: -10px;'>AMC TRACKER SYSTEM</p>", unsafe_allow_html=True)
+    st.divider()
 
-# Sidebar
-st.sidebar.markdown(f"### ⚙️ AMC Tracker\n**User:** {st.session_state.user['Full_Name']}\n\n**Role:** `{st.session_state.user['Role']}`")
-if st.sidebar.button("Logout"):
-    st.session_state.user = None
-    st.rerun()
-
-st.sidebar.divider()
+    st.markdown(f"**Logged User:** {st.session_state.user['Full_Name']}")
+    st.markdown(f"**Role:** `{st.session_state.user['Role']}`")
+    
+    if st.button("Logout", key="logout_btn"):
+        st.session_state.user = None
+        st.rerun()
 
 # -----------------------------------------------------------------------------
-# 4. TECHNICIAN DASHBOARD
+# 5. TECHNICIAN DASHBOARD
 # -----------------------------------------------------------------------------
 
 if st.session_state.user["Role"] == "Technician":
     tech_id = st.session_state.user["User_ID"]
-    st.title(f"🛠️ Technician Dashboard — {st.session_state.user['Full_Name']}")
+    
+    # Custom Styled Header
+    st.markdown(f"""
+    <div style='display: flex; align-items: center; gap: 12px; margin-bottom: 10px;'>
+        <h1 style='color: #0D47A1; margin: 0;'>🛠️ Technician Dashboard</h1>
+        <span style='font-size: 1.5rem; color: #64748B;'>— {st.session_state.user['Full_Name']}</span>
+    </div>
+    """, unsafe_allow_html=True)
 
     tech_tab1, tech_tab2, tech_tab3 = st.tabs(["📋 My Assigned Work Orders", "📍 Update Status & Destination", "📜 Service History"])
 
@@ -307,11 +331,11 @@ if st.session_state.user["Role"] == "Technician":
         st.dataframe(completed_jobs, use_container_width=True)
 
 # -----------------------------------------------------------------------------
-# 5. MANAGER COMMAND DASHBOARD
+# 6. MANAGER COMMAND DASHBOARD
 # -----------------------------------------------------------------------------
 
 elif st.session_state.user["Role"] == "Manager":
-    st.title("📡 Dispatch Control — AMC Tracker")
+    st.markdown("<h1 style='color: #0D47A1;'>📡 Dispatch Control Center</h1>", unsafe_allow_html=True)
 
     mgr_tab1, mgr_tab2, mgr_tab3 = st.tabs(["🗺️ Live Technician Radar", "➕ Create Maintenance Order", "👥 Manage Users"])
 
