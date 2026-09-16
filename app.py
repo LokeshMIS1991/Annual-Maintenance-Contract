@@ -321,11 +321,10 @@ if st.session_state.user["Role"] == "Technician":
                             st.toast(f"Selected {job['Job_ID']} for service report!")
                 st.divider()
 
-    # TAB 2: Service Report Form Linked to Pending/Assigned Jobs
+    # TAB 2: Service Report Form
     with tech_tab2:
         st.subheader("📝 Submit Client Service Report")
         
-        # Filter assigned/pending jobs specifically for this technician
         pending_tech_jobs = st.session_state.jobs_db[
             (st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id) & 
             (st.session_state.jobs_db["Status"] != "Completed")
@@ -336,7 +335,6 @@ if st.session_state.user["Role"] == "Technician":
         else:
             job_options = pending_tech_jobs["Job_ID"].tolist()
             
-            # Default to previously selected job if available
             default_index = 0
             if st.session_state.selected_job_for_report in job_options:
                 default_index = job_options.index(st.session_state.selected_job_for_report)
@@ -348,14 +346,12 @@ if st.session_state.user["Role"] == "Technician":
                 format_func=lambda x: f"{x} — {pending_tech_jobs[pending_tech_jobs['Job_ID'] == x]['Client_Name'].values[0]} ({pending_tech_jobs[pending_tech_jobs['Job_ID'] == x]['City'].values[0]})"
             )
             
-            # Pre-fill client & location details from selected job
             selected_job = pending_tech_jobs[pending_tech_jobs["Job_ID"] == selected_job_id].iloc[0]
             auto_client_name = str(selected_job.get("Client_Name", ""))
             auto_address = f"{selected_job.get('Address', '')}, {selected_job.get('City', '')}".strip(", ")
             if selected_job.get("Pincode"):
                 auto_address += f" - {selected_job.get('Pincode')}"
 
-            # Optional AMC Contract linkage
             contracts_df = st.session_state.amc_contracts_db
             contract_options = ["N/A"] + contracts_df["AMC_Contract_No"].astype(str).tolist() if not contracts_df.empty else ["N/A"]
 
@@ -393,14 +389,14 @@ if st.session_state.user["Role"] == "Technician":
                 with eq_col5:
                     eq_condition = st.selectbox("Condition", ["Good", "Requires Repair", "Critical", "Replaced"])
 
-                # Section 2: Preventive Maintenance Checklist
+                # Section 2: Preventive Maintenance Checklist with Professional 4-Option Radio Set
                 st.markdown(f"### 2. Preventive Maintenance Checklist ({selected_category})")
                 
                 checklist_results = {}
                 checklist_items = EQUIPMENT_DATA[selected_category]["checklist"]
                 
                 for idx, point in enumerate(checklist_items, 1):
-                    col_num, col_point, col_status, col_remark = st.columns([0.5, 4.5, 3, 4])
+                    col_num, col_point, col_status, col_remark = st.columns([0.5, 4.0, 4.0, 3.5])
                     with col_num:
                         st.write(f"**{idx}.**")
                     with col_point:
@@ -408,7 +404,7 @@ if st.session_state.user["Role"] == "Technician":
                     with col_status:
                         status = st.radio(
                             "Status", 
-                            ["OK", "Not OK", "N/A"], 
+                            ["Satisfactory", "Repaired On-Site", "Action Required", "Not Applicable"], 
                             horizontal=True, 
                             key=f"check_{selected_category}_{idx}",
                             label_visibility="collapsed"
@@ -461,7 +457,6 @@ if st.session_state.user["Role"] == "Technician":
                             "Submitted_At": submit_time_str
                         }
                         
-                        # Save Report & auto-mark job completed
                         st.session_state.service_reports_db = pd.concat([st.session_state.service_reports_db, pd.DataFrame([report_entry])], ignore_index=True)
                         save_sheet_data(st.session_state.service_reports_db, "ServiceReports")
                         
@@ -597,7 +592,6 @@ elif st.session_state.user["Role"] in ["Manager", "Admin"]:
     with mgr_tab4:
         col_mgr_a, col_mgr_b = st.columns(2)
         
-        # Dispatch Task Column
         with col_mgr_a:
             st.subheader("Dispatch New Task")
             with st.form("new_job_form"):
@@ -639,7 +633,6 @@ elif st.session_state.user["Role"] in ["Manager", "Admin"]:
                         st.toast(f"✅ Task Created ({j_id})!")
                         st.rerun()
 
-        # Admin Only Registration
         with col_mgr_b:
             st.subheader("Register System User")
             if st.session_state.user.get("Role") != "Admin":
