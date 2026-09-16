@@ -146,7 +146,6 @@ user_role = st.sidebar.radio("Select Your Role:", ["Technician Entry", "Admin Da
 
 is_admin = False
 if user_role == "Admin Dashboard":
-    # Retrieve admin password from secrets or default to "admin123"
     admin_password_secret = st.secrets.get("admin_password", "admin123")
     pwd_input = st.sidebar.text_input("Enter Admin Password", type="password")
     
@@ -251,121 +250,12 @@ if is_admin and not latest_pending_per_client.empty:
 st.divider()
 
 # ==========================================
-# 6. ENTRY FORM & RECORDS HISTORY TABS
+# 6. ROLE-BASED INTERFACE & TABS
 # ==========================================
-tab1, tab2 = st.tabs(["📝 Add New Field Visit", "📊 Visit History & Records"])
 
-# --- TAB 1: FORM ENTRY ---
-with tab1:
-    st.subheader("Register AMC Visit / Emergency Call")
-    
-    auto_id = generate_visit_id()
-    st.info(f"**Automated Visit ID:** `{auto_id}`")
-    
-    col_left, col_right = st.columns(2)
-    
-    with col_left:
-        client_name = st.text_input("Client Name *", placeholder="Enter client/customer name")
-        
-        default_company, default_phone, default_address = "", "", ""
-        if not df.empty and client_name.strip() and 'Client_Name' in df.columns:
-            matched_client = df[df['Client_Name'].astype(str).str.strip().str.lower() == client_name.strip().lower()]
-            if not matched_client.empty:
-                default_company = matched_client['Company_Name'].iloc[-1] if 'Company_Name' in matched_client.columns else ""
-                default_phone = matched_client['Phone_Number'].iloc[-1] if 'Phone_Number' in matched_client.columns else ""
-                default_address = matched_client['Address'].iloc[-1] if 'Address' in matched_client.columns else ""
-
-        company_name = st.text_input("Company Name", value=default_company)
-        phone_number = st.text_input("Phone Number", value=default_phone)
-        address = st.text_area("Client Address", value=default_address)
-        
-        st.markdown("---")
-        visit_type = st.selectbox(
-            "Visit Type *",
-            ["Preventive Maintenance (PM)", "Breakdown Call / Emergency Repair", "Installation / Retrofit"]
-        )
-        reason_for_visit = st.text_input("Reason / Reported Issue", value="Routine Maintenance")
-        
-    with col_right:
-        technician_name = st.text_input("Technician Name *")
-        date_of_visit = st.date_input("Date of Visit", today.date())
-        
-        product_name = st.selectbox(
-            "Product Name *",
-            ["Motorized Rolling Shutter", "Automatic Boom Barrier", "High-Speed Industrial Door", "Sliding Gate / Fire Door", "Other"]
-        )
-        
-        service_freq = st.selectbox("Service Frequency (Visits/Year)", [2, 3, 4], index=2)
-        total_services = int(service_freq)
-        
-        prev_completed = 0
-        if not df.empty and client_name.strip() and 'Client_Name' in df.columns and 'Product_Name' in df.columns:
-            matched = df[(df['Client_Name'].astype(str).str.strip().str.lower() == client_name.strip().lower()) & 
-                         (df['Product_Name'] == product_name)]
-            if not matched.empty:
-                prev_completed = int(matched['Services_Completed'].iloc[-1])
-        
-        auto_completed = prev_completed + 1
-        if auto_completed > total_services:
-            auto_completed = total_services
-            
-        auto_pending = max(0, total_services - auto_completed)
-        
-        if client_name.strip():
-            st.info(f"📊 **Automated Progress Status for {client_name.strip()}:** Completed `{auto_completed}` of `{total_services}` services (`{auto_pending}` Pending)")
-        
-        freq_days_map = {2: 180, 3: 120, 4: 90}
-        default_next_due = date_of_visit + datetime.timedelta(days=freq_days_map.get(service_freq, 90))
-        
-        # SENSITIVE CONTRACT FIELDS (RESTRICTED TO ADMIN)
-        if is_admin:
-            next_service_due = st.date_input("Next Service Due Date (Admin Only)", default_next_due)
-            contract_status = st.selectbox("Contract Status (Admin Only)", ["Active", "Inactive", "Expiring Soon", "Pending Service"])
-        else:
-            next_service_due = default_next_due
-            contract_status = "Active"
-            
-        uploaded_photo = st.file_uploader("Upload Job Sheet Photo", type=["jpg", "jpeg", "png"])
-    
-    remarks = st.text_area("Technician Remarks / Parts Used")
-    
-    if st.button("Save Record to Google Sheets"):
-        if not client_name.strip() or not technician_name.strip():
-            st.warning("⚠️ Client Name and Technician Name are required!")
-        else:
-            base64_photo = ""
-            if uploaded_photo is not None:
-                image_bytes = uploaded_photo.read()
-                base64_photo = base64.b64encode(image_bytes).decode('utf-8')
-            
-            record = {
-                "Visit_ID": auto_id,
-                "Client_Name": client_name.strip(),
-                "Company_Name": company_name,
-                "Date_of_Visit": str(date_of_visit),
-                "Address": address,
-                "Phone_Number": phone_number,
-                "Technician_Name": technician_name.strip(),
-                "Visit_Type": visit_type,
-                "Reason_for_Visit": reason_for_visit,
-                "Product_Name": product_name,
-                "Service_Frequency": service_freq,
-                "Next_Service_Due_Date": str(next_service_due),
-                "Total_Services_Included": total_services,
-                "Services_Completed": auto_completed,
-                "Remarks": remarks,
-                "Job_Sheet_Photo_Base64": base64_photo,
-                "Contract_Status": contract_status
-            }
-            
-            if save_visit_to_gsheets(sheet, record):
-                st.success(f"✅ Visit `{auto_id}` registered for {client_name.strip()}! ({auto_completed}/{total_services} Completed - {auto_pending} Pending)")
-                st.cache_resource.clear()
-                st.rerun()
-
-# --- TAB 2: HISTORY & SEARCH BY VISIT ID ---
-with tab2:
-    st.subheader("🔍 Visit Search & Historical Records")
+if is_admin:
+    # ADMIN VIEW: Display History and Analytics (Form Entry Removed)
+    st.subheader("📊 Administrative History & Record Controls")
     
     if df.empty:
         st.info("No records currently stored in Google Sheets.")
@@ -373,24 +263,17 @@ with tab2:
         f_col1, f_col2 = st.columns([2, 1])
         with f_col1:
             search_visit_id = st.text_input("🔍 Search by Visit ID (e.g., AMC-2026-XXXXX)", "").strip()
+        with f_col2:
+            status_filter = st.selectbox("Filter Status", ["All", "Active", "Inactive", "Expiring Soon", "Pending Service"])
             
         filtered_df = df.copy()
-        
-        # Admin-only Status Filter
-        if is_admin:
-            with f_col2:
-                status_filter = st.selectbox("Filter Status", ["All", "Active", "Inactive", "Expiring Soon", "Pending Service"])
-            if status_filter != "All":
-                filtered_df = filtered_df[filtered_df['Contract_Status'] == status_filter]
+        if status_filter != "All":
+            filtered_df = filtered_df[filtered_df['Contract_Status'] == status_filter]
 
         if search_visit_id:
             filtered_df = filtered_df[filtered_df['Visit_ID'].astype(str).str.contains(search_visit_id, case=False, na=False)]
 
-        # Sensitive Columns Removal for Technicians
         hidden_cols = ['Job_Sheet_Photo_Base64', 'Next_Service_Due_Date_DT']
-        if not is_admin:
-            hidden_cols.extend(['Next_Service_Due_Date', 'Contract_Status'])
-            
         display_cols = [c for c in filtered_df.columns if c not in hidden_cols]
         st.dataframe(filtered_df[display_cols], use_container_width=True)
 
@@ -424,11 +307,8 @@ with tab2:
                         st.markdown(f"**Product Name:** {row.get('Product_Name', 'N/A')}")
                         st.markdown(f"**Services Breakdown:** Completed {comp} of {tot} services ({pend} Pending)")
                         st.markdown(f"**Remarks:** {row.get('Remarks', 'N/A')}")
-                        
-                        # Sensitive Details Shown to Admin Only
-                        if is_admin:
-                            st.markdown(f"🔒 **Next Service Due:** {row.get('Next_Service_Due_Date', 'N/A')}")
-                            st.markdown(f"🔒 **Contract Status:** {row.get('Contract_Status', 'N/A')}")
+                        st.markdown(f"🔒 **Next Service Due:** {row.get('Next_Service_Due_Date', 'N/A')}")
+                        st.markdown(f"🔒 **Contract Status:** {row.get('Contract_Status', 'N/A')}")
                     
                     photo_b64 = str(row.get('Job_Sheet_Photo_Base64', ''))
                     if len(photo_b64) > 10:
@@ -443,3 +323,125 @@ with tab2:
                         st.info("No job sheet photo was uploaded for this visit.")
         else:
             st.caption("👈 Enter a specific **Visit ID** in the search bar above to view complete visit details and its associated Job Sheet photo.")
+
+else:
+    # TECHNICIAN VIEW: Entry Form & Basic History
+    tab1, tab2 = st.tabs(["📝 Add New Field Visit", "📊 Recent Visit History"])
+
+    with tab1:
+        st.subheader("Register AMC Visit / Emergency Call")
+        
+        auto_id = generate_visit_id()
+        st.info(f"**Automated Visit ID:** `{auto_id}`")
+        
+        col_left, col_right = st.columns(2)
+        
+        with col_left:
+            client_name = st.text_input("Client Name *", placeholder="Enter client/customer name")
+            
+            default_company, default_phone, default_address = "", "", ""
+            if not df.empty and client_name.strip() and 'Client_Name' in df.columns:
+                matched_client = df[df['Client_Name'].astype(str).str.strip().str.lower() == client_name.strip().lower()]
+                if not matched_client.empty:
+                    default_company = matched_client['Company_Name'].iloc[-1] if 'Company_Name' in matched_client.columns else ""
+                    default_phone = matched_client['Phone_Number'].iloc[-1] if 'Phone_Number' in matched_client.columns else ""
+                    default_address = matched_client['Address'].iloc[-1] if 'Address' in matched_client.columns else ""
+
+            company_name = st.text_input("Company Name", value=default_company)
+            phone_number = st.text_input("Phone Number", value=default_phone)
+            address = st.text_area("Client Address", value=default_address)
+            
+            st.markdown("---")
+            visit_type = st.selectbox(
+                "Visit Type *",
+                ["Preventive Maintenance (PM)", "Breakdown Call / Emergency Repair", "Installation / Retrofit"]
+            )
+            reason_for_visit = st.text_input("Reason / Reported Issue", value="Routine Maintenance")
+            
+        with col_right:
+            technician_name = st.text_input("Technician Name *")
+            date_of_visit = st.date_input("Date of Visit", today.date())
+            
+            product_name = st.selectbox(
+                "Product Name *",
+                ["Motorized Rolling Shutter", "Automatic Boom Barrier", "High-Speed Industrial Door", "Sliding Gate / Fire Door", "Other"]
+            )
+            
+            service_freq = st.selectbox("Service Frequency (Visits/Year)", [2, 3, 4], index=2)
+            total_services = int(service_freq)
+            
+            prev_completed = 0
+            if not df.empty and client_name.strip() and 'Client_Name' in df.columns and 'Product_Name' in df.columns:
+                matched = df[(df['Client_Name'].astype(str).str.strip().str.lower() == client_name.strip().lower()) & 
+                             (df['Product_Name'] == product_name)]
+                if not matched.empty:
+                    prev_completed = int(matched['Services_Completed'].iloc[-1])
+            
+            auto_completed = prev_completed + 1
+            if auto_completed > total_services:
+                auto_completed = total_services
+                
+            auto_pending = max(0, total_services - auto_completed)
+            
+            if client_name.strip():
+                st.info(f"📊 **Automated Progress Status for {client_name.strip()}:** Completed `{auto_completed}` of `{total_services}` services (`{auto_pending}` Pending)")
+            
+            freq_days_map = {2: 180, 3: 120, 4: 90}
+            default_next_due = date_of_visit + datetime.timedelta(days=freq_days_map.get(service_freq, 90))
+            
+            # Default contract values auto-assigned without exposing to technician
+            next_service_due = default_next_due
+            contract_status = "Active"
+                
+            uploaded_photo = st.file_uploader("Upload Job Sheet Photo", type=["jpg", "jpeg", "png"])
+        
+        remarks = st.text_area("Technician Remarks / Parts Used")
+        
+        if st.button("Save Record to Google Sheets"):
+            if not client_name.strip() or not technician_name.strip():
+                st.warning("⚠️ Client Name and Technician Name are required!")
+            else:
+                base64_photo = ""
+                if uploaded_photo is not None:
+                    image_bytes = uploaded_photo.read()
+                    base64_photo = base64.b64encode(image_bytes).decode('utf-8')
+                
+                record = {
+                    "Visit_ID": auto_id,
+                    "Client_Name": client_name.strip(),
+                    "Company_Name": company_name,
+                    "Date_of_Visit": str(date_of_visit),
+                    "Address": address,
+                    "Phone_Number": phone_number,
+                    "Technician_Name": technician_name.strip(),
+                    "Visit_Type": visit_type,
+                    "Reason_for_Visit": reason_for_visit,
+                    "Product_Name": product_name,
+                    "Service_Frequency": service_freq,
+                    "Next_Service_Due_Date": str(next_service_due),
+                    "Total_Services_Included": total_services,
+                    "Services_Completed": auto_completed,
+                    "Remarks": remarks,
+                    "Job_Sheet_Photo_Base64": base64_photo,
+                    "Contract_Status": contract_status
+                }
+                
+                if save_visit_to_gsheets(sheet, record):
+                    st.success(f"✅ Visit `{auto_id}` registered for {client_name.strip()}! ({auto_completed}/{total_services} Completed - {auto_pending} Pending)")
+                    st.cache_resource.clear()
+                    st.rerun()
+
+    with tab2:
+        st.subheader("🔍 Search Recent Records")
+        if df.empty:
+            st.info("No records currently stored.")
+        else:
+            search_visit_id = st.text_input("🔍 Search by Visit ID", "").strip()
+            filtered_df = df.copy()
+            if search_visit_id:
+                filtered_df = filtered_df[filtered_df['Visit_ID'].astype(str).str.contains(search_visit_id, case=False, na=False)]
+            
+            # Hide contract timing/status columns from technician history
+            tech_hidden = ['Job_Sheet_Photo_Base64', 'Next_Service_Due_Date_DT', 'Next_Service_Due_Date', 'Contract_Status']
+            display_cols = [c for c in filtered_df.columns if c not in tech_hidden]
+            st.dataframe(filtered_df[display_cols], use_container_width=True)
