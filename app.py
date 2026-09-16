@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime, date, time
 import zoneinfo
 import urllib.parse
 import os
@@ -113,10 +113,24 @@ st.markdown("""
     [data-testid="stSidebar"] { background-color: #F8FAFC !important; }
     .sidebar-logo-container { display: flex; flex-direction: column; align-items: center; width: 100%; margin-bottom: 10px; }
     .sidebar-logo-sub { color: #10B981; font-weight: 800; font-size: 0.95rem; letter-spacing: 1.5px; text-align: center; margin-top: 6px; }
-    .stButton > button, div[data-testid="stForm"] button { background-color: #1565C0 !important; color: #FFFFFF !important; border-radius: 8px !important; font-weight: 600 !important; width: 100% !important; }
+    
+    /* Buttons Styling */
+    .stButton > button, div[data-testid="stForm"] button { 
+        background-color: #1565C0 !important; 
+        color: #FFFFFF !important; 
+        border-radius: 8px !important; 
+        font-weight: 600 !important; 
+        width: 100% !important; 
+    }
     .stButton > button:hover, div[data-testid="stForm"] button:hover { background-color: #0D47A1 !important; }
     a { color: #1565C0 !important; }
-    div[data-testid="stForm"] { background-color: #FFFFFF; border: 2px solid #1565C0; border-radius: 16px; padding: 24px; }
+    
+    div[data-testid="stForm"] { 
+        background-color: #FFFFFF; 
+        border: 2px solid #1565C0; 
+        border-radius: 16px; 
+        padding: 24px; 
+    }
     .login-container div[data-testid="stForm"] { padding: 20px 28px !important; max-width: 360px; margin: 0 auto; text-align: center; }
 </style>
 """, unsafe_allow_html=True)
@@ -226,7 +240,7 @@ if st.session_state.user["Role"] == "Technician":
                         st.rerun()
                 st.divider()
 
-    # TAB 2: Dynamic AMC Visit Selection Form
+    # TAB 2: Service Report Form
     with tech_tab2:
         st.subheader("📝 Submit Client Service & Inspection Form")
         st.caption("Select the AMC contract below to automatically load the visit limit dropdown.")
@@ -234,22 +248,19 @@ if st.session_state.user["Role"] == "Technician":
         contracts_df = st.session_state.amc_contracts_db
         
         if contracts_df.empty:
-            st.warning("⚠️ No active AMC contracts found in the database. Please request a manager to register contracts.")
+            st.warning("⚠️ No active AMC contracts found in the database.")
         else:
-            # Dropdown to choose registered AMC Contract
             contract_options = contracts_df["AMC_Contract_No"].astype(str).tolist()
             selected_contract_no = st.selectbox("Select AMC Contract Number*", contract_options)
             
             selected_contract_info = contracts_df[contracts_df["AMC_Contract_No"].astype(str) == selected_contract_no].iloc[0]
             
-            # Extract contract parameters
             client_name_val = selected_contract_info.get("Client_Name", "")
             try:
                 allowed_visits_max = int(selected_contract_info.get("Allowed_Visits", 4))
             except Exception:
                 allowed_visits_max = 4
                 
-            # Dynamic list options based on max visits (e.g. "Visit 1 of 4", "Visit 2 of 4")
             visit_choices = [f"Visit {i} of {allowed_visits_max}" for i in range(1, allowed_visits_max + 1)]
             
             with st.form(f"service_report_form_{tech_id}"):
@@ -263,7 +274,7 @@ if st.session_state.user["Role"] == "Technician":
                     rpt_visit_num_str = st.selectbox("AMC Visit Sequence*", visit_choices)
                     rpt_next_due = st.date_input("Next Service Due Date", value=date.today() + pd.Timedelta(days=90))
                     
-                rpt_remarks = st.text_area("Technician Remarks & Actions Taken*", placeholder="Describe work performed, parts inspected/replaced...")
+                rpt_remarks = st.text_area("Technician Remarks & Actions Taken*", placeholder="Describe work performed...")
                 
                 submit_report = st.form_submit_button("Submit Service Report")
                 
@@ -356,7 +367,7 @@ if st.session_state.user["Role"] == "Technician":
 # 7. MANAGER COMMAND DASHBOARD
 # -----------------------------------------------------------------------------
 
-elif st.session_state.user["Role"] == "Manager":
+elif st.session_state.user["Role"] in ["Manager", "Admin"]:
     st.markdown("<h1 style='color: #0D47A1;'>📡 Dispatch & AMC Control Center</h1>", unsafe_allow_html=True)
 
     mgr_tab1, mgr_tab2, mgr_tab3, mgr_tab4 = st.tabs([
@@ -420,6 +431,8 @@ elif st.session_state.user["Role"] == "Manager":
 
     with mgr_tab4:
         col_mgr_a, col_mgr_b = st.columns(2)
+        
+        # Dispatch Task Column
         with col_mgr_a:
             st.subheader("Dispatch New Task")
             with st.form("new_job_form"):
@@ -430,35 +443,57 @@ elif st.session_state.user["Role"] == "Manager":
                 city = st.text_input("City")
                 pincode = st.text_input("Pin Code", max_chars=6)
                 issue = st.text_area("Service Notes")
+                
                 tech_list = st.session_state.users_db[st.session_state.users_db["Role"] == "Technician"]
-                assigned_tech = st.selectbox("Assign Technician", options=tech_list["User_ID"].tolist(), format_func=lambda x: f"{x} - {tech_list[tech_list['User_ID']==x]['Full_Name'].values[0]}")
-                sched_time = st.text_input("Scheduled Time", value="Today, 2:00 PM")
+                assigned_tech = st.selectbox(
+                    "Assign Technician", 
+                    options=tech_list["User_ID"].tolist(), 
+                    format_func=lambda x: f"{x} - {tech_list[tech_list['User_ID']==x]['Full_Name'].values[0]}"
+                )
+                
+                # Separate Calendar and Time Selectors (Restricting Past Dates)
+                st.markdown("**Scheduled Date & Time**")
+                sched_col1, sched_col2 = st.columns(2)
+                with sched_col1:
+                    sched_date = st.date_input("Scheduled Date", min_value=date.today(), value=date.today())
+                with sched_col2:
+                    sched_time = st.time_input("Scheduled Time", value=time(14, 0))
                 
                 if st.form_submit_button("Dispatch Order"):
-                    new_job_entry = {
-                        "Job_ID": j_id, "Assigned_Tech_ID": str(assigned_tech), "Client_Name": client_name,
-                        "Client_Phone": client_phone, "Address": address, "City": city, "Pincode": pincode,
-                        "Issue_Description": issue, "Status": "Assigned", "Scheduled_Time": sched_time
-                    }
-                    st.session_state.jobs_db = pd.concat([st.session_state.jobs_db, pd.DataFrame([new_job_entry])], ignore_index=True)
-                    save_sheet_data(st.session_state.jobs_db, "Jobs")
-                    st.toast(f"✅ Work Order {j_id} created!")
-                    st.rerun()
+                    # Check if selected time is earlier today
+                    selected_datetime = datetime.combine(sched_date, sched_time)
+                    if selected_datetime < datetime.now():
+                        st.error("⚠️ Cannot schedule a task for a time that has already passed today.")
+                    else:
+                        scheduled_time_str = f"{sched_date.strftime('%d-%b-%Y')} at {sched_time.strftime('%I:%M %p')}"
+                        new_job_entry = {
+                            "Job_ID": j_id, "Assigned_Tech_ID": str(assigned_tech), "Client_Name": client_name,
+                            "Client_Phone": client_phone, "Address": address, "City": city, "Pincode": pincode,
+                            "Issue_Description": issue, "Status": "Assigned", "Scheduled_Time": scheduled_time_str
+                        }
+                        st.session_state.jobs_db = pd.concat([st.session_state.jobs_db, pd.DataFrame([new_job_entry])], ignore_index=True)
+                        save_sheet_data(st.session_state.jobs_db, "Jobs")
+                        st.toast(f"✅ Work Order {j_id} created!")
+                        st.rerun()
 
+        # Admin Only Registration
         with col_mgr_b:
             st.subheader("Register System User")
-            with st.form("add_user_form"):
-                new_uid = st.text_input("User ID (e.g. TECH03)").strip().upper()
-                new_name = st.text_input("Full Name")
-                new_role = st.selectbox("Role", ["Technician", "Manager"])
-                new_pass = st.text_input("Password", type="password").strip()
-                
-                if st.form_submit_button("Create Account"):
-                    if new_uid in st.session_state.users_db["User_ID"].astype(str).values:
-                        st.error("User ID already exists!")
-                    else:
-                        user_entry = {"User_ID": new_uid, "Full_Name": new_name, "Role": new_role, "Password": new_pass}
-                        st.session_state.users_db = pd.concat([st.session_state.users_db, pd.DataFrame([user_entry])], ignore_index=True)
-                        save_sheet_data(st.session_state.users_db, "Users")
-                        st.toast(f"✅ Account for {new_name} created!")
-                        st.rerun()
+            if st.session_state.user.get("Role") != "Admin":
+                st.info("🔒 System User Registration is restricted. It can be created by Admin only.")
+            else:
+                with st.form("add_user_form"):
+                    new_uid = st.text_input("User ID (e.g. TECH03)").strip().upper()
+                    new_name = st.text_input("Full Name")
+                    new_role = st.selectbox("Role", ["Technician", "Manager", "Admin"])
+                    new_pass = st.text_input("Password", type="password").strip()
+                    
+                    if st.form_submit_button("Create Account"):
+                        if new_uid in st.session_state.users_db["User_ID"].astype(str).values:
+                            st.error("User ID already exists!")
+                        else:
+                            user_entry = {"User_ID": new_uid, "Full_Name": new_name, "Role": new_role, "Password": new_pass}
+                            st.session_state.users_db = pd.concat([st.session_state.users_db, pd.DataFrame([user_entry])], ignore_index=True)
+                            save_sheet_data(st.session_state.users_db, "Users")
+                            st.toast(f"✅ Account for {new_name} created!")
+                            st.rerun()
