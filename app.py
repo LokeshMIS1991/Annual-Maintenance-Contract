@@ -160,9 +160,17 @@ st.markdown("""
         text-align: center !important;
     }
 
-    /* Shift Password Eye Visibility Icon Left for Better Spacing */
+    /* Move eye icon significantly to the left */
     .login-container div[data-baseweb="input"] button {
-        margin-right: 12px !important;
+        margin-right: 28px !important;
+        position: relative !important;
+        right: 10px !important;
+    }
+
+    /* Prevent input text from running under the shifted eye icon */
+    .login-container input[type="password"], 
+    .login-container input[type="text"] {
+        padding-right: 65px !important;
     }
 
     /* Custom Input Instruction Text ("Enter to Login") */
@@ -171,13 +179,12 @@ st.markdown("""
     }
     .login-container [data-testid="InputInstructions"]::after {
         content: "Enter to Login" !important;
-        font-size: 0.75rem !important;
+        font-size: 0.72rem !important;
         color: #64748B !important;
-        padding-right: 8px !important;
+        margin-right: 12px !important;
     }
 </style>
 """, unsafe_allow_html=True)
-
 # -----------------------------------------------------------------------------
 # 4. LOGIN SCREEN
 # -----------------------------------------------------------------------------
