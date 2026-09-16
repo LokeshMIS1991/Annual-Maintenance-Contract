@@ -157,7 +157,7 @@ EQUIPMENT_DATA = {
 }
 
 # -----------------------------------------------------------------------------
-# 3. HELPER FUNCTIONS
+# 3. HELPER FUNCTIONS & DIALOG POPUPS
 # -----------------------------------------------------------------------------
 
 def make_google_maps_link(address, city, pincode=""):
@@ -169,6 +169,25 @@ def get_logo_path():
         if os.path.exists(name):
             return name
     return None
+
+# POPUP DIALOG FOR TASK SUMMARY
+@st.dialog("📊 Task Progress Summary")
+def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
+    st.write(f"### Performance Overview for **{tech_name}**")
+    st.divider()
+    
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Assigned", total_cnt)
+    col2.metric("Completed", completed_cnt, delta=f"{completed_cnt} Done", delta_color="normal")
+    col3.metric("Pending", pending_cnt, delta=f"-{pending_cnt} Remaining", delta_color="inverse")
+    
+    st.divider()
+    if total_cnt > 0:
+        completion_pct = int((completed_cnt / total_cnt) * 100)
+        st.write(f"**Completion Rate:** {completion_pct}%")
+        st.progress(completion_pct / 100)
+    else:
+        st.info("No work orders recorded for this technician.")
 
 # -----------------------------------------------------------------------------
 # 4. BRANDED UI STYLING
@@ -206,6 +225,21 @@ st.markdown("""
         background-color: #F8FAFC !important;
         border-color: #CBD5E1 !important;
         color: #0F172A !important;
+    }
+    
+    /* Equipment Details Box Styling */
+    .equipment-box {
+        background-color: #F8FAFC;
+        border-left: 5px solid #0F172A;
+        border-radius: 8px;
+        padding: 12px 18px;
+        margin-bottom: 20px;
+    }
+    .equipment-title {
+        color: #0F172A !important;
+        font-weight: 700;
+        margin: 0 0 10px 0;
+        font-size: 1.25rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -272,6 +306,18 @@ if st.session_state.user["Role"] == "Technician":
 
     st.markdown(f"<h1>🛠️ Technician Dashboard — <span style='color:#64748B;'>{tech_name}</span></h1>", unsafe_allow_html=True)
 
+    # Compute task counts for popup
+    all_tech_jobs = st.session_state.jobs_db[st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id]
+    total_tasks = len(all_tech_jobs)
+    completed_tasks = len(all_tech_jobs[all_tech_jobs["Status"] == "Completed"])
+    pending_tasks = total_tasks - completed_tasks
+
+    # Quick Summary Trigger Button
+    summary_col1, summary_col2 = st.columns([3, 1])
+    with summary_col2:
+        if st.button("📊 View Task Summary"):
+            show_task_summary_popup(tech_name, total_tasks, completed_tasks, pending_tasks)
+
     tech_tab1, tech_tab2, tech_tab3, tech_tab4 = st.tabs([
         "📋 Assigned Work Orders", 
         "📝 Submit Client Service Report",
@@ -282,10 +328,7 @@ if st.session_state.user["Role"] == "Technician":
     # TAB 1: Assigned Jobs
     with tech_tab1:
         st.subheader("Assigned Maintenance Tasks")
-        tech_jobs = st.session_state.jobs_db[
-            (st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id) & 
-            (st.session_state.jobs_db["Status"] != "Completed")
-        ]
+        tech_jobs = all_tech_jobs[all_tech_jobs["Status"] != "Completed"]
         
         if tech_jobs.empty:
             st.info("🎉 No pending maintenance visits assigned to you.")
@@ -376,7 +419,7 @@ if st.session_state.user["Role"] == "Technician":
                     rpt_next_due = st.date_input("Next Service Due Date", value=date.today() + pd.Timedelta(days=90))
 
                 # Section 1: Equipment Details
-                st.markdown("### 1. Equipment Details")
+                st.markdown("<div class='equipment-box'><h3 class='equipment-title'>1. Equipment Details</h3>", unsafe_allow_html=True)
                 eq_col1, eq_col2, eq_col3, eq_col4, eq_col5 = st.columns([3, 2, 2, 1, 2])
                 with eq_col1:
                     eq_type = st.selectbox("Equipment Type", EQUIPMENT_DATA[selected_category]["types"])
@@ -388,15 +431,16 @@ if st.session_state.user["Role"] == "Technician":
                     eq_qty = st.number_input("Qty", min_value=1, value=1)
                 with eq_col5:
                     eq_condition = st.selectbox("Condition", ["Good", "Requires Repair", "Critical", "Replaced"])
+                st.markdown("</div>", unsafe_allow_html=True)
 
-                # Section 2: Preventive Maintenance Checklist with Professional 4-Option Radio Set
+                # Section 2: Preventive Maintenance Checklist (Vertical Layout)
                 st.markdown(f"### 2. Preventive Maintenance Checklist ({selected_category})")
                 
                 checklist_results = {}
                 checklist_items = EQUIPMENT_DATA[selected_category]["checklist"]
                 
                 for idx, point in enumerate(checklist_items, 1):
-                    col_num, col_point, col_status, col_remark = st.columns([0.5, 4.0, 4.0, 3.5])
+                    col_num, col_point, col_status, col_remark = st.columns([0.5, 4.0, 3.5, 4.0])
                     with col_num:
                         st.write(f"**{idx}.**")
                     with col_point:
@@ -405,7 +449,7 @@ if st.session_state.user["Role"] == "Technician":
                         status = st.radio(
                             "Status", 
                             ["Satisfactory", "Repaired On-Site", "Action Required", "Not Applicable"], 
-                            horizontal=True, 
+                            horizontal=False, 
                             key=f"check_{selected_category}_{idx}",
                             label_visibility="collapsed"
                         )
@@ -541,6 +585,30 @@ elif st.session_state.user["Role"] in ["Manager", "Admin"]:
         st.subheader("Technician Fleet Live Radar")
         full_radar = pd.merge(st.session_state.tech_status_db, st.session_state.users_db[["User_ID", "Full_Name"]], left_on="Tech_ID", right_on="User_ID", how="left")
         st.dataframe(full_radar, use_container_width=True)
+        
+        st.divider()
+        st.subheader("Inspect Technician Task Breakdown")
+        
+        tech_users = st.session_state.users_db[st.session_state.users_db["Role"] == "Technician"]
+        if not tech_users.empty:
+            c_sel_tech, c_btn_popup = st.columns([3, 1])
+            with c_sel_tech:
+                inspect_tech_id = st.selectbox(
+                    "Select Technician to View Stats", 
+                    tech_users["User_ID"].tolist(),
+                    format_func=lambda x: f"{x} - {tech_users[tech_users['User_ID']==x]['Full_Name'].values[0]}"
+                )
+            
+            with c_btn_popup:
+                st.write("") # Spacing alignment
+                if st.button("📊 Open Tech Task Popup"):
+                    selected_tech_name = tech_users[tech_users["User_ID"] == inspect_tech_id]["Full_Name"].values[0]
+                    tech_jobs = st.session_state.jobs_db[st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == str(inspect_tech_id)]
+                    tot_cnt = len(tech_jobs)
+                    comp_cnt = len(tech_jobs[tech_jobs["Status"] == "Completed"])
+                    pend_cnt = tot_cnt - comp_cnt
+                    show_task_summary_popup(selected_tech_name, tot_cnt, comp_cnt, pend_cnt)
+
         st.divider()
         st.subheader("All Active Work Orders")
         st.dataframe(st.session_state.jobs_db, use_container_width=True)
