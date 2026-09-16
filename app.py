@@ -125,6 +125,7 @@ st.markdown("""
     .stButton > button:hover, div[data-testid="stForm"] button:hover { background-color: #0D47A1 !important; }
     a { color: #1565C0 !important; }
     
+    /* Clean Form Outline */
     div[data-testid="stForm"] { 
         background-color: #FFFFFF; 
         border: 2px solid #1565C0; 
@@ -132,6 +133,16 @@ st.markdown("""
         padding: 24px; 
     }
     .login-container div[data-testid="stForm"] { padding: 20px 28px !important; max-width: 360px; margin: 0 auto; text-align: center; }
+
+    /* Override and reset selectbox styling to standard clean view */
+    div[data-baseweb="select"] {
+        background-color: transparent !important;
+    }
+    div[data-baseweb="select"] > div {
+        background-color: #F8FAFC !important;
+        border-color: #CBD5E1 !important;
+        color: #0F172A !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -451,7 +462,7 @@ elif st.session_state.user["Role"] in ["Manager", "Admin"]:
                     format_func=lambda x: f"{x} - {tech_list[tech_list['User_ID']==x]['Full_Name'].values[0]}"
                 )
                 
-                # Separate Calendar and Time Selectors (Restricting Past Dates)
+                # Calendar and Time Inputs
                 st.markdown("**Scheduled Date & Time**")
                 sched_col1, sched_col2 = st.columns(2)
                 with sched_col1:
@@ -459,8 +470,8 @@ elif st.session_state.user["Role"] in ["Manager", "Admin"]:
                 with sched_col2:
                     sched_time = st.time_input("Scheduled Time", value=time(14, 0))
                 
-                if st.form_submit_button("Dispatch Order"):
-                    # Check if selected time is earlier today
+                if st.form_submit_button("Task Created"):
+                    # Restrict selected time in the past
                     selected_datetime = datetime.combine(sched_date, sched_time)
                     if selected_datetime < datetime.now():
                         st.error("⚠️ Cannot schedule a task for a time that has already passed today.")
@@ -473,7 +484,7 @@ elif st.session_state.user["Role"] in ["Manager", "Admin"]:
                         }
                         st.session_state.jobs_db = pd.concat([st.session_state.jobs_db, pd.DataFrame([new_job_entry])], ignore_index=True)
                         save_sheet_data(st.session_state.jobs_db, "Jobs")
-                        st.toast(f"✅ Work Order {j_id} created!")
+                        st.toast(f"✅ Task Created ({j_id})!")
                         st.rerun()
 
         # Admin Only Registration
