@@ -52,7 +52,6 @@ def save_sheet_data(df, worksheet_name):
     except Exception as e:
         st.error(f"❌ Failed to save data to Google Sheets ({worksheet_name}): {e}")
 
-# Load dynamic data from Google Sheets into session state on initial run
 if "users_db" not in st.session_state:
     st.session_state.users_db = load_sheet_data("Users")
 
@@ -77,7 +76,7 @@ def get_logo_path():
     return None
 
 # -----------------------------------------------------------------------------
-# 3. BRANDED UI STYLING
+# 3. BRANDED UI STYLING & EYE ICON / HINT TEXT ADJUSTMENTS
 # -----------------------------------------------------------------------------
 
 st.markdown("""
@@ -161,16 +160,20 @@ st.markdown("""
         text-align: center !important;
     }
 
-    /* Hide Streamlit "Press Enter to Login" hint text overlay */
-    .login-container [data-testid="InputInstructions"] {
-        display: none !important;
+    /* Shift Password Eye Visibility Icon Left for Better Spacing */
+    .login-container div[data-baseweb="input"] button {
+        margin-right: 12px !important;
     }
 
-    /* Adjust Password Field Right Padding so Eye Icon stays clear of inputs */
-    .login-container input[type="password"], 
-    .login-container input[type="text"] {
-        padding-right: 42px !important;
-        text-align: center !important;
+    /* Custom Input Instruction Text ("Enter to Login") */
+    .login-container [data-testid="InputInstructions"] {
+        font-size: 0 !important;
+    }
+    .login-container [data-testid="InputInstructions"]::after {
+        content: "Enter to Login" !important;
+        font-size: 0.75rem !important;
+        color: #64748B !important;
+        padding-right: 8px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -194,7 +197,6 @@ if st.session_state.user is None:
             else:
                 st.markdown("<h2 style='text-align: center; color: #0D47A1; margin:0;'>⚙️ SIDHARTH</h2>", unsafe_allow_html=True)
             
-            # Centered Titles & Badges with tight line-height
             st.markdown("<h3 style='text-align:center; color:#0D47A1; margin-top:-6px; margin-bottom:2px; font-size:1.2rem; font-weight:700;'>AMC Tracker</h3>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; color:#10B981; font-weight:800; font-size:0.8rem; margin-bottom:14px; letter-spacing:0.5px;'>● SIGN IN</div>", unsafe_allow_html=True)
 
@@ -336,7 +338,6 @@ if st.session_state.user["Role"] == "Technician":
             submit_broadcast = st.form_submit_button("Broadcast Location Update")
             
             if submit_broadcast:
-                # Automate capturing live time at submission
                 now_str = datetime.now().strftime("%I:%M %p")
                 
                 if tech_id in st.session_state.tech_status_db["Tech_ID"].astype(str).values:
