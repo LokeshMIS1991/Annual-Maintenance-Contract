@@ -460,19 +460,68 @@ if st.session_state.user["Role"] == "Technician":
                     rpt_next_due = st.date_input("Next Service Due Date", value=date.today() + pd.Timedelta(days=90))
 
                 # Section 1: Equipment Details
-                st.markdown("<div class='equipment-box'><h3 class='equipment-title'>1. Equipment Details</h3>", unsafe_allow_html=True)
-                eq_col1, eq_col2, eq_col3, eq_col4, eq_col5 = st.columns([3, 2, 2, 1, 2])
-                with eq_col1:
-                    eq_type = st.selectbox("Equipment Type", EQUIPMENT_DATA[selected_category]["types"])
-                with eq_col2:
-                    eq_make_model = st.text_input("Make / Model", placeholder="e.g. Sidharth / Standard")
-                with eq_col3:
-                    eq_size = st.text_input("Door Size (W x H)", placeholder="e.g. 4000x4500 mm")
-                with eq_col4:
-                    eq_qty = st.number_input("Qty", min_value=1, value=1)
-                with eq_col5:
-                    eq_condition = st.selectbox("Condition", ["Good", "Requires Repair", "Critical", "Replaced"])
-                st.markdown("</div>", unsafe_allow_html=True)
+                # -----------------------------------------------------------------------------
+            # EQUIPMENT DETAILS SECTION (OUTSIDE st.form TO REMOVE BLUE BOXES)
+            # -----------------------------------------------------------------------------
+            st.markdown("""
+            <style>
+                .equipment-box-container {
+                    background-color: #F8FAFC;
+                    border-left: 5px solid #0F172A;
+                    border-radius: 8px;
+                    padding: 16px 20px;
+                    margin-top: 10px;
+                    margin-bottom: 20px;
+                }
+                .equipment-title-text {
+                    color: #0F172A !important;
+                    font-weight: 700;
+                    font-size: 1.35rem;
+                    margin: 0;
+                }
+            </style>
+            <div class="equipment-box-container">
+                <h3 class="equipment-title-text">1. Equipment Details</h3>
+            </div>
+            """, unsafe_allow_html=True)
+
+            eq_col1, eq_col2, eq_col3, eq_col4, eq_col5 = st.columns([3, 2, 2, 1, 2])
+
+            with eq_col1:
+                eq_type = st.selectbox(
+                    "Equipment Type", 
+                    EQUIPMENT_DATA[selected_category]["types"],
+                    key="eq_type_clean_select"
+                )
+
+            with eq_col2:
+                eq_make_model = st.text_input(
+                    "Make / Model", 
+                    placeholder="e.g. Sidharth / Standard",
+                    key="eq_make_clean_input"
+                )
+
+            with eq_col3:
+                eq_size = st.text_input(
+                    "Door Size (W x H)", 
+                    placeholder="e.g. 4000x4500 mm",
+                    key="eq_size_clean_input"
+                )
+
+            with eq_col4:
+                eq_qty = st.number_input(
+                    "Qty", 
+                    min_value=1, 
+                    value=1,
+                    key="eq_qty_clean_input"
+                )
+
+            with eq_col5:
+                eq_condition = st.selectbox(
+                    "Condition", 
+                    ["Good", "Requires Repair", "Critical", "Replaced"],
+                    key="eq_condition_clean_select"
+                )
 
                 # Section 2: Preventive Maintenance Checklist
                 st.markdown(f"### 2. Preventive Maintenance Checklist ({selected_category})")
