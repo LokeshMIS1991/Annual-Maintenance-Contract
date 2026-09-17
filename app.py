@@ -503,6 +503,9 @@ if st.session_state.user["Role"] == "Technician":
             with c_header2:
                 # Dynamic Category Selection (All 5 Categories)
                 selected_category = st.selectbox("Equipment Category*", list(EQUIPMENT_DATA.keys()))
+                # Dynamic Category Selection (Fetches all 5 keys from EQUIPMENT_DATA)
+                selected_category = st.selectbox("Equipment Category*", options=list(EQUIPMENT_DATA.keys()),key="global_category_selector"
+                )
                 rpt_visit_num_str = st.selectbox("AMC Visit Sequence*", ["Visit 1 of 4", "Visit 2 of 4", "Visit 3 of 4", "Visit 4 of 4"])
 
             st.divider()
