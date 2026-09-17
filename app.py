@@ -36,7 +36,7 @@ except Exception as e:
     st.stop()
 
 def load_sheet_data(worksheet_name):
-    # Standard base metadata columns
+    # Strict list of 19 base metadata columns
     service_report_cols = [
         "Report_ID", "Job_ID", "Tech_ID", "Tech_Name", "Client_Name", "Site_Location", 
         "AMC_Contract_No", "Category", "Equipment_Type", "Make_Model", "Door_Size", "Qty", 
@@ -44,7 +44,7 @@ def load_sheet_data(worksheet_name):
         "Remarks", "Submitted_At"
     ]
     
-    # Append ONLY separated Q1_Choice through Q18_Remark columns
+    # Append strictly Q1_Choice, Q1_Remark through Q18_Choice, Q18_Remark (55 columns total)
     for i in range(1, 19):
         service_report_cols.extend([f"Q{i}_Choice", f"Q{i}_Remark"])
 
@@ -63,11 +63,13 @@ def load_sheet_data(worksheet_name):
         records = ws.get_all_records()
         df = pd.DataFrame(records)
         
-        # Ensure only the active columns exist in the DataFrame schema
+        # Guarantee all expected columns exist
         for col in cols:
             if col not in df.columns:
                 df[col] = ""
-        return df[cols]  # Filters out old P01..P18 columns if present in existing sheet
+                
+        # Return ONLY the defined columns to drop any rogue columns like P01_...
+        return df[cols]
     except Exception:
         try:
             ws = sh.add_worksheet(title=worksheet_name, rows="100", cols="60")
@@ -76,7 +78,7 @@ def load_sheet_data(worksheet_name):
             return pd.DataFrame(columns=cols)
         except Exception:
             return pd.DataFrame(columns=cols)
-            
+
 def save_sheet_data(df, worksheet_name):
     try:
         ws = sh.worksheet(worksheet_name)
@@ -86,7 +88,7 @@ def save_sheet_data(df, worksheet_name):
     except Exception as e:
         st.error(f"❌ Failed to save data to Google Sheets ({worksheet_name}): {e}")
 
-# Initialize Session State Data
+# Initialize Session Data
 if "users_db" not in st.session_state:
     st.session_state.users_db = load_sheet_data("Users")
 
@@ -106,7 +108,7 @@ if "selected_job_for_report" not in st.session_state:
     st.session_state.selected_job_for_report = None
 
 # -----------------------------------------------------------------------------
-# 2. CHECKLIST CONFIGURATION
+# 2. CHECKLIST DATA CONFIGURATION
 # -----------------------------------------------------------------------------
 
 EQUIPMENT_DATA = {
@@ -470,10 +472,11 @@ if st.session_state.user["Role"] == "Technician":
                             key=f"rem_{selected_category}_{idx}",
                             label_visibility="collapsed"
                         )
+                    
+                    # Save status and remark under Q1..Q18 numerical keys
                     checklist_results[f"Q{idx}"] = {
-                        "question": point,
                         "choice": status, 
-                        "remark": remark if remark else "N/A"
+                        "remark": remark.strip() if remark.strip() else "N/A"
                     }
                     st.divider()
 
@@ -493,7 +496,7 @@ if st.session_state.user["Role"] == "Technician":
                         except Exception:
                             submit_time_str = datetime.now().strftime("%Y-%m-%d %I:%M %p")
 
-                        # Core metadata record
+                        # Core metadata record (NO legacy P01..P18 keys)
                         report_entry = {
                             "Report_ID": f"RPT-{len(st.session_state.service_reports_db) + 1001}",
                             "Job_ID": selected_job_id,
@@ -508,7 +511,7 @@ if st.session_state.user["Role"] == "Technician":
                             "Door_Size": eq_size,
                             "Qty": str(eq_qty),
                             "Condition": eq_condition,
-                            "Checklist_Data": "Saved into individual Q1-Q18 columns",
+                            "Checklist_Data": "Stored in Q1-Q18 columns",
                             "Service_Date": str(rpt_service_date),
                             "Visit_Number": rpt_visit_num_str,
                             "Next_Service_Due_Date": str(rpt_next_due),
@@ -516,7 +519,7 @@ if st.session_state.user["Role"] == "Technician":
                             "Submitted_At": submit_time_str
                         }
 
-                        # Dynamically bind Q1_Choice, Q1_Remark, ..., Q18_Choice, Q18_Remark to individual dict keys
+                        # Dynamically populate EXCLUSIVELY Q1_Choice, Q1_Remark through Q18_Choice, Q18_Remark
                         for idx in range(1, 19):
                             q_key = f"Q{idx}"
                             if q_key in checklist_results:
@@ -526,8 +529,11 @@ if st.session_state.user["Role"] == "Technician":
                                 report_entry[f"Q{idx}_Choice"] = "N/A"
                                 report_entry[f"Q{idx}_Remark"] = "N/A"
 
-                        # Save updated DataFrame to session state and Google Sheets
-                        st.session_state.service_reports_db = pd.concat([st.session_state.service_reports_db, pd.DataFrame([report_entry])], ignore_index=True)
+                        # Ensure DataFrame conforms strictly to approved columns (19 base + 36 Q-cols)
+                        valid_columns = load_sheet_data("ServiceReports").columns.tolist()
+                        new_row_df = pd.DataFrame([report_entry])[valid_columns]
+
+                        st.session_state.service_reports_db = pd.concat([st.session_state.service_reports_db[valid_columns], new_row_df], ignore_index=True)
                         save_sheet_data(st.session_state.service_reports_db, "ServiceReports")
                         
                         # Set job status to Completed
