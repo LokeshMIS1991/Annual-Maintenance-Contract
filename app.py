@@ -468,7 +468,7 @@ if st.session_state.user["Role"] == "Technician":
                 st.divider()
 
     # -------------------------------------------------------------------------
-    # TAB 2: Service Report Form (Option 1: Site Photos & Option 2: Filled Form Photo)
+    # TAB 2: Service Report Form
     # -------------------------------------------------------------------------
     with tech_tab2:
         st.subheader("📝 Submit Client Service Report")
@@ -595,43 +595,48 @@ if st.session_state.user["Role"] == "Technician":
                 }
                 st.divider()
 
+            # -----------------------------------------------------------------
+            # SECTION 3: Remarks & Recommendations
+            # -----------------------------------------------------------------
             st.markdown("### 3. Remarks & Recommendations")
-            rpt_remarks = st.text_area("General Remarks*", placeholder="Overall observations, work executed, recommendations...", key=f"rem_area_{current_category}")
+            rpt_remarks = st.text_area(
+                "General Remarks*", 
+                placeholder="Overall observations, work executed, recommendations...", 
+                key=f"rem_area_{current_category}"
+            )
 
-            # -----------------------------------------------------------------
-            # PHOTO UPLOADS: Option 1 (Site Photos) & Option 2 (Form Filled Photo)
-            # -----------------------------------------------------------------
             st.divider()
-            st.markdown("### 📷 Photo Attachments")
 
-            col_img1, col_img2 = st.columns(2)
-            
-            # OPTION 1: Site Photos (4 to 8 required)
-            with col_img1:
-                st.markdown("#### Option 1: Site Photos*")
-                site_photos = st.file_uploader(
-                    "Attach 4 to 8 Site Photos (Equipment, Site Condition, Installation)", 
-                    type=["jpg", "jpeg", "png"], 
-                    accept_multiple_files=True, 
-                    key=f"site_photos_{current_category}"
-                )
-                if site_photos:
-                    if 4 <= len(site_photos) <= 8:
-                        st.success(f"✅ {len(site_photos)} site photos selected.")
-                    else:
-                        st.warning(f"⚠️ Selected {len(site_photos)} photos. Please attach between 4 and 8 site photos.")
+            # -----------------------------------------------------------------
+            # SECTION 4: Site Photographs (4 to 8 required)
+            # -----------------------------------------------------------------
+            st.markdown("### 4. Site Photographs*")
+            site_photos = st.file_uploader(
+                "Upload Site Photos (Attach between 4 and 8 site images)", 
+                type=["jpg", "jpeg", "png"], 
+                accept_multiple_files=True, 
+                key=f"site_photos_{current_category}"
+            )
+            if site_photos:
+                if 4 <= len(site_photos) <= 8:
+                    st.success(f"✅ {len(site_photos)} site photographs attached.")
+                else:
+                    st.warning(f"⚠️ Selected {len(site_photos)} photos. Please upload between 4 and 8 site photographs.")
 
-            # OPTION 2: Form Filled Photo (Physical Sheet)
-            with col_img2:
-                st.markdown("#### Option 2: Filled Form Photo")
-                sheet_photo = st.file_uploader(
-                    "Attach Photo of Physical Signed Service Form / Paper Sheet (Optional)", 
-                    type=["jpg", "jpeg", "png"], 
-                    accept_multiple_files=False, 
-                    key=f"sheet_upload_{current_category}"
-                )
-                if sheet_photo:
-                    st.success(f"✅ Filled form photo selected: `{sheet_photo.name}`")
+            st.divider()
+
+            # -----------------------------------------------------------------
+            # SECTION 5: Form Photograph (Physical Sheet)
+            # -----------------------------------------------------------------
+            st.markdown("### 5. Form Photograph")
+            sheet_photo = st.file_uploader(
+                "Upload Photo of Physical Signed Form / Sheet (Optional)", 
+                type=["jpg", "jpeg", "png"], 
+                accept_multiple_files=False, 
+                key=f"sheet_upload_{current_category}"
+            )
+            if sheet_photo:
+                st.success(f"✅ Physical sheet photograph attached: `{sheet_photo.name}`")
 
             st.divider()
 
@@ -639,9 +644,9 @@ if st.session_state.user["Role"] == "Technician":
                 if not rpt_site_location or not rpt_remarks:
                     st.error("⚠️ Please fill in all required text fields marked with *")
                 elif not site_photos or len(site_photos) < 4 or len(site_photos) > 8:
-                    st.error("⚠️ Please attach between 4 and 8 site photos under Option 1 before submitting.")
+                    st.error("⚠️ Please attach between 4 and 8 photos under '4. Site Photographs' before submitting.")
                 else:
-                    with st.spinner("📤 Uploading site photos and form scan to Google Drive... Please wait."):
+                    with st.spinner("📤 Uploading site photographs and physical form scan to Google Drive... Please wait."):
                         sheet_link = ""
                         if sheet_photo:
                             uploaded_sheet = upload_photos_to_drive([sheet_photo], folder_name="AMC_Physical_Sheets")
