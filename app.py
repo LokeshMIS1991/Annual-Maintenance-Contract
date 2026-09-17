@@ -201,20 +201,18 @@ def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
         st.info("No work orders recorded for this technician.")
 
 # -----------------------------------------------------------------------------
-# 4. BRANDED UI STYLING (EXPLICIT DEEP DROPDOWN FIX)
+# 4. BRANDED UI STYLING
 # -----------------------------------------------------------------------------
 
 st.markdown("""
 <style>
-    /* Tab & Sidebar Styling */
     .stTabs [data-baseweb="tab-highlight"] { background-color: #1565C0 !important; }
     .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #1565C0 !important; font-weight: 700 !important; }
     [data-testid="stSidebar"] { background-color: #F8FAFC !important; }
     .sidebar-logo-sub { color: #10B981; font-weight: 800; font-size: 0.95rem; letter-spacing: 1.5px; text-align: center; margin-top: 6px; }
     
-    /* Strict Action Button Styling (Isolates actual buttons from select boxes) */
-    .stButton > button, 
-    div[data-testid="stFormSubmitButton"] > button { 
+    /* Target action buttons strictly */
+    div[data-testid="stButton"] > button { 
         background-color: #1565C0 !important; 
         color: #FFFFFF !important; 
         border-radius: 8px !important; 
@@ -223,15 +221,14 @@ st.markdown("""
         border: none !important;
     }
     
-    .stButton > button:hover, 
-    div[data-testid="stFormSubmitButton"] > button:hover { 
+    div[data-testid="stButton"] > button:hover { 
         background-color: #0D47A1 !important; 
         color: #FFFFFF !important;
     }
     
     a { color: #1565C0 !important; }
     
-    /* Form Outline */
+    /* Form Outer Container */
     div[data-testid="stForm"] { 
         background-color: #FFFFFF; 
         border: 2px solid #1565C0; 
@@ -241,39 +238,24 @@ st.markdown("""
     .login-container div[data-testid="stForm"] { padding: 20px 28px !important; max-width: 360px; margin: 0 auto; text-align: center; }
 
     /* ==========================================================================
-       FORCEFUL SELECTBOX OVERRIDE: REMOVES SOLID BLUE FILL & SHOWS SELECTED TEXT
+       CLEAN NATIVE SELECTBOX FIX (REMOVES ALL BLUE BOX OVERLAYS)
        ========================================================================== */
-    
-    /* Target Streamlit Selectbox Container directly */
-    div[data-testid="stSelectbox"] {
-        background-color: transparent !important;
+    div[data-baseweb="select"] {
+        background: #F8FAFC !important;
+        border-radius: 8px !important;
     }
     
-    /* Strip blue background from all nested BaseWeb divs inside selectbox */
-    div[data-testid="stSelectbox"] div[data-baseweb="select"],
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
-        background-color: #F1F5F9 !important;
-        border: 1px solid #CBD5E1 !important;
-        border-radius: 8px !important;
+    div[data-baseweb="select"] * {
+        background-color: transparent !important;
         color: #0F172A !important;
+        fill: #0F172A !important;
     }
 
-    /* Force selected text to display in dark legible color */
-    div[data-testid="stSelectbox"] div[role="button"],
-    div[data-testid="stSelectbox"] span,
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] * {
+    div[data-baseweb="select"] [role="button"] {
         color: #0F172A !important;
-        background-color: transparent !important;
         font-weight: 600 !important;
     }
 
-    /* Override arrow icon color */
-    div[data-testid="stSelectbox"] svg {
-        fill: #0F172A !important;
-        color: #0F172A !important;
-    }
-
-    /* Equipment Box Container Header */
     .equipment-box {
         background-color: #F8FAFC;
         border-left: 5px solid #0F172A;
@@ -453,6 +435,22 @@ if st.session_state.user["Role"] == "Technician":
 
             st.divider()
 
+            # Equipment Type and Condition defined OUTSIDE st.form to break BaseWeb form button overrides
+            st.markdown("<div class='equipment-box'><h3 class='equipment-title'>1. Equipment Details</h3>", unsafe_allow_html=True)
+            eq_col1, eq_col2, eq_col3, eq_col4, eq_col5 = st.columns([3, 2, 2, 1, 2])
+            
+            with eq_col1:
+                eq_type = st.selectbox("Equipment Type", EQUIPMENT_DATA[selected_category]["types"], key="active_eq_type")
+            with eq_col2:
+                eq_make_model = st.text_input("Make / Model", placeholder="e.g. Sidharth / Standard", key="active_eq_make")
+            with eq_col3:
+                eq_size = st.text_input("Door Size (W x H)", placeholder="e.g. 4000x4500 mm", key="active_eq_size")
+            with eq_col4:
+                eq_qty = st.number_input("Qty", min_value=1, value=1, key="active_eq_qty")
+            with eq_col5:
+                eq_condition = st.selectbox("Condition", ["Good", "Requires Repair", "Critical", "Replaced"], key="active_eq_cond")
+            st.markdown("</div>", unsafe_allow_html=True)
+
             with st.form(f"service_report_form_{tech_id}"):
                 st.markdown("### General Visit Details")
                 c_det1, c_det2 = st.columns(2)
@@ -461,21 +459,6 @@ if st.session_state.user["Role"] == "Technician":
                     rpt_service_date = st.date_input("Service Date", value=date.today())
                 with c_det2:
                     rpt_next_due = st.date_input("Next Service Due Date", value=date.today() + pd.Timedelta(days=90))
-
-                # Section 1: Equipment Details
-                st.markdown("<div class='equipment-box'><h3 class='equipment-title'>1. Equipment Details</h3>", unsafe_allow_html=True)
-                eq_col1, eq_col2, eq_col3, eq_col4, eq_col5 = st.columns([3, 2, 2, 1, 2])
-                with eq_col1:
-                    eq_type = st.selectbox("Equipment Type", EQUIPMENT_DATA[selected_category]["types"])
-                with eq_col2:
-                    eq_make_model = st.text_input("Make / Model", placeholder="e.g. Sidharth / Standard")
-                with eq_col3:
-                    eq_size = st.text_input("Door Size (W x H)", placeholder="e.g. 4000x4500 mm")
-                with eq_col4:
-                    eq_qty = st.number_input("Qty", min_value=1, value=1)
-                with eq_col5:
-                    eq_condition = st.selectbox("Condition", ["Good", "Requires Repair", "Critical", "Replaced"])
-                st.markdown("</div>", unsafe_allow_html=True)
 
                 # Section 2: Preventive Maintenance Checklist
                 st.markdown(f"### 2. Preventive Maintenance Checklist ({selected_category})")
