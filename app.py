@@ -36,11 +36,21 @@ except Exception as e:
     st.stop()
 
 def load_sheet_data(worksheet_name):
+    # Base columns + expanded Q1_Choice through Q18_Remark
+    service_report_cols = [
+        "Report_ID", "Job_ID", "Tech_ID", "Tech_Name", "Client_Name", "Site_Location", 
+        "AMC_Contract_No", "Category", "Equipment_Type", "Make_Model", "Door_Size", "Qty", 
+        "Condition", "Checklist_Data", "Service_Date", "Visit_Number", "Next_Service_Due_Date", 
+        "Remarks", "Submitted_At"
+    ]
+    for i in range(1, 19):
+        service_report_cols.extend([f"Q{i}_Choice", f"Q{i}_Remark"])
+
     default_columns = {
         "Users": ["User_ID", "Full_Name", "Role", "Password"],
         "Jobs": ["Job_ID", "Assigned_Tech_ID", "Client_Name", "Client_Phone", "Address", "City", "Pincode", "Issue_Description", "Status", "Scheduled_Time"],
         "TechStatus": ["Tech_ID", "Current_City", "Current_Pincode", "Current_Status", "Next_City", "Next_Pincode", "ETA", "Last_Updated"],
-        "ServiceReports": ["Report_ID", "Job_ID", "Tech_ID", "Tech_Name", "Client_Name", "Site_Location", "AMC_Contract_No", "Category", "Equipment_Type", "Make_Model", "Door_Size", "Qty", "Condition", "Checklist_Data", "Service_Date", "Visit_Number", "Next_Service_Due_Date", "Remarks", "Submitted_At"],
+        "ServiceReports": service_report_cols,
         "AMCContracts": ["AMC_Contract_No", "Client_Name", "Start_Date", "End_Date", "Allowed_Visits"]
     }
     
@@ -56,7 +66,7 @@ def load_sheet_data(worksheet_name):
         return df
     except Exception:
         try:
-            ws = sh.add_worksheet(title=worksheet_name, rows="100", cols="20")
+            ws = sh.add_worksheet(title=worksheet_name, rows="100", cols="60")
             if cols:
                 ws.append_row(cols)
             return pd.DataFrame(columns=cols)
@@ -170,7 +180,6 @@ def get_logo_path():
             return name
     return None
 
-# POPUP DIALOG FOR TASK SUMMARY
 @st.dialog("📊 Task Progress Summary")
 def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
     st.write(f"### Performance Overview for **{tech_name}**")
@@ -227,7 +236,6 @@ st.markdown("""
         color: #0F172A !important;
     }
     
-    /* Equipment Details Box Styling */
     .equipment-box {
         background-color: #F8FAFC;
         border-left: 5px solid #0F172A;
@@ -306,13 +314,11 @@ if st.session_state.user["Role"] == "Technician":
 
     st.markdown(f"<h1>🛠️ Technician Dashboard — <span style='color:#64748B;'>{tech_name}</span></h1>", unsafe_allow_html=True)
 
-    # Compute task counts for popup
     all_tech_jobs = st.session_state.jobs_db[st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id]
     total_tasks = len(all_tech_jobs)
     completed_tasks = len(all_tech_jobs[all_tech_jobs["Status"] == "Completed"])
     pending_tasks = total_tasks - completed_tasks
 
-    # Quick Summary Trigger Button
     summary_col1, summary_col2 = st.columns([3, 1])
     with summary_col2:
         if st.button("📊 View Task Summary"):
@@ -433,7 +439,7 @@ if st.session_state.user["Role"] == "Technician":
                     eq_condition = st.selectbox("Condition", ["Good", "Requires Repair", "Critical", "Replaced"])
                 st.markdown("</div>", unsafe_allow_html=True)
 
-                # Section 2: Preventive Maintenance Checklist (Vertical Layout)
+                # Section 2: Preventive Maintenance Checklist
                 st.markdown(f"### 2. Preventive Maintenance Checklist ({selected_category})")
                 
                 checklist_results = {}
@@ -460,7 +466,11 @@ if st.session_state.user["Role"] == "Technician":
                             key=f"rem_{selected_category}_{idx}",
                             label_visibility="collapsed"
                         )
-                    checklist_results[f"P{idx}_{point}"] = {"status": status, "remark": remark}
+                    checklist_results[f"Q{idx}"] = {
+                        "question": point,
+                        "choice": status, 
+                        "remark": remark if remark else "N/A"
+                    }
                     st.divider()
 
                 # Section 3: Overall Remarks
@@ -479,6 +489,11 @@ if st.session_state.user["Role"] == "Technician":
                         except Exception:
                             submit_time_str = datetime.now().strftime("%Y-%m-%d %I:%M %p")
 
+                        formatted_summary = "\n".join([
+                            f"{k} [{v['question']}]: {v['choice']} | Remark: {v['remark']}" 
+                            for k, v in checklist_results.items()
+                        ])
+
                         report_entry = {
                             "Report_ID": f"RPT-{len(st.session_state.service_reports_db) + 1001}",
                             "Job_ID": selected_job_id,
@@ -493,14 +508,24 @@ if st.session_state.user["Role"] == "Technician":
                             "Door_Size": eq_size,
                             "Qty": str(eq_qty),
                             "Condition": eq_condition,
-                            "Checklist_Data": str(checklist_results),
+                            "Checklist_Data": formatted_summary,
                             "Service_Date": str(rpt_service_date),
                             "Visit_Number": rpt_visit_num_str,
                             "Next_Service_Due_Date": str(rpt_next_due),
                             "Remarks": rpt_remarks,
                             "Submitted_At": submit_time_str
                         }
-                        
+
+                        # Unpack 18 Choices and Remarks into individual columns
+                        for idx in range(1, 19):
+                            q_key = f"Q{idx}"
+                            if q_key in checklist_results:
+                                report_entry[f"Q{idx}_Choice"] = checklist_results[q_key]["choice"]
+                                report_entry[f"Q{idx}_Remark"] = checklist_results[q_key]["remark"]
+                            else:
+                                report_entry[f"Q{idx}_Choice"] = "N/A"
+                                report_entry[f"Q{idx}_Remark"] = "N/A"
+
                         st.session_state.service_reports_db = pd.concat([st.session_state.service_reports_db, pd.DataFrame([report_entry])], ignore_index=True)
                         save_sheet_data(st.session_state.service_reports_db, "ServiceReports")
                         
@@ -600,7 +625,7 @@ elif st.session_state.user["Role"] in ["Manager", "Admin"]:
                 )
             
             with c_btn_popup:
-                st.write("") # Spacing alignment
+                st.write("")
                 if st.button("📊 Open Tech Task Popup"):
                     selected_tech_name = tech_users[tech_users["User_ID"] == inspect_tech_id]["Full_Name"].values[0]
                     tech_jobs = st.session_state.jobs_db[st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == str(inspect_tech_id)]
