@@ -104,7 +104,7 @@ if "selected_job_for_report" not in st.session_state:
     st.session_state.selected_job_for_report = None
 
 # -----------------------------------------------------------------------------
-# 2. CHECKLIST DATA CONFIGURATION
+# 2. COMPLETE CATEGORIZED EQUIPMENT DATA CONFIGURATION
 # -----------------------------------------------------------------------------
 
 EQUIPMENT_DATA = {
@@ -165,6 +165,92 @@ EQUIPMENT_DATA = {
             "Full Cycle High-Speed Opening & Closing Operation Check",
             "Safety Reversing Test on Obstacle Detection"
         ]
+    },
+    "Sectional Door": {
+        "types": [
+            "Industrial Sectional Door",
+            "Residential Overhead Door",
+            "Insulated Sectional Door",
+            "Vision / Full-Glazed Door",
+            "Other"
+        ],
+        "checklist": [
+            "Door Panels (Damage, Alignment, Cracks)",
+            "Torsion / Extension Spring Tension & Condition",
+            "Spring Anti-Drop Safety Device",
+            "Steel Lifting Cables (Fraying, Wear, Tension)",
+            "Cable Failure Safety Device (Bottom Bracket)",
+            "Side Vertical & Horizontal Guide Tracks",
+            "Track Rollers, Hinges & Shaft Bearings",
+            "Drive Motor Unit & Gearbox Condition",
+            "Control Panel & Electrical Wiring",
+            "Limit Switches (Open / Close Stop Positions)",
+            "Safety Edge / Safety Light Curtains",
+            "Infrared Safety Photocells",
+            "Remote Control & Push Button Switches",
+            "Manual Emergency Release (Chain / Declutch)",
+            "Rubber Bottom, Side & Top Weather Seals",
+            "Lubrication (Springs, Bearings, Rollers, Hinges)",
+            "Smooth Operation, Noise & Vibration Check",
+            "Final Functional & Auto-Reverse Safety Test"
+        ]
+    },
+    "Automatic Gate Barrier": {
+        "types": [
+            "Electromechanical Gate Barrier",
+            "Hydraulic Gate Barrier",
+            "Articulated Arm Barrier",
+            "Other"
+        ],
+        "checklist": [
+            "Barrier Housing / Cabinet (Physical Condition & Lock)",
+            "Barrier Boom Arm Condition & Alignment",
+            "Balancing Spring Tension & Adjustment",
+            "Motor & Gearbox / Hydraulic Pump Unit",
+            "Drive Lever, Mechanical Stops & Bearings",
+            "Control Panel & Microprocessor Board Settings",
+            "Electrical Wiring, Terminations & Grounding",
+            "Limit Switches (Open / Close Positioning)",
+            "Inductive Loop Detector & Ground Loops",
+            "Safety Photocells / Light Beams",
+            "Boom Rubber Safety Edge / LED Warning Lights",
+            "Access Control Integration (RFID / Card Reader / UHF)",
+            "Push Button Station & Remote Keyfobs",
+            "Manual Emergency Release Key Mechanism",
+            "Lubrication of Pivot Joints & Internal Linkages",
+            "Anchor Bolts & Foundation Stability",
+            "Abnormal Noise, Vibration & Slowdown Speed",
+            "Final Functional Test & Safety Auto-Reverse Check"
+        ]
+    },
+    "Sliding Gate": {
+        "types": [
+            "Tracked Sliding Gate",
+            "Cantilever Sliding Gate",
+            "Telescopic Sliding Gate",
+            "Heavy Industrial Sliding Gate",
+            "Other"
+        ],
+        "checklist": [
+            "Gate Leaf Physical Condition & Frame Structural Integrity",
+            "Bottom Track Rail / Cantilever Carriage Wheels Condition",
+            "Top Guide Rollers & Guide Channel Alignment",
+            "Gear Rack & Pinion Tooth Engagement & Alignment",
+            "Sliding Gate Motor Unit & Oil Level / Gearbox",
+            "Mechanical Physical End Stops (Open & Close Positions)",
+            "Limit Switches / Magnetic Limit Sensors",
+            "Control Board Wiring, Fuses & Earth Connections",
+            "Infrared Safety Photocells Alignment & Cleanliness",
+            "Safety Edge Bumper & Obstacle Sensitivity Force Adjustment",
+            "Flashing Warning Lamp & Audible Buzzer Operation",
+            "Push Button Station, Key Switch & Keyfob Operation",
+            "Access Control Integration (GSM / Intercom / Card Reader)",
+            "Manual Key Release Mechanism & Declutch Operation",
+            "Greasing of Rack, Wheels, Rollers & Bearings",
+            "Foundation Bolts & Motor Mounting Base Stability",
+            "Gate Travel Smoothness, Noise & Vibration Check",
+            "Final Functional Test & Safety Auto-Reverse Test"
+        ]
     }
 }
 
@@ -206,14 +292,13 @@ def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
 
 st.markdown("""
 <style>
-    /* Tabs & Sidebar Accent */
     .stTabs [data-baseweb="tab-highlight"] { background-color: #1565C0 !important; }
     .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #1565C0 !important; font-weight: 700 !important; }
     [data-testid="stSidebar"] { background-color: #F8FAFC !important; }
     .sidebar-logo-sub { color: #10B981; font-weight: 800; font-size: 0.95rem; letter-spacing: 1.5px; text-align: center; margin-top: 6px; }
     
-    /* Standalone & Form Buttons (Explicit class scope to avoid leaking into selectboxes) */
-    .stButton > button, 
+    /* Action & Submit Buttons */
+    div[data-testid="stButton"] > button,
     button[kind="primaryFormSubmit"] { 
         background-color: #1565C0 !important; 
         color: #FFFFFF !important; 
@@ -223,7 +308,7 @@ st.markdown("""
         border: none !important;
     }
     
-    .stButton > button:hover, 
+    div[data-testid="stButton"] > button:hover,
     button[kind="primaryFormSubmit"]:hover { 
         background-color: #0D47A1 !important; 
         color: #FFFFFF !important;
@@ -231,7 +316,7 @@ st.markdown("""
     
     a { color: #1565C0 !important; }
     
-    /* Form Outline Container */
+    /* Form Outline */
     div[data-testid="stForm"] { 
         background-color: #FFFFFF; 
         border: 2px solid #1565C0; 
@@ -240,49 +325,20 @@ st.markdown("""
     }
     .login-container div[data-testid="stForm"] { padding: 20px 28px !important; max-width: 360px; margin: 0 auto; text-align: center; }
 
-    /* ==========================================================================
-       TARGETED SELECTBOX STYLING FIX (PREVENTS BLUE OVERLAY & SHOWS SELECTED TEXT)
-       ========================================================================== */
-
-    /* Outer Wrapper Container */
-    div[data-baseweb="select"] {
-        background-color: #F8FAFC !important;
-        border-radius: 8px !important;
-    }
-
-    /* Target ONLY the outer input box wrapper for borders/backgrounds */
-    div[data-baseweb="select"] > div:first-child {
-        background-color: #F8FAFC !important;
-        border: 1px solid #CBD5E1 !important;
-        border-radius: 8px !important;
-    }
-
-    /* Force inner value container, text span, and SVGs to remain transparent & legible */
-    div[data-baseweb="select"] div[role="button"],
-    div[data-baseweb="select"] span,
-    div[data-baseweb="select"] input {
-        color: #0F172A !important;
-        background-color: transparent !important;
-        font-weight: 500 !important;
-    }
-
-    div[data-baseweb="select"] svg {
-        fill: #0F172A !important;
-    }
-
-    /* Equipment Section Banner */
-    .equipment-box {
+    /* Section Banner Styling */
+    .equipment-box-container {
         background-color: #F8FAFC;
         border-left: 5px solid #0F172A;
         border-radius: 8px;
-        padding: 12px 18px;
-        margin-bottom: 20px;
+        padding: 14px 18px;
+        margin-top: 10px;
+        margin-bottom: 18px;
     }
-    .equipment-title {
+    .equipment-title-text {
         color: #0F172A !important;
         font-weight: 700;
-        margin: 0 0 10px 0;
         font-size: 1.25rem;
+        margin: 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -445,41 +501,14 @@ if st.session_state.user["Role"] == "Technician":
                 selected_contract_no = st.selectbox("Link AMC Contract Number (Optional)", contract_options)
             
             with c_header2:
-                selected_category = st.selectbox("Equipment Category*", ["Rolling Shutter", "High Speed Door"])
+                # Dynamic Category Selection (All 5 Categories)
+                selected_category = st.selectbox("Equipment Category*", list(EQUIPMENT_DATA.keys()))
                 rpt_visit_num_str = st.selectbox("AMC Visit Sequence*", ["Visit 1 of 4", "Visit 2 of 4", "Visit 3 of 4", "Visit 4 of 4"])
 
             st.divider()
 
-            with st.form(f"service_report_form_{tech_id}"):
-                st.markdown("### General Visit Details")
-                c_det1, c_det2 = st.columns(2)
-                with c_det1:
-                    rpt_site_location = st.text_input("Site / Location*", value=auto_address)
-                    rpt_service_date = st.date_input("Service Date", value=date.today())
-                with c_det2:
-                    rpt_next_due = st.date_input("Next Service Due Date", value=date.today() + pd.Timedelta(days=90))
-
-                # Section 1: Equipment Details
-                # -----------------------------------------------------------------------------
-            # EQUIPMENT DETAILS SECTION (OUTSIDE st.form TO REMOVE BLUE BOXES)
-            # -----------------------------------------------------------------------------
+            # 1. Equipment Details (Placed outside form to guarantee clean dropdown rendering)
             st.markdown("""
-            <style>
-                .equipment-box-container {
-                    background-color: #F8FAFC;
-                    border-left: 5px solid #0F172A;
-                    border-radius: 8px;
-                    padding: 16px 20px;
-                    margin-top: 10px;
-                    margin-bottom: 20px;
-                }
-                .equipment-title-text {
-                    color: #0F172A !important;
-                    font-weight: 700;
-                    font-size: 1.35rem;
-                    margin: 0;
-                }
-            </style>
             <div class="equipment-box-container">
                 <h3 class="equipment-title-text">1. Equipment Details</h3>
             </div>
@@ -491,21 +520,21 @@ if st.session_state.user["Role"] == "Technician":
                 eq_type = st.selectbox(
                     "Equipment Type", 
                     EQUIPMENT_DATA[selected_category]["types"],
-                    key="eq_type_clean_select"
+                    key=f"eq_type_{selected_category}"
                 )
 
             with eq_col2:
                 eq_make_model = st.text_input(
                     "Make / Model", 
                     placeholder="e.g. Sidharth / Standard",
-                    key="eq_make_clean_input"
+                    key=f"eq_make_{selected_category}"
                 )
 
             with eq_col3:
                 eq_size = st.text_input(
-                    "Door Size (W x H)", 
+                    "Door / Gate Size (W x H)", 
                     placeholder="e.g. 4000x4500 mm",
-                    key="eq_size_clean_input"
+                    key=f"eq_size_{selected_category}"
                 )
 
             with eq_col4:
@@ -513,17 +542,27 @@ if st.session_state.user["Role"] == "Technician":
                     "Qty", 
                     min_value=1, 
                     value=1,
-                    key="eq_qty_clean_input"
+                    key=f"eq_qty_{selected_category}"
                 )
 
             with eq_col5:
                 eq_condition = st.selectbox(
                     "Condition", 
                     ["Good", "Requires Repair", "Critical", "Replaced"],
-                    key="eq_condition_clean_select"
+                    key=f"eq_cond_{selected_category}"
                 )
 
-                # Section 2: Preventive Maintenance Checklist
+            # 2. Main Service Report Submission Form
+            with st.form(f"service_report_form_{tech_id}"):
+                st.markdown("### General Visit Details")
+                c_det1, c_det2 = st.columns(2)
+                with c_det1:
+                    rpt_site_location = st.text_input("Site / Location*", value=auto_address)
+                    rpt_service_date = st.date_input("Service Date", value=date.today())
+                with c_det2:
+                    rpt_next_due = st.date_input("Next Service Due Date", value=date.today() + pd.Timedelta(days=90))
+
+                # Preventive Maintenance Checklist
                 st.markdown(f"### 2. Preventive Maintenance Checklist ({selected_category})")
                 
                 checklist_results = {}
@@ -557,7 +596,7 @@ if st.session_state.user["Role"] == "Technician":
                     }
                     st.divider()
 
-                # Section 3: Overall Remarks
+                # Overall Remarks
                 st.markdown("### 3. Remarks / Recommendations")
                 rpt_remarks = st.text_area("General Remarks & Summary*", placeholder="Overall observations, recommendations...")
 
@@ -595,6 +634,7 @@ if st.session_state.user["Role"] == "Technician":
                             "Submitted_At": submit_time_str
                         }
 
+                        # Dynamically bind Q1..Q18 choices & remarks
                         for idx in range(1, 19):
                             q_key = f"Q{idx}"
                             if q_key in checklist_results:
