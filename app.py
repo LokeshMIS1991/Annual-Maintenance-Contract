@@ -589,7 +589,7 @@ if st.session_state.user["Role"] == "Technician":
                 st.divider()
 
     # -------------------------------------------------------------------------
-    # TAB 2: Service Report Form (Fully Dynamic Section Routing)
+    # TAB 2: Dynamic Service Report Form (Inline Pill/Radio Control Layout)
     # -------------------------------------------------------------------------
     with tech_tab2:
         st.subheader("📝 Submit Client Service Report")
@@ -602,17 +602,17 @@ if st.session_state.user["Role"] == "Technician":
         if pending_tech_jobs.empty:
             st.info("🎉 No pending tasks found. Select a task or assign a work order first.")
         else:
-            # Task & AMC Linking Header (Outside Form for Reactive Updating)
             job_options = pending_tech_jobs["Job_ID"].tolist()
             default_index = 0
             if st.session_state.selected_job_for_report in job_options:
                 default_index = job_options.index(st.session_state.selected_job_for_report)
                 
-            selected_job_id = st.selectbox(
+            selected_job_id = st.radio(
                 "Select Assigned Job / Task*", 
-                job_options, 
+                options=job_options, 
                 index=default_index,
-                format_func=lambda x: f"{x} — {pending_tech_jobs[pending_tech_jobs['Job_ID'] == x]['Client_Name'].values[0]} ({pending_tech_jobs[pending_tech_jobs['Job_ID'] == x]['City'].values[0]})"
+                horizontal=True,
+                format_func=lambda x: f"{x} — {pending_tech_jobs[pending_tech_jobs['Job_ID'] == x]['Client_Name'].values[0]}"
             )
             
             selected_job = pending_tech_jobs[pending_tech_jobs["Job_ID"] == selected_job_id].iloc[0]
@@ -624,198 +624,154 @@ if st.session_state.user["Role"] == "Technician":
             contracts_df = st.session_state.amc_contracts_db
             contract_options = ["N/A"] + contracts_df["AMC_Contract_No"].astype(str).tolist() if not contracts_df.empty else ["N/A"]
 
-            # General Header Metadata
+            # Header Info
             h_col1, h_col2 = st.columns(2)
             with h_col1:
                 st.text_input("Client Name", value=auto_client_name, disabled=True)
                 selected_contract_no = st.selectbox("Link AMC Contract Number (Optional)", contract_options, key="select_amc_contract")
-            
             with h_col2:
-                # DYNAMIC CATEGORY SELECTOR (Outside Form to trigger instant re-render)
-                selected_category = st.selectbox(
-                    "Equipment Category*", 
-                    options=list(EQUIPMENT_DATA.keys()), 
-                    key="dyn_category_selector"
-                )
-                rpt_visit_num_str = st.selectbox(
+                rpt_visit_num_str = st.radio(
                     "AMC Visit Sequence*", 
                     ["Visit 1 of 4", "Visit 2 of 4", "Visit 3 of 4", "Visit 4 of 4"], 
+                    horizontal=True,
                     key="select_visit_seq"
                 )
 
             st.divider()
 
-            # Retrieve dynamic options based on chosen category
-            category_data = EQUIPMENT_DATA[selected_category]
+            # 1. CATEGORY SELECTION (Inline Horizontal Radio Pills)
+            st.markdown("### Select Equipment Category*")
+            current_category = st.radio(
+                "Category",
+                options=list(EQUIPMENT_DATA.keys()),
+                horizontal=True,
+                key="active_category_radio",
+                label_visibility="collapsed"
+            )
+
+            st.divider()
+
+            category_data = EQUIPMENT_DATA[current_category]
             category_types = category_data["types"]
             category_checklist = category_data["checklist"]
 
-            # Dynamic Equipment Section
-            st.markdown(f"""
-            <div class="section-banner">
-                <h3 class="section-banner-title">1. Equipment Configuration — {selected_category}</h3>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f"### 1. Equipment Details — **{current_category}**")
 
-            # =========================================================
-            # 1. EQUIPMENT CONFIGURATION
-            # =========================================================
-
-            eq_col1, eq_col2, eq_col3, eq_col4, eq_col5 = st.columns(
-                [3.2, 2.2, 2.2, 1.0, 2.2],
-                gap="medium"
+            # Inline Equipment Type Selection
+            st.markdown("**Equipment Type***")
+            eq_type = st.radio(
+                "Equipment Type",
+                options=category_types,
+                horizontal=True,
+                key=f"eq_type_radio_{current_category}",
+                label_visibility="collapsed"
             )
 
-            # Equipment Type
+            eq_col1, eq_col2, eq_col3, eq_col4 = st.columns([2.5, 2.5, 1.5, 2.5])
             with eq_col1:
-                with st.container(key="eq_type_box"):
-                    eq_type = st.selectbox(
-                        "Equipment Type*",
-                        options=category_types,
-                        key=f"eq_type_{selected_category}"
-                    )
-
-            # Make / Model
+                eq_make_model = st.text_input("Make / Model", placeholder="e.g. Sidharth", key=f"eq_make_{current_category}")
             with eq_col2:
-                eq_make_model = st.text_input(
-                    "Make / Model",
-                    placeholder="e.g. Sidharth / Standard",
-                    key=f"eq_make_{selected_category}"
-                )
-
-            # Door / Gate Size
+                eq_size = st.text_input("Door / Gate Size", placeholder="e.g. 4000x4500 mm", key=f"eq_size_{current_category}")
             with eq_col3:
-                eq_size = st.text_input(
-                    "Door / Gate Size",
-                    placeholder="e.g. 4000 × 4500 mm",
-                    key=f"eq_size_{selected_category}"
-                )
-
-            # Quantity
+                eq_qty = st.number_input("Qty", min_value=1, value=1, key=f"eq_qty_{current_category}")
             with eq_col4:
-                eq_qty = st.number_input(
-                    "Qty",
-                    min_value=1,
-                    value=1,
-                    step=1,
-                    key=f"eq_qty_{selected_category}"
-                )
+                eq_condition = st.radio("Condition*", ["Good", "Requires Repair", "Critical", "Replaced"], horizontal=True, key=f"eq_cond_{current_category}")
 
-            # Condition
-            with eq_col5:
-                with st.container(key="eq_condition_box"):
-                    eq_condition = st.selectbox(
-                        "Condition*",
-                        options=[
-                            "Good",
-                            "Requires Repair",
-                            "Critical",
-                            "Replaced"
-                        ],
-                        key=f"eq_cond_{selected_category}"
+            st.markdown("### General Visit Details")
+            c_det1, c_det2 = st.columns(2)
+            with c_det1:
+                rpt_site_location = st.text_input("Site / Location*", value=auto_address, key=f"loc_{current_category}")
+                rpt_service_date = st.date_input("Service Date", value=date.today(), key=f"sdate_{current_category}")
+            with c_det2:
+                rpt_next_due = st.date_input("Next Service Due Date", value=date.today() + pd.Timedelta(days=90), key=f"ndate_{current_category}")
+
+            st.markdown(f"### 2. Preventive Maintenance Checklist ({current_category})")
+            
+            checklist_results = {}
+            for idx, point in enumerate(category_checklist, 1):
+                col_num, col_point, col_status, col_remark = st.columns([0.5, 4.0, 3.5, 4.0])
+                with col_num:
+                    st.write(f"**{idx}.**")
+                with col_point:
+                    st.write(point)
+                with col_status:
+                    status = st.radio(
+                        "Status", 
+                        ["Satisfactory", "Repaired On-Site", "Action Required", "Not Applicable"], 
+                        horizontal=False, 
+                        key=f"chk_{current_category}_{idx}",
+                        label_visibility="collapsed"
                     )
-
-            # FORM WRAPPER: Checklist + Remarks Submission
-            with st.form(key=f"report_form_{selected_category}_{tech_id}"):
-                st.markdown("### General Visit Details")
-                c_det1, c_det2 = st.columns(2)
-                with c_det1:
-                    rpt_site_location = st.text_input("Site / Location*", value=auto_address)
-                    rpt_service_date = st.date_input("Service Date", value=date.today())
-                with c_det2:
-                    rpt_next_due = st.date_input("Next Service Due Date", value=date.today() + pd.Timedelta(days=90))
-
-                st.markdown(f"### 2. Preventive Maintenance Checklist ({selected_category})")
+                with col_remark:
+                    remark = st.text_input(
+                        "Remarks", 
+                        placeholder="Action taken / Remark", 
+                        key=f"rem_{current_category}_{idx}",
+                        label_visibility="collapsed"
+                    )
                 
-                checklist_results = {}
-                
-                # Render 18-point Dynamic Checklist
-                for idx, point in enumerate(category_checklist, 1):
-                    col_num, col_point, col_status, col_remark = st.columns([0.5, 4.0, 3.5, 4.0])
-                    with col_num:
-                        st.write(f"**{idx}.**")
-                    with col_point:
-                        st.write(point)
-                    with col_status:
-                        status = st.radio(
-                            "Status", 
-                            ["Satisfactory", "Repaired On-Site", "Action Required", "Not Applicable"], 
-                            horizontal=False, 
-                            key=f"chk_{selected_category}_{idx}",
-                            label_visibility="collapsed"
-                        )
-                    with col_remark:
-                        remark = st.text_input(
-                            "Remarks", 
-                            placeholder="Action taken / Remark", 
-                            key=f"rem_{selected_category}_{idx}",
-                            label_visibility="collapsed"
-                        )
-                    
-                    checklist_results[f"Q{idx}"] = {
-                        "choice": status, 
-                        "remark": remark.strip() if remark.strip() else "N/A"
+                checklist_results[f"Q{idx}"] = {
+                    "choice": status, 
+                    "remark": remark.strip() if remark.strip() else "N/A"
+                }
+                st.divider()
+
+            st.markdown("### 3. Remarks & Recommendations")
+            rpt_remarks = st.text_area("General Remarks*", placeholder="Overall observations, work executed, recommendations...", key=f"rem_area_{current_category}")
+
+            if st.button("Submit Service Report", type="primary", key=f"submit_btn_{current_category}", use_container_width=True):
+                if not rpt_site_location or not rpt_remarks:
+                    st.error("⚠️ Please fill in all required fields marked with *")
+                else:
+                    try:
+                        local_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
+                        submit_time_str = datetime.now(local_tz).strftime("%Y-%m-%d %I:%M %p")
+                    except Exception:
+                        submit_time_str = datetime.now().strftime("%Y-%m-%d %I:%M %p")
+
+                    report_entry = {
+                        "Report_ID": f"RPT-{len(st.session_state.service_reports_db) + 1001}",
+                        "Job_ID": selected_job_id,
+                        "Tech_ID": tech_id,
+                        "Tech_Name": tech_name,
+                        "Client_Name": auto_client_name,
+                        "Site_Location": rpt_site_location,
+                        "AMC_Contract_No": selected_contract_no,
+                        "Category": current_category,
+                        "Equipment_Type": eq_type,
+                        "Make_Model": eq_make_model,
+                        "Door_Size": eq_size,
+                        "Qty": str(eq_qty),
+                        "Condition": eq_condition,
+                        "Checklist_Data": "Stored in Q1-Q18 columns",
+                        "Service_Date": str(rpt_service_date),
+                        "Visit_Number": rpt_visit_num_str,
+                        "Next_Service_Due_Date": str(rpt_next_due),
+                        "Remarks": rpt_remarks,
+                        "Submitted_At": submit_time_str
                     }
-                    st.divider()
 
-                st.markdown("### 3. Remarks & Recommendations")
-                rpt_remarks = st.text_area("General Remarks*", placeholder="Overall observations, work executed, recommendations...")
+                    for idx in range(1, 19):
+                        q_key = f"Q{idx}"
+                        if q_key in checklist_results:
+                            report_entry[f"Q{idx}_Choice"] = checklist_results[q_key]["choice"]
+                            report_entry[f"Q{idx}_Remark"] = checklist_results[q_key]["remark"]
+                        else:
+                            report_entry[f"Q{idx}_Choice"] = "N/A"
+                            report_entry[f"Q{idx}_Remark"] = "N/A"
 
-                submit_report = st.form_submit_button("Submit Service Report")
-                
-                if submit_report:
-                    if not rpt_site_location or not rpt_remarks:
-                        st.error("⚠️ Please fill in all required fields marked with *")
-                    else:
-                        try:
-                            local_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
-                            submit_time_str = datetime.now(local_tz).strftime("%Y-%m-%d %I:%M %p")
-                        except Exception:
-                            submit_time_str = datetime.now().strftime("%Y-%m-%d %I:%M %p")
+                    valid_columns = load_sheet_data("ServiceReports").columns.tolist()
+                    new_row_df = pd.DataFrame([report_entry])[valid_columns]
 
-                        report_entry = {
-                            "Report_ID": f"RPT-{len(st.session_state.service_reports_db) + 1001}",
-                            "Job_ID": selected_job_id,
-                            "Tech_ID": tech_id,
-                            "Tech_Name": tech_name,
-                            "Client_Name": auto_client_name,
-                            "Site_Location": rpt_site_location,
-                            "AMC_Contract_No": selected_contract_no,
-                            "Category": selected_category,
-                            "Equipment_Type": eq_type,
-                            "Make_Model": eq_make_model,
-                            "Door_Size": eq_size,
-                            "Qty": str(eq_qty),
-                            "Condition": eq_condition,
-                            "Checklist_Data": "Stored in Q1-Q18 columns",
-                            "Service_Date": str(rpt_service_date),
-                            "Visit_Number": rpt_visit_num_str,
-                            "Next_Service_Due_Date": str(rpt_next_due),
-                            "Remarks": rpt_remarks,
-                            "Submitted_At": submit_time_str
-                        }
-
-                        for idx in range(1, 19):
-                            q_key = f"Q{idx}"
-                            if q_key in checklist_results:
-                                report_entry[f"Q{idx}_Choice"] = checklist_results[q_key]["choice"]
-                                report_entry[f"Q{idx}_Remark"] = checklist_results[q_key]["remark"]
-                            else:
-                                report_entry[f"Q{idx}_Choice"] = "N/A"
-                                report_entry[f"Q{idx}_Remark"] = "N/A"
-
-                        valid_columns = load_sheet_data("ServiceReports").columns.tolist()
-                        new_row_df = pd.DataFrame([report_entry])[valid_columns]
-
-                        st.session_state.service_reports_db = pd.concat([st.session_state.service_reports_db[valid_columns], new_row_df], ignore_index=True)
-                        save_sheet_data(st.session_state.service_reports_db, "ServiceReports")
-                        
-                        st.session_state.jobs_db.loc[st.session_state.jobs_db["Job_ID"] == selected_job_id, "Status"] = "Completed"
-                        save_sheet_data(st.session_state.jobs_db, "Jobs")
-                        
-                        st.session_state.selected_job_for_report = None
-                        st.toast(f"✅ Service report submitted successfully for {selected_job_id}!", icon="📄")
-                        st.rerun()
+                    st.session_state.service_reports_db = pd.concat([st.session_state.service_reports_db[valid_columns], new_row_df], ignore_index=True)
+                    save_sheet_data(st.session_state.service_reports_db, "ServiceReports")
+                    
+                    st.session_state.jobs_db.loc[st.session_state.jobs_db["Job_ID"] == selected_job_id, "Status"] = "Completed"
+                    save_sheet_data(st.session_state.jobs_db, "Jobs")
+                    
+                    st.session_state.selected_job_for_report = None
+                    st.toast(f"✅ Service report submitted successfully for {selected_job_id}!", icon="📄")
+                    st.rerun()
 
     # -------------------------------------------------------------------------
     # TAB 3: Broadcast Status & Location
