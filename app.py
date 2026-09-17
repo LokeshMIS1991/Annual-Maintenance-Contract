@@ -201,17 +201,18 @@ def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
         st.info("No work orders recorded for this technician.")
 
 # -----------------------------------------------------------------------------
-# 4. BRANDED UI STYLING (ISOLATED ACTION BUTTONS VS SELECT DROPDOWNS)
+# 4. BRANDED UI STYLING
 # -----------------------------------------------------------------------------
 
 st.markdown("""
 <style>
+    /* Tab & Sidebar Accenting */
     .stTabs [data-baseweb="tab-highlight"] { background-color: #1565C0 !important; }
     .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #1565C0 !important; font-weight: 700 !important; }
     [data-testid="stSidebar"] { background-color: #F8FAFC !important; }
     .sidebar-logo-sub { color: #10B981; font-weight: 800; font-size: 0.95rem; letter-spacing: 1.5px; text-align: center; margin-top: 6px; }
     
-    /* SPECIFICALLY TARGET REGULAR BUTTONS AND FORM SUBMIT BUTTONS (EXCLUDES DROPDOWNS) */
+    /* Action & Submit Buttons Styling */
     div[data-testid="stButton"] > button,
     button[kind="primaryFormSubmit"],
     button[kind="secondaryFormSubmit"] { 
@@ -230,8 +231,7 @@ st.markdown("""
         color: #FFFFFF !important;
     }
     
-    a { color: #1565C0 !important; }
-    
+    /* Form Outline */
     div[data-testid="stForm"] { 
         background-color: #FFFFFF; 
         border: 2px solid #1565C0; 
@@ -240,14 +240,40 @@ st.markdown("""
     }
     .login-container div[data-testid="stForm"] { padding: 20px 28px !important; max-width: 360px; margin: 0 auto; text-align: center; }
 
-    /* RESET BASEWEB SELECT OVERRIDES ENTIRELY TO RESTORE ORIGINAL NATIVE DROPDOWN UI */
-    div[data-baseweb="select"] button {
-        background-color: transparent !important;
-        border: none !important;
-        color: inherit !important;
-    }
+    /* ==========================================================================
+       COMPLETE DROPDOWN FIX: REMOVES SOLID BLUE FILL & DISPLAYS SELECTED TEXT
+       ========================================================================== */
     
-    /* Equipment Box Container Header */
+    /* 1. Base Select Box Outer Wrapper */
+    div[data-baseweb="select"] {
+        background-color: transparent !important;
+    }
+
+    /* 2. Target Inner Input Container (Equipment Type & Condition) */
+    div[data-baseweb="select"] > div {
+        background-color: #F8FAFC !important;
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 8px !important;
+        color: #0F172A !important;
+    }
+
+    /* 3. Force Dropdown Displayed Text / Value Visibility */
+    div[data-baseweb="select"] [data-testid="stMarkdownContainer"],
+    div[data-baseweb="select"] div[role="button"],
+    div[data-baseweb="select"] span,
+    div[data-baseweb="select"] input {
+        color: #0F172A !important;
+        background-color: transparent !important;
+        font-weight: 500 !important;
+    }
+
+    /* 4. Fix Dropdown Arrow Icon */
+    div[data-baseweb="select"] svg {
+        fill: #0F172A !important;
+        color: #0F172A !important;
+    }
+
+    /* 5. Equipment Container Styling */
     .equipment-box {
         background-color: #F8FAFC;
         border-left: 5px solid #0F172A;
