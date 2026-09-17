@@ -44,7 +44,7 @@ def load_sheet_data(worksheet_name):
         "Remarks", "Submitted_At"
     ]
     
-    # Append separated Q1_Choice through Q18_Remark columns
+    # Append ONLY separated Q1_Choice through Q18_Remark columns
     for i in range(1, 19):
         service_report_cols.extend([f"Q{i}_Choice", f"Q{i}_Remark"])
 
@@ -62,10 +62,12 @@ def load_sheet_data(worksheet_name):
         ws = sh.worksheet(worksheet_name)
         records = ws.get_all_records()
         df = pd.DataFrame(records)
+        
+        # Ensure only the active columns exist in the DataFrame schema
         for col in cols:
             if col not in df.columns:
                 df[col] = ""
-        return df
+        return df[cols]  # Filters out old P01..P18 columns if present in existing sheet
     except Exception:
         try:
             ws = sh.add_worksheet(title=worksheet_name, rows="100", cols="60")
@@ -74,7 +76,7 @@ def load_sheet_data(worksheet_name):
             return pd.DataFrame(columns=cols)
         except Exception:
             return pd.DataFrame(columns=cols)
-
+            
 def save_sheet_data(df, worksheet_name):
     try:
         ws = sh.worksheet(worksheet_name)
