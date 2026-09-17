@@ -201,21 +201,20 @@ def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
         st.info("No work orders recorded for this technician.")
 
 # -----------------------------------------------------------------------------
-# 4. BRANDED UI STYLING
+# 4. BRANDED UI STYLING (EXPLICIT DEEP DROPDOWN FIX)
 # -----------------------------------------------------------------------------
 
 st.markdown("""
 <style>
-    /* Tab & Sidebar Accenting */
+    /* Tab & Sidebar Styling */
     .stTabs [data-baseweb="tab-highlight"] { background-color: #1565C0 !important; }
     .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #1565C0 !important; font-weight: 700 !important; }
     [data-testid="stSidebar"] { background-color: #F8FAFC !important; }
     .sidebar-logo-sub { color: #10B981; font-weight: 800; font-size: 0.95rem; letter-spacing: 1.5px; text-align: center; margin-top: 6px; }
     
-    /* Action & Submit Buttons Styling */
-    div[data-testid="stButton"] > button,
-    button[kind="primaryFormSubmit"],
-    button[kind="secondaryFormSubmit"] { 
+    /* Strict Action Button Styling (Isolates actual buttons from select boxes) */
+    .stButton > button, 
+    div[data-testid="stFormSubmitButton"] > button { 
         background-color: #1565C0 !important; 
         color: #FFFFFF !important; 
         border-radius: 8px !important; 
@@ -224,12 +223,13 @@ st.markdown("""
         border: none !important;
     }
     
-    div[data-testid="stButton"] > button:hover,
-    button[kind="primaryFormSubmit"]:hover,
-    button[kind="secondaryFormSubmit"]:hover { 
+    .stButton > button:hover, 
+    div[data-testid="stFormSubmitButton"] > button:hover { 
         background-color: #0D47A1 !important; 
         color: #FFFFFF !important;
     }
+    
+    a { color: #1565C0 !important; }
     
     /* Form Outline */
     div[data-testid="stForm"] { 
@@ -241,39 +241,39 @@ st.markdown("""
     .login-container div[data-testid="stForm"] { padding: 20px 28px !important; max-width: 360px; margin: 0 auto; text-align: center; }
 
     /* ==========================================================================
-       COMPLETE DROPDOWN FIX: REMOVES SOLID BLUE FILL & DISPLAYS SELECTED TEXT
+       FORCEFUL SELECTBOX OVERRIDE: REMOVES SOLID BLUE FILL & SHOWS SELECTED TEXT
        ========================================================================== */
     
-    /* 1. Base Select Box Outer Wrapper */
-    div[data-baseweb="select"] {
+    /* Target Streamlit Selectbox Container directly */
+    div[data-testid="stSelectbox"] {
         background-color: transparent !important;
     }
-
-    /* 2. Target Inner Input Container (Equipment Type & Condition) */
-    div[data-baseweb="select"] > div {
-        background-color: #F8FAFC !important;
+    
+    /* Strip blue background from all nested BaseWeb divs inside selectbox */
+    div[data-testid="stSelectbox"] div[data-baseweb="select"],
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
+        background-color: #F1F5F9 !important;
         border: 1px solid #CBD5E1 !important;
         border-radius: 8px !important;
         color: #0F172A !important;
     }
 
-    /* 3. Force Dropdown Displayed Text / Value Visibility */
-    div[data-baseweb="select"] [data-testid="stMarkdownContainer"],
-    div[data-baseweb="select"] div[role="button"],
-    div[data-baseweb="select"] span,
-    div[data-baseweb="select"] input {
+    /* Force selected text to display in dark legible color */
+    div[data-testid="stSelectbox"] div[role="button"],
+    div[data-testid="stSelectbox"] span,
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] * {
         color: #0F172A !important;
         background-color: transparent !important;
-        font-weight: 500 !important;
+        font-weight: 600 !important;
     }
 
-    /* 4. Fix Dropdown Arrow Icon */
-    div[data-baseweb="select"] svg {
+    /* Override arrow icon color */
+    div[data-testid="stSelectbox"] svg {
         fill: #0F172A !important;
         color: #0F172A !important;
     }
 
-    /* 5. Equipment Container Styling */
+    /* Equipment Box Container Header */
     .equipment-box {
         background-color: #F8FAFC;
         border-left: 5px solid #0F172A;
