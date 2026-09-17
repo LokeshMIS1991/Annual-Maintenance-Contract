@@ -4,11 +4,14 @@ from datetime import datetime, date
 import zoneinfo
 import urllib.parse
 import os
+import io
 import gspread
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 
 # -----------------------------------------------------------------------------
-# 1. PAGE CONFIGURATION & BRANDING CSS
+# 1. PAGE CONFIGURATION & BASE STYLING
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="AMC Annual Maintenance Tracker", 
@@ -16,183 +19,17 @@ st.set_page_config(
     layout="wide"
 )
 
-# FIXED CSS: Target ONLY true submit buttons so Selectbox dropdowns remain intact
+# Structural CSS rules that do not override BaseWeb dropdowns or button overlays
 st.markdown("""
 <style>
-    /* Tab Styling */
-    .stTabs [data-baseweb="tab-highlight"] { background-color: #1565C0 !important; }
-    .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #1565C0 !important; font-weight: 700 !important; }
-    [data-testid="stSidebar"] { background-color: #F8FAFC !important; }
-    .sidebar-logo-sub { color: #10B981; font-weight: 800; font-size: 0.95rem; letter-spacing: 1.5px; text-align: center; margin-top: 6px; }
-
-    /* Form Container Outer Ring */
-    div[data-testid="stForm"] { 
-        background-color: #FFFFFF; 
+    .login-container { 
         border: 2px solid #1565C0; 
         border-radius: 12px; 
         padding: 24px; 
-    }
-    
-    .login-container div[data-testid="stForm"] { 
-        padding: 24px !important; 
+        background-color: #FFFFFF;
         max-width: 400px; 
-        margin: 0 auto; 
+        margin: 40px auto; 
     }
-
-    /* =========================================================
-       EQUIPMENT CONFIGURATION - PROFESSIONAL INPUT STYLING
-       ========================================================= */
-
-    /* Text and Number Inputs */
-    div[data-testid="stTextInput"] input,
-    div[data-testid="stNumberInput"] input {
-        height: 42px !important;
-        min-height: 42px !important;
-        background-color: #F1F5F9 !important;
-        border: 1px solid #E2E8F0 !important;
-        border-radius: 10px !important;
-        color: #334155 !important;
-        font-size: 14px !important;
-        box-shadow: none !important;
-        padding: 0 14px !important;
-    }
-
-    div[data-testid="stTextInput"] input:hover,
-    div[data-testid="stNumberInput"] input:hover {
-        background-color: #F8FAFC !important;
-        border-color: #CBD5E1 !important;
-    }
-
-    div[data-testid="stTextInput"] input:focus,
-    div[data-testid="stNumberInput"] input:focus {
-        background-color: #FFFFFF !important;
-        border-color: #1565C0 !important;
-        box-shadow: 0 0 0 1px #1565C0 !important;
-    }
-
-    div[data-testid="stTextInput"] input::placeholder,
-    div[data-testid="stNumberInput"] input::placeholder {
-        color: #94A3B8 !important;
-        opacity: 1 !important;
-    }
-
-    /* Selectboxes */
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
-        height: 42px !important;
-        min-height: 42px !important;
-        background-color: #F1F5F9 !important;
-        border: 1px solid #E2E8F0 !important;
-        border-radius: 10px !important;
-        box-shadow: none !important;
-        color: #334155 !important;
-        font-size: 14px !important;
-    }
-
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] [data-baseweb="value-container"] {
-        color: #334155 !important;
-        padding-left: 14px !important;
-    }
-
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] svg {
-        fill: #64748B !important;
-    }
-
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div:hover {
-        background-color: #F8FAFC !important;
-        border-color: #CBD5E1 !important;
-    }
-
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div:focus-within {
-        background-color: #FFFFFF !important;
-        border-color: #1565C0 !important;
-        box-shadow: 0 0 0 1px #1565C0 !important;
-    }
-
-    /* Number input stepper buttons */
-    div[data-testid="stNumberInput"] button {
-        background-color: transparent !important;
-        border: none !important;
-        color: #64748B !important;
-        height: 40px !important;
-    }
-
-    div[data-testid="stNumberInput"] button:hover {
-        background-color: #E2E8F0 !important;
-        color: #1565C0 !important;
-    }
-
-    /* Consistent labels */
-    div[data-testid="stTextInput"] label,
-    div[data-testid="stNumberInput"] label,
-    div[data-testid="stSelectbox"] label {
-        color: #374151 !important;
-        font-size: 14px !important;
-        font-weight: 500 !important;
-        margin-bottom: 5px !important;
-    }
-
-    /* Dropdown menu */
-    div[data-baseweb="popover"] {
-        border-radius: 10px !important;
-    }
-
-    div[data-baseweb="menu"] {
-        border-radius: 10px !important;
-        padding: 5px !important;
-    }
-
-    div[data-baseweb="menu"] li {
-        font-size: 14px !important;
-        color: #334155 !important;
-        border-radius: 7px !important;
-        padding: 9px 12px !important;
-    }
-
-    div[data-baseweb="menu"] li:hover {
-        background-color: #F1F5F9 !important;
-    }
-
-    /* Submit buttons ONLY */
-    button[data-testid="stFormSubmitButton"] {
-        background-color: #1565C0 !important;
-        color: #FFFFFF !important;
-        border-radius: 8px !important;
-        font-weight: 600 !important;
-        width: 100% !important;
-        border: none !important;
-        height: 42px !important;
-    }
-
-    button[data-testid="stFormSubmitButton"]:hover {
-        background-color: #0D47A1 !important;
-        color: #FFFFFF !important;
-    }
-
-    /* Equipment Type selectbox — custom accent color (green) instead of blue */
-    .st-key-eq_type_box div[data-baseweb="select"] > div {
-        border-color: #10B981 !important;
-    }
-    .st-key-eq_type_box div[data-baseweb="select"] > div:hover {
-        border-color: #0DA271 !important;
-    }
-    .st-key-eq_type_box div[data-baseweb="select"] > div:focus-within {
-        border-color: #10B981 !important;
-        box-shadow: 0 0 0 1px #10B981 !important;
-    }
-
-    /* Condition selectbox — remove blue accent entirely, keep neutral */
-    .st-key-eq_condition_box div[data-baseweb="select"] > div {
-        border-color: #E2E8F0 !important;
-    }
-    .st-key-eq_condition_box div[data-baseweb="select"] > div:hover {
-        border-color: #CBD5E1 !important;
-    }
-    .st-key-eq_condition_box div[data-baseweb="select"] > div:focus-within {
-        border-color: #CBD5E1 !important;
-        box-shadow: none !important;
-    }
-
-    /* Section Banner Header */
     .section-banner {
         background-color: #F1F5F9;
         border-left: 6px solid #1565C0;
@@ -211,7 +48,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 2. GOOGLE SHEETS CONNECTION & PERSISTENCE
+# 2. GOOGLE SHEETS & DRIVE CONNECTION
 # -----------------------------------------------------------------------------
 @st.cache_resource
 def get_gspread_client():
@@ -236,7 +73,7 @@ def load_sheet_data(worksheet_name):
         "Report_ID", "Job_ID", "Tech_ID", "Tech_Name", "Client_Name", "Site_Location", 
         "AMC_Contract_No", "Category", "Equipment_Type", "Make_Model", "Door_Size", "Qty", 
         "Condition", "Checklist_Data", "Service_Date", "Visit_Number", "Next_Service_Due_Date", 
-        "Remarks", "Submitted_At"
+        "Remarks", "Submitted_At", "Physical_Sheet_URL", "Site_Photos_URLs"
     ]
     for i in range(1, 19):
         service_report_cols.extend([f"Q{i}_Choice", f"Q{i}_Remark"])
@@ -276,7 +113,7 @@ def save_sheet_data(df, worksheet_name):
     except Exception as e:
         st.error(f"❌ Failed to save data to Google Sheets ({worksheet_name}): {e}")
 
-# Load session state DBs
+# Session State Persistence Initializations
 if "users_db" not in st.session_state:
     st.session_state.users_db = load_sheet_data("Users")
 if "jobs_db" not in st.session_state:
@@ -440,9 +277,56 @@ EQUIPMENT_DATA = {
     }
 }
 
+if "active_category" not in st.session_state:
+    st.session_state.active_category = list(EQUIPMENT_DATA.keys())[0]
+
 # -----------------------------------------------------------------------------
-# 4. HELPER FUNCTIONS & DIALOGS
+# 4. HELPER FUNCTIONS & GOOGLE DRIVE UPLOADER
 # -----------------------------------------------------------------------------
+def upload_photos_to_drive(file_list, folder_name="AMC_Site_Photos"):
+    """Uploads files to a target Google Drive folder and returns direct share links."""
+    creds_dict = st.secrets["gcp_service_account"]
+    scopes = ["https://www.googleapis.com/auth/drive"]
+    credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    drive_service = build("drive", "v3", credentials=credentials)
+
+    query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+    results = drive_service.files().list(q=query, fields="files(id)").execute()
+    folders = results.get("files", [])
+
+    if folders:
+        folder_id = folders[0]["id"]
+    else:
+        folder_metadata = {
+            "name": folder_name,
+            "mimeType": "application/vnd.google-apps.folder"
+        }
+        folder = drive_service.files().create(body=folder_metadata, fields="id").execute()
+        folder_id = folder.get("id")
+
+    uploaded_links = []
+
+    for file in file_list:
+        file_metadata = {
+            "name": f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{file.name}",
+            "parents": [folder_id]
+        }
+        media = MediaIoBaseUpload(io.BytesIO(file.getvalue()), mimetype=file.type, resumable=True)
+        uploaded_file = drive_service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields="id, webViewLink"
+        ).execute()
+
+        drive_service.permissions().create(
+            fileId=uploaded_file.get("id"),
+            body={"role": "reader", "type": "anyone"}
+        ).execute()
+
+        uploaded_links.append(uploaded_file.get("webViewLink"))
+
+    return uploaded_links
+
 def make_google_maps_link(address, city, pincode=""):
     query = urllib.parse.quote(f"{address}, {city} {pincode}".strip())
     return f"https://www.google.com/maps/search/?api=1&query={query}"
@@ -478,30 +362,26 @@ if "user" not in st.session_state:
     st.session_state.user = None
 
 if st.session_state.user is None:
-    col_left, col_center, col_right = st.columns([1, 1.2, 1])
-
-    with col_center:
-        st.markdown("<div class='login-container'>", unsafe_allow_html=True)
-        with st.form("login_form"):
-            logo_path = get_logo_path()
-            if logo_path:
-                st.image(logo_path, use_container_width=True)
-            else:
-                st.markdown("<h2 style='text-align: center; color: #1565C0; margin:0;'>⚙️ SIDHARTH</h2>", unsafe_allow_html=True)
-            
-            st.markdown("<h3 style='text-align:center; color:#1565C0; margin-bottom: 20px;'>AMC Tracker</h3>", unsafe_allow_html=True)
-            user_id_input = st.text_input("User ID", placeholder="e.g. TECH01").strip().upper()
-            password_input = st.text_input("Password", type="password", placeholder="Enter password").strip()
-            
-            if st.form_submit_button("Sign In"):
-                user_df = st.session_state.users_db
-                match = user_df[(user_df["User_ID"].astype(str) == user_id_input) & (user_df["Password"].astype(str) == password_input)]
-                if not match.empty:
-                    st.session_state.user = match.iloc[0].to_dict()
-                    st.rerun()
-                else:
-                    st.error("❌ Invalid User ID or Password")
-        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("<div class='login-container'>", unsafe_allow_html=True)
+    logo_path = get_logo_path()
+    if logo_path:
+        st.image(logo_path, use_container_width=True)
+    else:
+        st.markdown("<h2 style='text-align: center; color: #1565C0; margin:0;'>⚙️ SIDHARTH</h2>", unsafe_allow_html=True)
+    
+    st.markdown("<h3 style='text-align:center; color:#1565C0; margin-bottom: 20px;'>AMC Tracker</h3>", unsafe_allow_html=True)
+    user_id_input = st.text_input("User ID", placeholder="e.g. TECH01").strip().upper()
+    password_input = st.text_input("Password", type="password", placeholder="Enter password").strip()
+    
+    if st.button("Sign In", type="primary", use_container_width=True):
+        user_df = st.session_state.users_db
+        match = user_df[(user_df["User_ID"].astype(str) == user_id_input) & (user_df["Password"].astype(str) == password_input)]
+        if not match.empty:
+            st.session_state.user = match.iloc[0].to_dict()
+            st.rerun()
+        else:
+            st.error("❌ Invalid User ID or Password")
+    st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
 # -----------------------------------------------------------------------------
@@ -513,11 +393,11 @@ with st.sidebar:
         st.image(logo_path, use_container_width=True)
     else:
         st.markdown("<h3 style='color: #1565C0; text-align:center;'>⚙️ SIDHARTH</h3>", unsafe_allow_html=True)
-    st.markdown("<div class='sidebar-logo-sub'>AMC TRACKER</div>", unsafe_allow_html=True)
+    st.markdown("<div style='color: #10B981; font-weight: 800; font-size: 0.95rem; text-align: center;'>AMC TRACKER</div>", unsafe_allow_html=True)
     st.divider()
     st.markdown(f"**Logged User:** {st.session_state.user['Full_Name']}")
     st.markdown(f"**Role:** `{st.session_state.user['Role']}`")
-    if st.button("Logout"):
+    if st.button("Logout", use_container_width=True):
         st.session_state.user = None
         st.rerun()
 
@@ -589,7 +469,7 @@ if st.session_state.user["Role"] == "Technician":
                 st.divider()
 
     # -------------------------------------------------------------------------
-    # TAB 2: Dynamic Service Report Form (Inline Pill/Radio Control Layout)
+    # TAB 2: Service Report Form (With Inline Choices & Drive Photo Uploads)
     # -------------------------------------------------------------------------
     with tech_tab2:
         st.subheader("📝 Submit Client Service Report")
@@ -639,7 +519,7 @@ if st.session_state.user["Role"] == "Technician":
 
             st.divider()
 
-            # 1. CATEGORY SELECTION (Inline Horizontal Radio Pills)
+            # Inline Equipment Category Switcher
             st.markdown("### Select Equipment Category*")
             current_category = st.radio(
                 "Category",
@@ -657,7 +537,7 @@ if st.session_state.user["Role"] == "Technician":
 
             st.markdown(f"### 1. Equipment Details — **{current_category}**")
 
-            # Inline Equipment Type Selection
+            # Inline Equipment Type Selector
             st.markdown("**Equipment Type***")
             eq_type = st.radio(
                 "Equipment Type",
@@ -719,10 +599,50 @@ if st.session_state.user["Role"] == "Technician":
             st.markdown("### 3. Remarks & Recommendations")
             rpt_remarks = st.text_area("General Remarks*", placeholder="Overall observations, work executed, recommendations...", key=f"rem_area_{current_category}")
 
+            # Photo Upload Options
+            st.divider()
+            st.markdown("### 📷 Site & Sheet Documentation")
+
+            col_img1, col_img2 = st.columns(2)
+            with col_img1:
+                sheet_photo = st.file_uploader(
+                    "Upload Physical Sheet Photo (Optional)", 
+                    type=["jpg", "jpeg", "png"], 
+                    key=f"sheet_upload_{current_category}"
+                )
+
+            with col_img2:
+                site_photos = st.file_uploader(
+                    "Upload Site Photos (4 to 8 Photos Required)*", 
+                    type=["jpg", "jpeg", "png"], 
+                    accept_multiple_files=True, 
+                    key=f"site_photos_{current_category}"
+                )
+
+            if site_photos:
+                if 4 <= len(site_photos) <= 8:
+                    st.success(f"✅ {len(site_photos)} site photos selected.")
+                else:
+                    st.warning(f"⚠️ Selected {len(site_photos)} photos. Please attach between 4 and 8 site photos.")
+
+            st.divider()
+
             if st.button("Submit Service Report", type="primary", key=f"submit_btn_{current_category}", use_container_width=True):
                 if not rpt_site_location or not rpt_remarks:
-                    st.error("⚠️ Please fill in all required fields marked with *")
+                    st.error("⚠️ Please fill in all required text fields marked with *")
+                elif not site_photos or len(site_photos) < 4 or len(site_photos) > 8:
+                    st.error("⚠️ Please attach between 4 and 8 site photos before submitting.")
                 else:
+                    with st.spinner("📤 Uploading site photos to Google Drive... Please wait."):
+                        sheet_link = ""
+                        if sheet_photo:
+                            uploaded_sheet = upload_photos_to_drive([sheet_photo], folder_name="AMC_Physical_Sheets")
+                            if uploaded_sheet:
+                                sheet_link = uploaded_sheet[0]
+
+                        site_photo_links = upload_photos_to_drive(site_photos, folder_name="AMC_Site_Photos")
+                        site_links_str = " | ".join(site_photo_links)
+
                     try:
                         local_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
                         submit_time_str = datetime.now(local_tz).strftime("%Y-%m-%d %I:%M %p")
@@ -748,7 +668,9 @@ if st.session_state.user["Role"] == "Technician":
                         "Visit_Number": rpt_visit_num_str,
                         "Next_Service_Due_Date": str(rpt_next_due),
                         "Remarks": rpt_remarks,
-                        "Submitted_At": submit_time_str
+                        "Submitted_At": submit_time_str,
+                        "Physical_Sheet_URL": sheet_link,
+                        "Site_Photos_URLs": site_links_str
                     }
 
                     for idx in range(1, 19):
@@ -770,11 +692,11 @@ if st.session_state.user["Role"] == "Technician":
                     save_sheet_data(st.session_state.jobs_db, "Jobs")
                     
                     st.session_state.selected_job_for_report = None
-                    st.toast(f"✅ Service report submitted successfully for {selected_job_id}!", icon="📄")
+                    st.toast(f"✅ Service report & photos submitted successfully for {selected_job_id}!", icon="📄")
                     st.rerun()
 
     # -------------------------------------------------------------------------
-    # TAB 3: Broadcast Status & Location
+    # TAB 3: Broadcast Location & Status
     # -------------------------------------------------------------------------
     with tech_tab3:
         st.subheader("Broadcast Live Location & Next Target")
@@ -787,44 +709,43 @@ if st.session_state.user["Role"] == "Technician":
         c_next_pin = curr_rec["Next_Pincode"].values[0] if not curr_rec.empty else ""
         c_eta = curr_rec["ETA"].values[0] if not curr_rec.empty else ""
 
-        with st.form("tech_status_form"):
-            col_s1, col_s2 = st.columns(2)
-            with col_s1:
-                st.markdown("##### 📍 Current Location")
-                t_curr_city = st.text_input("Current City", value=c_curr_city)
-                t_curr_pin = st.text_input("Current Pincode", value=c_curr_pin)
-                t_curr_stat = st.selectbox("Current Status", ["Available", "In Transit", "Working On Site", "Off Duty"], index=["Available", "In Transit", "Working On Site", "Off Duty"].index(c_curr_stat) if c_curr_stat in ["Available", "In Transit", "Working On Site", "Off Duty"] else 0)
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            st.markdown("##### 📍 Current Location")
+            t_curr_city = st.text_input("Current City", value=c_curr_city, key="ts_curr_city")
+            t_curr_pin = st.text_input("Current Pincode", value=c_curr_pin, key="ts_curr_pin")
+            t_curr_stat = st.selectbox("Current Status", ["Available", "In Transit", "Working On Site", "Off Duty"], index=["Available", "In Transit", "Working On Site", "Off Duty"].index(c_curr_stat) if c_curr_stat in ["Available", "In Transit", "Working On Site", "Off Duty"] else 0, key="ts_curr_stat")
+        
+        with col_s2:
+            st.markdown("##### 🎯 Next Destination (Optional)")
+            t_next_city = st.text_input("Next City / Target Location", value=c_next_city, key="ts_next_city")
+            t_next_pin = st.text_input("Next Pincode", value=c_next_pin, key="ts_next_pin")
+            t_eta = st.text_input("Estimated Arrival Time (ETA)", value=c_eta, placeholder="e.g. 02:30 PM", key="ts_eta")
+
+        if st.button("Update Location & Status", type="primary", use_container_width=True):
+            try:
+                local_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
+                upd_time_str = datetime.now(local_tz).strftime("%Y-%m-%d %I:%M %p")
+            except Exception:
+                upd_time_str = datetime.now().strftime("%Y-%m-%d %I:%M %p")
+
+            status_entry = {
+                "Tech_ID": tech_id,
+                "Current_City": t_curr_city,
+                "Current_Pincode": t_curr_pin,
+                "Current_Status": t_curr_stat,
+                "Next_City": t_next_city,
+                "Next_Pincode": t_next_pin,
+                "ETA": t_eta,
+                "Last_Updated": upd_time_str
+            }
             
-            with col_s2:
-                st.markdown("##### 🎯 Next Destination (Optional)")
-                t_next_city = st.text_input("Next City / Target Location", value=c_next_city)
-                t_next_pin = st.text_input("Next Pincode", value=c_next_pin)
-                t_eta = st.text_input("Estimated Arrival Time (ETA)", value=c_eta, placeholder="e.g. 02:30 PM")
-
-            if st.form_submit_button("Update Location & Status"):
-                try:
-                    local_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
-                    upd_time_str = datetime.now(local_tz).strftime("%Y-%m-%d %I:%M %p")
-                except Exception:
-                    upd_time_str = datetime.now().strftime("%Y-%m-%d %I:%M %p")
-
-                status_entry = {
-                    "Tech_ID": tech_id,
-                    "Current_City": t_curr_city,
-                    "Current_Pincode": t_curr_pin,
-                    "Current_Status": t_curr_stat,
-                    "Next_City": t_next_city,
-                    "Next_Pincode": t_next_pin,
-                    "ETA": t_eta,
-                    "Last_Updated": upd_time_str
-                }
-                
-                df_status = st.session_state.tech_status_db
-                df_status = df_status[df_status["Tech_ID"].astype(str) != tech_id]
-                st.session_state.tech_status_db = pd.concat([df_status, pd.DataFrame([status_entry])], ignore_index=True)
-                save_sheet_data(st.session_state.tech_status_db, "TechStatus")
-                st.toast("✅ Location & Status successfully broadcasted!")
-                st.rerun()
+            df_status = st.session_state.tech_status_db
+            df_status = df_status[df_status["Tech_ID"].astype(str) != tech_id]
+            st.session_state.tech_status_db = pd.concat([df_status, pd.DataFrame([status_entry])], ignore_index=True)
+            save_sheet_data(st.session_state.tech_status_db, "TechStatus")
+            st.toast("✅ Location & Status successfully broadcasted!")
+            st.rerun()
 
     # -------------------------------------------------------------------------
     # TAB 4: Service History
