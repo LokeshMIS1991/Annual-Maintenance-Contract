@@ -39,21 +39,132 @@ st.markdown("""
         margin: 0 auto; 
     }
 
-    /* Target ONLY Action and Submit Buttons (Leaves Selectbox Triggers Untouched) */
-    button[kind="primary"], 
-    button[data-testid="stFormSubmitButton"] { 
-        background-color: #1565C0 !important; 
-        color: #FFFFFF !important; 
-        border-radius: 8px !important; 
-        font-weight: 600 !important; 
-        width: 100% !important; 
+    /* =========================================================
+       EQUIPMENT CONFIGURATION - PROFESSIONAL INPUT STYLING
+       ========================================================= */
+
+    /* Text and Number Inputs */
+    div[data-testid="stTextInput"] input,
+    div[data-testid="stNumberInput"] input {
+        height: 42px !important;
+        min-height: 42px !important;
+        background-color: #F1F5F9 !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 10px !important;
+        color: #334155 !important;
+        font-size: 14px !important;
+        box-shadow: none !important;
+        padding: 0 14px !important;
+    }
+
+    div[data-testid="stTextInput"] input:hover,
+    div[data-testid="stNumberInput"] input:hover {
+        background-color: #F8FAFC !important;
+        border-color: #CBD5E1 !important;
+    }
+
+    div[data-testid="stTextInput"] input:focus,
+    div[data-testid="stNumberInput"] input:focus {
+        background-color: #FFFFFF !important;
+        border-color: #1565C0 !important;
+        box-shadow: 0 0 0 1px #1565C0 !important;
+    }
+
+    div[data-testid="stTextInput"] input::placeholder,
+    div[data-testid="stNumberInput"] input::placeholder {
+        color: #94A3B8 !important;
+        opacity: 1 !important;
+    }
+
+    /* Selectboxes */
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
+        height: 42px !important;
+        min-height: 42px !important;
+        background-color: #F1F5F9 !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 10px !important;
+        box-shadow: none !important;
+        color: #334155 !important;
+        font-size: 14px !important;
+    }
+
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] [data-baseweb="value-container"] {
+        color: #334155 !important;
+        padding-left: 14px !important;
+    }
+
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] svg {
+        fill: #64748B !important;
+    }
+
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div:hover {
+        background-color: #F8FAFC !important;
+        border-color: #CBD5E1 !important;
+    }
+
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div:focus-within {
+        background-color: #FFFFFF !important;
+        border-color: #1565C0 !important;
+        box-shadow: 0 0 0 1px #1565C0 !important;
+    }
+
+    /* Number input stepper buttons */
+    div[data-testid="stNumberInput"] button {
+        background-color: transparent !important;
+        border: none !important;
+        color: #64748B !important;
+        height: 40px !important;
+    }
+
+    div[data-testid="stNumberInput"] button:hover {
+        background-color: #E2E8F0 !important;
+        color: #1565C0 !important;
+    }
+
+    /* Consistent labels */
+    div[data-testid="stTextInput"] label,
+    div[data-testid="stNumberInput"] label,
+    div[data-testid="stSelectbox"] label {
+        color: #374151 !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        margin-bottom: 5px !important;
+    }
+
+    /* Dropdown menu */
+    div[data-baseweb="popover"] {
+        border-radius: 10px !important;
+    }
+
+    div[data-baseweb="menu"] {
+        border-radius: 10px !important;
+        padding: 5px !important;
+    }
+
+    div[data-baseweb="menu"] li {
+        font-size: 14px !important;
+        color: #334155 !important;
+        border-radius: 7px !important;
+        padding: 9px 12px !important;
+    }
+
+    div[data-baseweb="menu"] li:hover {
+        background-color: #F1F5F9 !important;
+    }
+
+    /* Submit buttons ONLY */
+    button[data-testid="stFormSubmitButton"] {
+        background-color: #1565C0 !important;
+        color: #FFFFFF !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        width: 100% !important;
         border: none !important;
         height: 42px !important;
     }
-    
-    button[kind="primary"]:hover, 
-    button[data-testid="stFormSubmitButton"]:hover { 
-        background-color: #0D47A1 !important; 
+
+    button[data-testid="stFormSubmitButton"]:hover {
+        background-color: #0D47A1 !important;
         color: #FFFFFF !important;
     }
 
@@ -522,17 +633,61 @@ if st.session_state.user["Role"] == "Technician":
             </div>
             """, unsafe_allow_html=True)
 
-            eq_col1, eq_col2, eq_col3, eq_col4, eq_col5 = st.columns([3, 2, 2, 1, 2])
+            # =========================================================
+            # 1. EQUIPMENT CONFIGURATION
+            # =========================================================
+
+            eq_col1, eq_col2, eq_col3, eq_col4, eq_col5 = st.columns(
+                [3.2, 2.2, 2.2, 1.0, 2.2],
+                gap="medium"
+            )
+
+            # Equipment Type
             with eq_col1:
-                eq_type = st.selectbox("Equipment Type*", options=category_types, key=f"eq_type_{selected_category}")
+                eq_type = st.selectbox(
+                    "Equipment Type*",
+                    options=category_types,
+                    key=f"eq_type_{selected_category}"
+                )
+
+            # Make / Model
             with eq_col2:
-                eq_make_model = st.text_input("Make / Model", placeholder="e.g. Sidharth / Standard", key=f"eq_make_{selected_category}")
+                eq_make_model = st.text_input(
+                    "Make / Model",
+                    placeholder="e.g. Sidharth / Standard",
+                    key=f"eq_make_{selected_category}"
+                )
+
+            # Door / Gate Size
             with eq_col3:
-                eq_size = st.text_input("Door / Gate Size", placeholder="e.g. 4000x4500 mm", key=f"eq_size_{selected_category}")
+                eq_size = st.text_input(
+                    "Door / Gate Size",
+                    placeholder="e.g. 4000 × 4500 mm",
+                    key=f"eq_size_{selected_category}"
+                )
+
+            # Quantity
             with eq_col4:
-                eq_qty = st.number_input("Qty", min_value=1, value=1, key=f"eq_qty_{selected_category}")
+                eq_qty = st.number_input(
+                    "Qty",
+                    min_value=1,
+                    value=1,
+                    step=1,
+                    key=f"eq_qty_{selected_category}"
+                )
+
+            # Condition
             with eq_col5:
-                eq_condition = st.selectbox("Condition*", ["Good", "Requires Repair", "Critical", "Replaced"], key=f"eq_cond_{selected_category}")
+                eq_condition = st.selectbox(
+                    "Condition*",
+                    options=[
+                        "Good",
+                        "Requires Repair",
+                        "Critical",
+                        "Replaced"
+                    ],
+                    key=f"eq_cond_{selected_category}"
+                )
 
             # FORM WRAPPER: Checklist + Remarks Submission
             with st.form(key=f"report_form_{selected_category}_{tech_id}"):
