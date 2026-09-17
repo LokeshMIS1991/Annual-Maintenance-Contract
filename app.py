@@ -368,7 +368,9 @@ if st.session_state.user is None:
     else:
         st.markdown("<h2 style='text-align: center; color: #1565C0; margin:0;'>⚙️ SIDHARTH</h2>", unsafe_allow_html=True)
     
-    st.markdown("<h3 style='text-align:center; color:#1565C0; margin-bottom: 20px;'>AMC Tracker</h3>", unsafe_allow_html=True)
+    # CHANGED: Updated color to Sidharth brand green (#2E7D32)
+    st.markdown("<h3 style='text-align:center; color:#2E7D32; font-weight: 700; margin-bottom: 20px;'>AMC Tracker</h3>", unsafe_allow_html=True)
+    
     user_id_input = st.text_input("User ID", placeholder="e.g. TECH01").strip().upper()
     password_input = st.text_input("Password", type="password", placeholder="Enter password").strip()
     
@@ -382,7 +384,6 @@ if st.session_state.user is None:
             st.error("❌ Invalid User ID or Password")
     st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
-
 # -----------------------------------------------------------------------------
 # 6. SIDEBAR
 # -----------------------------------------------------------------------------
