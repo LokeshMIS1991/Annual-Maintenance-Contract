@@ -36,13 +36,15 @@ except Exception as e:
     st.stop()
 
 def load_sheet_data(worksheet_name):
-    # Base columns + expanded Q1_Choice through Q18_Remark
+    # Base columns
     service_report_cols = [
         "Report_ID", "Job_ID", "Tech_ID", "Tech_Name", "Client_Name", "Site_Location", 
         "AMC_Contract_No", "Category", "Equipment_Type", "Make_Model", "Door_Size", "Qty", 
         "Condition", "Checklist_Data", "Service_Date", "Visit_Number", "Next_Service_Due_Date", 
         "Remarks", "Submitted_At"
     ]
+    
+    # Append Q1_Choice, Q1_Remark, Q2_Choice, Q2_Remark ... Q18_Choice, Q18_Remark
     for i in range(1, 19):
         service_report_cols.extend([f"Q{i}_Choice", f"Q{i}_Remark"])
 
@@ -488,12 +490,8 @@ if st.session_state.user["Role"] == "Technician":
                             submit_time_str = datetime.now(local_tz).strftime("%Y-%m-%d %I:%M %p")
                         except Exception:
                             submit_time_str = datetime.now().strftime("%Y-%m-%d %I:%M %p")
-
-                        formatted_summary = "\n".join([
-                            f"{k} [{v['question']}]: {v['choice']} | Remark: {v['remark']}" 
-                            for k, v in checklist_results.items()
-                        ])
-
+                
+                        # Base entry with standard metadata
                         report_entry = {
                             "Report_ID": f"RPT-{len(st.session_state.service_reports_db) + 1001}",
                             "Job_ID": selected_job_id,
@@ -508,7 +506,7 @@ if st.session_state.user["Role"] == "Technician":
                             "Door_Size": eq_size,
                             "Qty": str(eq_qty),
                             "Condition": eq_condition,
-                            "Checklist_Data": formatted_summary,
+                            "Checklist_Data": "See individual Q1-Q18 Choice and Remark columns",  # Summary field
                             "Service_Date": str(rpt_service_date),
                             "Visit_Number": rpt_visit_num_str,
                             "Next_Service_Due_Date": str(rpt_next_due),
@@ -516,6 +514,30 @@ if st.session_state.user["Role"] == "Technician":
                             "Submitted_At": submit_time_str
                         }
 
+        # Populate individual Choice and Remark columns for Q1 through Q18
+        for idx in range(1, 19):
+            q_key = f"Q{idx}"
+            if q_key in checklist_results:
+                report_entry[f"Q{idx}_Choice"] = checklist_results[q_key]["choice"]
+                report_entry[f"Q{idx}_Remark"] = checklist_results[q_key]["remark"]
+            else:
+                report_entry[f"Q{idx}_Choice"] = "N/A"
+                report_entry[f"Q{idx}_Remark"] = "N/A"
+
+        # Save to session state and update Google Sheets
+        st.session_state.service_reports_db = pd.concat(
+            [st.session_state.service_reports_db, pd.DataFrame([report_entry])], 
+            ignore_index=True
+        )
+        save_sheet_data(st.session_state.service_reports_db, "ServiceReports")
+        
+        # Mark job as completed
+        st.session_state.jobs_db.loc[st.session_state.jobs_db["Job_ID"] == selected_job_id, "Status"] = "Completed"
+        save_sheet_data(st.session_state.jobs_db, "Jobs")
+        
+        st.session_state.selected_job_for_report = None
+        st.toast(f"✅ Service report submitted for {selected_job_id}!", icon="📄")
+        st.rerun()
                         # Unpack 18 Choices and Remarks into individual columns
                         for idx in range(1, 19):
                             q_key = f"Q{idx}"
