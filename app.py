@@ -36,7 +36,6 @@ except Exception as e:
     st.stop()
 
 def load_sheet_data(worksheet_name):
-    # Strict list of 19 base metadata columns
     service_report_cols = [
         "Report_ID", "Job_ID", "Tech_ID", "Tech_Name", "Client_Name", "Site_Location", 
         "AMC_Contract_No", "Category", "Equipment_Type", "Make_Model", "Door_Size", "Qty", 
@@ -44,7 +43,6 @@ def load_sheet_data(worksheet_name):
         "Remarks", "Submitted_At"
     ]
     
-    # Append strictly Q1_Choice, Q1_Remark through Q18_Choice, Q18_Remark (55 columns total)
     for i in range(1, 19):
         service_report_cols.extend([f"Q{i}_Choice", f"Q{i}_Remark"])
 
@@ -63,12 +61,10 @@ def load_sheet_data(worksheet_name):
         records = ws.get_all_records()
         df = pd.DataFrame(records)
         
-        # Guarantee all expected columns exist
         for col in cols:
             if col not in df.columns:
                 df[col] = ""
                 
-        # Return ONLY the defined columns to drop any rogue columns like P01_...
         return df[cols]
     except Exception:
         try:
@@ -233,13 +229,21 @@ st.markdown("""
     }
     .login-container div[data-testid="stForm"] { padding: 20px 28px !important; max-width: 360px; margin: 0 auto; text-align: center; }
 
-    div[data-baseweb="select"] {
-        background-color: transparent !important;
-    }
+    /* Fixed Dropdown Select Styling to prevent solid blue boxes */
     div[data-baseweb="select"] > div {
         background-color: #F8FAFC !important;
-        border-color: #CBD5E1 !important;
+        border: 1px solid #CBD5E1 !important;
         color: #0F172A !important;
+        border-radius: 8px !important;
+    }
+    
+    div[data-baseweb="select"] span {
+        color: #0F172A !important;
+        font-weight: 500 !important;
+    }
+    
+    div[data-baseweb="select"] svg {
+        fill: #0F172A !important;
     }
     
     .equipment-box {
@@ -473,7 +477,6 @@ if st.session_state.user["Role"] == "Technician":
                             label_visibility="collapsed"
                         )
                     
-                    # Save status and remark under Q1..Q18 numerical keys
                     checklist_results[f"Q{idx}"] = {
                         "choice": status, 
                         "remark": remark.strip() if remark.strip() else "N/A"
@@ -496,7 +499,6 @@ if st.session_state.user["Role"] == "Technician":
                         except Exception:
                             submit_time_str = datetime.now().strftime("%Y-%m-%d %I:%M %p")
 
-                        # Core metadata record (NO legacy P01..P18 keys)
                         report_entry = {
                             "Report_ID": f"RPT-{len(st.session_state.service_reports_db) + 1001}",
                             "Job_ID": selected_job_id,
@@ -519,7 +521,6 @@ if st.session_state.user["Role"] == "Technician":
                             "Submitted_At": submit_time_str
                         }
 
-                        # Dynamically populate EXCLUSIVELY Q1_Choice, Q1_Remark through Q18_Choice, Q18_Remark
                         for idx in range(1, 19):
                             q_key = f"Q{idx}"
                             if q_key in checklist_results:
@@ -529,14 +530,12 @@ if st.session_state.user["Role"] == "Technician":
                                 report_entry[f"Q{idx}_Choice"] = "N/A"
                                 report_entry[f"Q{idx}_Remark"] = "N/A"
 
-                        # Ensure DataFrame conforms strictly to approved columns (19 base + 36 Q-cols)
                         valid_columns = load_sheet_data("ServiceReports").columns.tolist()
                         new_row_df = pd.DataFrame([report_entry])[valid_columns]
 
                         st.session_state.service_reports_db = pd.concat([st.session_state.service_reports_db[valid_columns], new_row_df], ignore_index=True)
                         save_sheet_data(st.session_state.service_reports_db, "ServiceReports")
                         
-                        # Set job status to Completed
                         st.session_state.jobs_db.loc[st.session_state.jobs_db["Job_ID"] == selected_job_id, "Status"] = "Completed"
                         save_sheet_data(st.session_state.jobs_db, "Jobs")
                         
