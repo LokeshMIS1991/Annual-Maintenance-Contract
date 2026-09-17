@@ -104,7 +104,7 @@ if "selected_job_for_report" not in st.session_state:
     st.session_state.selected_job_for_report = None
 
 # -----------------------------------------------------------------------------
-# 2. COMPLETE CATEGORIZED EQUIPMENT DATA CONFIGURATION
+# 2. CATEGORIZED EQUIPMENT CONFIGURATION
 # -----------------------------------------------------------------------------
 
 EQUIPMENT_DATA = {
@@ -287,17 +287,33 @@ def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
         st.info("No work orders recorded for this technician.")
 
 # -----------------------------------------------------------------------------
-# 4. BRANDED UI STYLING
+# 4. BRANDED UI STYLING (FIXES BLUE BOXES & OVERRIDES BASEWEB SELECT)
 # -----------------------------------------------------------------------------
 
 st.markdown("""
 <style>
+    /* Tab Styling */
     .stTabs [data-baseweb="tab-highlight"] { background-color: #1565C0 !important; }
     .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #1565C0 !important; font-weight: 700 !important; }
     [data-testid="stSidebar"] { background-color: #F8FAFC !important; }
     .sidebar-logo-sub { color: #10B981; font-weight: 800; font-size: 0.95rem; letter-spacing: 1.5px; text-align: center; margin-top: 6px; }
     
-    /* Action & Submit Buttons */
+    /* FIX FOR DROPDOWNS: Remove solid blue background & display dark crisp text */
+    div[data-baseweb="select"] > div {
+        background-color: #F1F5F9 !important;
+        color: #0F172A !important;
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 8px !important;
+    }
+    div[data-baseweb="select"] * {
+        color: #0F172A !important;
+        background-color: transparent !important;
+    }
+    div[aria-selected="true"] {
+        color: #0F172A !important;
+    }
+    
+    /* Primary Action Buttons */
     div[data-testid="stButton"] > button,
     button[kind="primaryFormSubmit"] { 
         background-color: #1565C0 !important; 
@@ -316,7 +332,7 @@ st.markdown("""
     
     a { color: #1565C0 !important; }
     
-    /* Form Outline */
+    /* Form Container Outer Ring */
     div[data-testid="stForm"] { 
         background-color: #FFFFFF; 
         border: 2px solid #1565C0; 
@@ -325,12 +341,12 @@ st.markdown("""
     }
     .login-container div[data-testid="stForm"] { padding: 20px 28px !important; max-width: 360px; margin: 0 auto; text-align: center; }
 
-    /* Section Banner Styling */
+    /* Section Banner Header */
     .equipment-box-container {
         background-color: #F8FAFC;
-        border-left: 5px solid #0F172A;
-        border-radius: 8px;
-        padding: 14px 18px;
+        border-left: 6px solid #0F172A;
+        border-radius: 6px;
+        padding: 12px 18px;
         margin-top: 10px;
         margin-bottom: 18px;
     }
@@ -422,7 +438,7 @@ if st.session_state.user["Role"] == "Technician":
         "📜 Service History"
     ])
 
-    # TAB 1: Assigned Jobs
+    # TAB 1: Assigned Work Orders
     with tech_tab1:
         st.subheader("Assigned Maintenance Tasks")
         tech_jobs = all_tech_jobs[all_tech_jobs["Status"] != "Completed"]
@@ -461,7 +477,7 @@ if st.session_state.user["Role"] == "Technician":
                             st.toast(f"Selected {job['Job_ID']} for service report!")
                 st.divider()
 
-    # TAB 2: Service Report Form
+    # TAB 2: Service Report Form (Clean UI & Full Category Set)
     with tech_tab2:
         st.subheader("📝 Submit Client Service Report")
         
@@ -498,19 +514,16 @@ if st.session_state.user["Role"] == "Technician":
             c_header1, c_header2 = st.columns(2)
             with c_header1:
                 st.text_input("Client Name", value=auto_client_name, disabled=True)
-                selected_contract_no = st.selectbox("Link AMC Contract Number (Optional)", contract_options)
+                selected_contract_no = st.selectbox("Link AMC Contract Number (Optional)", contract_options, key="select_amc_contract")
             
             with c_header2:
-                # Dynamic Category Selection (All 5 Categories)
-                selected_category = st.selectbox("Equipment Category*", list(EQUIPMENT_DATA.keys()))
-                # Dynamic Category Selection (Fetches all 5 keys from EQUIPMENT_DATA)
-                selected_category = st.selectbox("Equipment Category*", options=list(EQUIPMENT_DATA.keys()),key="global_category_selector"
-                )
-                rpt_visit_num_str = st.selectbox("AMC Visit Sequence*", ["Visit 1 of 4", "Visit 2 of 4", "Visit 3 of 4", "Visit 4 of 4"])
+                # Dynamically renders all 5 equipment categories
+                selected_category = st.selectbox("Equipment Category*", list(EQUIPMENT_DATA.keys()), key="select_eq_category")
+                rpt_visit_num_str = st.selectbox("AMC Visit Sequence*", ["Visit 1 of 4", "Visit 2 of 4", "Visit 3 of 4", "Visit 4 of 4"], key="select_visit_seq")
 
             st.divider()
 
-            # 1. Equipment Details (Placed outside form to guarantee clean dropdown rendering)
+            # Section 1: Equipment Details (Natively rendered to avoid blue box fill)
             st.markdown("""
             <div class="equipment-box-container">
                 <h3 class="equipment-title-text">1. Equipment Details</h3>
@@ -523,21 +536,21 @@ if st.session_state.user["Role"] == "Technician":
                 eq_type = st.selectbox(
                     "Equipment Type", 
                     EQUIPMENT_DATA[selected_category]["types"],
-                    key=f"eq_type_{selected_category}"
+                    key=f"eq_type_input_{selected_category}"
                 )
 
             with eq_col2:
                 eq_make_model = st.text_input(
                     "Make / Model", 
                     placeholder="e.g. Sidharth / Standard",
-                    key=f"eq_make_{selected_category}"
+                    key=f"eq_make_input_{selected_category}"
                 )
 
             with eq_col3:
                 eq_size = st.text_input(
                     "Door / Gate Size (W x H)", 
                     placeholder="e.g. 4000x4500 mm",
-                    key=f"eq_size_{selected_category}"
+                    key=f"eq_size_input_{selected_category}"
                 )
 
             with eq_col4:
@@ -545,17 +558,17 @@ if st.session_state.user["Role"] == "Technician":
                     "Qty", 
                     min_value=1, 
                     value=1,
-                    key=f"eq_qty_{selected_category}"
+                    key=f"eq_qty_input_{selected_category}"
                 )
 
             with eq_col5:
                 eq_condition = st.selectbox(
                     "Condition", 
                     ["Good", "Requires Repair", "Critical", "Replaced"],
-                    key=f"eq_cond_{selected_category}"
+                    key=f"eq_cond_input_{selected_category}"
                 )
 
-            # 2. Main Service Report Submission Form
+            # Section 2 & 3: Interactive Inspection Checklist Form
             with st.form(f"service_report_form_{tech_id}"):
                 st.markdown("### General Visit Details")
                 c_det1, c_det2 = st.columns(2)
@@ -565,7 +578,6 @@ if st.session_state.user["Role"] == "Technician":
                 with c_det2:
                     rpt_next_due = st.date_input("Next Service Due Date", value=date.today() + pd.Timedelta(days=90))
 
-                # Preventive Maintenance Checklist
                 st.markdown(f"### 2. Preventive Maintenance Checklist ({selected_category})")
                 
                 checklist_results = {}
@@ -599,7 +611,6 @@ if st.session_state.user["Role"] == "Technician":
                     }
                     st.divider()
 
-                # Overall Remarks
                 st.markdown("### 3. Remarks / Recommendations")
                 rpt_remarks = st.text_area("General Remarks & Summary*", placeholder="Overall observations, recommendations...")
 
@@ -637,7 +648,6 @@ if st.session_state.user["Role"] == "Technician":
                             "Submitted_At": submit_time_str
                         }
 
-                        # Dynamically bind Q1..Q18 choices & remarks
                         for idx in range(1, 19):
                             q_key = f"Q{idx}"
                             if q_key in checklist_results:
@@ -706,7 +716,7 @@ if st.session_state.user["Role"] == "Technician":
                 st.toast(f"📍 Location Broadcast Updated at {now_str}!", icon="✅")
                 st.rerun()
 
-    # TAB 4: History
+    # TAB 4: Service History
     with tech_tab4:
         st.subheader("My Service Record History")
         reports_df = st.session_state.service_reports_db
@@ -717,7 +727,7 @@ if st.session_state.user["Role"] == "Technician":
             st.info("📜 No service reports submitted yet.")
 
 # -----------------------------------------------------------------------------
-# 8. MANAGER COMMAND DASHBOARD
+# 8. MANAGER DASHBOARD
 # -----------------------------------------------------------------------------
 
 elif st.session_state.user["Role"] in ["Manager", "Admin"]:
