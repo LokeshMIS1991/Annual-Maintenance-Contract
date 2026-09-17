@@ -201,7 +201,7 @@ def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
         st.info("No work orders recorded for this technician.")
 
 # -----------------------------------------------------------------------------
-# 4. BRANDED UI STYLING (CORRECTED DROPDOWN STYLING)
+# 4. BRANDED UI STYLING (ISOLATED ACTION BUTTONS VS SELECT DROPDOWNS)
 # -----------------------------------------------------------------------------
 
 st.markdown("""
@@ -211,15 +211,25 @@ st.markdown("""
     [data-testid="stSidebar"] { background-color: #F8FAFC !important; }
     .sidebar-logo-sub { color: #10B981; font-weight: 800; font-size: 0.95rem; letter-spacing: 1.5px; text-align: center; margin-top: 6px; }
     
-    /* Target buttons specifically without touching select boxes */
-    .stButton > button, div[data-testid="stForm"] button { 
+    /* SPECIFICALLY TARGET REGULAR BUTTONS AND FORM SUBMIT BUTTONS (EXCLUDES DROPDOWNS) */
+    div[data-testid="stButton"] > button,
+    button[kind="primaryFormSubmit"],
+    button[kind="secondaryFormSubmit"] { 
         background-color: #1565C0 !important; 
         color: #FFFFFF !important; 
         border-radius: 8px !important; 
         font-weight: 600 !important; 
         width: 100% !important; 
+        border: none !important;
     }
-    .stButton > button:hover, div[data-testid="stForm"] button:hover { background-color: #0D47A1 !important; }
+    
+    div[data-testid="stButton"] > button:hover,
+    button[kind="primaryFormSubmit"]:hover,
+    button[kind="secondaryFormSubmit"]:hover { 
+        background-color: #0D47A1 !important; 
+        color: #FFFFFF !important;
+    }
+    
     a { color: #1565C0 !important; }
     
     div[data-testid="stForm"] { 
@@ -230,22 +240,11 @@ st.markdown("""
     }
     .login-container div[data-testid="stForm"] { padding: 20px 28px !important; max-width: 360px; margin: 0 auto; text-align: center; }
 
-    /* FIX FOR DROPDOWN SELECT BOXES - PREVENTS SOLID BLUE OVERLAY */
-    div[data-baseweb="select"] {
+    /* RESET BASEWEB SELECT OVERRIDES ENTIRELY TO RESTORE ORIGINAL NATIVE DROPDOWN UI */
+    div[data-baseweb="select"] button {
         background-color: transparent !important;
-    }
-    div[data-baseweb="select"] > div:first-child {
-        background-color: #FFFFFF !important;
-        border: 1px solid #CBD5E1 !important;
-        color: #0F172A !important;
-        border-radius: 8px !important;
-    }
-    div[data-baseweb="select"] * {
-        background-color: transparent !important;
-        color: #0F172A !important;
-    }
-    div[data-baseweb="select"] svg {
-        fill: #0F172A !important;
+        border: none !important;
+        color: inherit !important;
     }
     
     /* Equipment Box Container Header */
