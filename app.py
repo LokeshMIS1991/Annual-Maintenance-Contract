@@ -419,9 +419,11 @@ if st.session_state.user["Role"] == "Technician":
         if st.button("📊 View Task Summary"):
             show_task_summary_popup(tech_name, total_tasks, completed_tasks, pending_tasks)
 
-    tech_tab1, tech_tab2, tech_tab3, tech_tab4 = st.tabs([
+    # RESTRUCTURED TABS TO INCLUDE DEDICATED UPLOAD TAB
+    tech_tab1, tech_tab2, tech_tab3, tech_tab4, tech_tab5 = st.tabs([
         "📋 Assigned Work Orders", 
         "📝 Submit Client Service Report",
+        "📸 Upload Photos",
         "📍 Update Status & Destination", 
         "📜 Service History"
     ])
@@ -595,9 +597,6 @@ if st.session_state.user["Role"] == "Technician":
                 }
                 st.divider()
 
-            # -----------------------------------------------------------------
-            # SECTION 3: Remarks & Recommendations
-            # -----------------------------------------------------------------
             st.markdown("### 3. Remarks & Recommendations")
             rpt_remarks = st.text_area(
                 "General Remarks*", 
@@ -607,9 +606,6 @@ if st.session_state.user["Role"] == "Technician":
 
             st.divider()
 
-            # -----------------------------------------------------------------
-            # SECTION 4: Site Photographs (4 to 8 required)
-            # -----------------------------------------------------------------
             st.markdown("### 4. Site Photographs*")
             site_photos = st.file_uploader(
                 "Upload Site Photos (Attach between 4 and 8 site images)", 
@@ -625,9 +621,6 @@ if st.session_state.user["Role"] == "Technician":
 
             st.divider()
 
-            # -----------------------------------------------------------------
-            # SECTION 5: Form Photograph (Physical Sheet)
-            # -----------------------------------------------------------------
             st.markdown("### 5. Form Photograph")
             sheet_photo = st.file_uploader(
                 "Upload Photo of Physical Signed Form / Sheet (Optional)", 
@@ -709,9 +702,79 @@ if st.session_state.user["Role"] == "Technician":
                     st.rerun()
 
     # -------------------------------------------------------------------------
-    # TAB 3: Broadcast Location & Status
+    # TAB 3: Standalone Photo Uploader
     # -------------------------------------------------------------------------
     with tech_tab3:
+        st.subheader("📸 Upload Site & Form Photos")
+        
+        pending_tech_jobs = st.session_state.jobs_db[
+            (st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id)
+        ]
+        
+        if pending_tech_jobs.empty:
+            st.info("No active tasks found for photo upload.")
+        else:
+            upload_job_id = st.radio(
+                "Select Job / Work Order*", 
+                options=pending_tech_jobs["Job_ID"].tolist(), 
+                horizontal=True,
+                key="upload_tab_job_select",
+                format_func=lambda x: f"{x} — {pending_tech_jobs[pending_tech_jobs['Job_ID'] == x]['Client_Name'].values[0]}"
+            )
+            
+            st.divider()
+            
+            col_u1, col_u2 = st.columns(2)
+            with col_u1:
+                st.markdown("#### 1. Site Photographs (4 to 8 required)")
+                tab_site_photos = st.file_uploader(
+                    "Attach Site Images", 
+                    type=["jpg", "jpeg", "png"], 
+                    accept_multiple_files=True, 
+                    key="standalone_site_photos"
+                )
+            
+            with col_u2:
+                st.markdown("#### 2. Physical Form Scan")
+                tab_sheet_photo = st.file_uploader(
+                    "Attach Paper Sheet Image (Optional)", 
+                    type=["jpg", "jpeg", "png"], 
+                    accept_multiple_files=False, 
+                    key="standalone_sheet_photo"
+                )
+                
+            if st.button("Upload Photos to Drive", type="primary", use_container_width=True, key="standalone_upload_btn"):
+                if not tab_site_photos or len(tab_site_photos) < 4 or len(tab_site_photos) > 8:
+                    st.error("⚠️ Please attach between 4 and 8 site photos.")
+                else:
+                    with st.spinner("📤 Uploading media files to Google Drive..."):
+                        standalone_sheet_link = ""
+                        if tab_sheet_photo:
+                            up_sheet = upload_photos_to_drive([tab_sheet_photo], folder_name="AMC_Physical_Sheets")
+                            if up_sheet:
+                                standalone_sheet_link = up_sheet[0]
+                                
+                        up_site = upload_photos_to_drive(tab_site_photos, folder_name="AMC_Site_Photos")
+                        standalone_site_links = " | ".join(up_site)
+                        
+                        # Update Google Sheets Database for existing job
+                        reports_df = st.session_state.service_reports_db
+                        match_mask = reports_df["Job_ID"].astype(str) == str(upload_job_id)
+                        
+                        if match_mask.any():
+                            reports_df.loc[match_mask, "Site_Photos_URLs"] = standalone_site_links
+                            if standalone_sheet_link:
+                                reports_df.loc[match_mask, "Physical_Sheet_URL"] = standalone_sheet_link
+                            save_sheet_data(reports_df, "ServiceReports")
+                            st.toast("✅ Photos successfully linked to existing service report!")
+                        else:
+                            st.toast("✅ Photos uploaded to Google Drive successfully!")
+                        st.rerun()
+
+    # -------------------------------------------------------------------------
+    # TAB 4: Broadcast Location & Status
+    # -------------------------------------------------------------------------
+    with tech_tab4:
         st.subheader("Broadcast Live Location & Next Target")
         curr_rec = st.session_state.tech_status_db[st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id]
         
@@ -761,9 +824,9 @@ if st.session_state.user["Role"] == "Technician":
             st.rerun()
 
     # -------------------------------------------------------------------------
-    # TAB 4: Service History
+    # TAB 5: Service History
     # -------------------------------------------------------------------------
-    with tech_tab4:
+    with tech_tab5:
         st.subheader("📜 Submitted Service Reports History")
         tech_reports = st.session_state.service_reports_db[st.session_state.service_reports_db["Tech_ID"].astype(str) == tech_id]
         
