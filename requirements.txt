@@ -1,6 +1,7 @@
 pillow
 google-auth
-streamlit>=1.30.0
-pandas>=2.0.0
-gspread>=5.12.0
-google-auth>=2.25.0
+streamlit
+pandas
+google-api-python-client
+google-auth
+google-auth-httplib2
