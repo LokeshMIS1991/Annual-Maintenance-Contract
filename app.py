@@ -628,22 +628,26 @@ if st.session_state.user["Role"] == "Technician":
         if not reports_df.empty and "Tech_ID" in reports_df.columns:
             my_reports = reports_df[reports_df["Tech_ID"].astype(str) == tech_id]
             
-            # Progress Summary Metrics
-            m1, m2, m3, m4 = st.columns(4)
-            sites_visited = len(my_reports)
-            
-            # Numeric calculations safely
-            tot_km = pd.to_numeric(my_reports.get("Distance_Travelled_KM", 0), errors='coerce').sum()
-            tot_hrs = pd.to_numeric(my_reports.get("Time_Taken_Hours", 0), errors='coerce').sum()
-            
-            m1.metric("Sites Visited", sites_visited)
-            m2.metric("Total Travelled", f"{tot_km:.1f} KM")
-            m3.metric("Time Spent On-Site", f"{tot_hrs:.1f} Hrs")
-            m4.metric("Avg Time / Site", f"{(tot_hrs / sites_visited):.1f} Hrs" if sites_visited > 0 else "0 Hrs")
-            
-            st.divider()
-            st.markdown("### Detailed Reports Log")
-            st.dataframe(my_reports, use_container_width=True)
+            if not my_reports.empty:
+                # Safely extract Series or fallback to empty Series
+                km_series = my_reports["Distance_Travelled_KM"] if "Distance_Travelled_KM" in my_reports.columns else pd.Series(dtype=float)
+                hrs_series = my_reports["Time_Taken_Hours"] if "Time_Taken_Hours" in my_reports.columns else pd.Series(dtype=float)
+
+                sites_visited = len(my_reports)
+                tot_km = pd.to_numeric(km_series, errors='coerce').sum()
+                tot_hrs = pd.to_numeric(hrs_series, errors='coerce').sum()
+
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Sites Visited", sites_visited)
+                m2.metric("Total Travelled", f"{tot_km:.1f} KM")
+                m3.metric("Time Spent On-Site", f"{tot_hrs:.1f} Hrs")
+                m4.metric("Avg Time / Site", f"{(tot_hrs / sites_visited):.1f} Hrs" if sites_visited > 0 else "0 Hrs")
+                
+                st.divider()
+                st.markdown("### Detailed Reports Log")
+                st.dataframe(my_reports, use_container_width=True)
+            else:
+                st.info("📜 No service reports submitted yet.")
         else:
             st.info("📜 No service reports submitted yet.")
 
@@ -706,19 +710,20 @@ elif st.session_state.user["Role"] in ["Manager", "Admin"]:
 
         st.divider()
 
-        # Aggregate Metrics
+       # Aggregate Metrics safely
         tot_visited = len(all_reports)
-        all_reports["Distance_Travelled_KM"] = pd.to_numeric(all_reports.get("Distance_Travelled_KM", 0), errors='coerce').fillna(0)
-        all_reports["Time_Taken_Hours"] = pd.to_numeric(all_reports.get("Time_Taken_Hours", 0), errors='coerce').fillna(0)
         
-        tot_dist = all_reports["Distance_Travelled_KM"].sum()
-        tot_time = all_reports["Time_Taken_Hours"].sum()
+        if not all_reports.empty and "Distance_Travelled_KM" in all_reports.columns:
+            all_reports["Distance_Travelled_KM"] = pd.to_numeric(all_reports["Distance_Travelled_KM"], errors='coerce').fillna(0)
+            tot_dist = all_reports["Distance_Travelled_KM"].sum()
+        else:
+            tot_dist = 0.0
 
-        p_col1, p_col2, p_col3, p_col4 = st.columns(4)
-        p_col1.metric("Total Sites Visited", tot_visited)
-        p_col2.metric("Total Distance Travelled", f"{tot_dist:.1f} KM")
-        p_col3.metric("Total Field Hours", f"{tot_time:.1f} Hours")
-        p_col4.metric("Avg Time Spent / Site", f"{(tot_time / tot_visited):.1f} Hours" if tot_visited > 0 else "0 Hours")
+        if not all_reports.empty and "Time_Taken_Hours" in all_reports.columns:
+            all_reports["Time_Taken_Hours"] = pd.to_numeric(all_reports["Time_Taken_Hours"], errors='coerce').fillna(0)
+            tot_time = all_reports["Time_Taken_Hours"].sum()
+        else:
+            tot_time = 0.0
 
         st.divider()
         st.markdown("### Technician Summary Table")
