@@ -317,28 +317,41 @@ def render_login_form():
     col1, col2, col3 = st.columns([1, 1.8, 1])
     
     with col2:
-        # Streamlit Form acts directly as the bordered card
         with st.form("main_login_form", clear_on_submit=False):
+            # 1. Logo Display
             logo_path = get_logo_path()
             if logo_path:
                 l_col1, l_col2, l_col3 = st.columns([0.1, 3.8, 0.1])
                 with l_col2:
                     st.image(logo_path, use_container_width=True)
-                    
             else:
-                st.markdown("<h2 style='text-align:center; color:#0F3D7A; font-weight:800; margin-bottom:5px;'>SIDHARTH</h2><p style='text-align:center; color:#0F3D7A; font-size:0.85rem; font-weight:700; letter-spacing:1px; margin-top:-10px;'>SHUTTER & AUTOMATION</p>", unsafe_allow_html=True)
+                st.markdown(
+                    "<h2 style='text-align:center; color:#0F3D7A; font-weight:800; margin-bottom:5px;'>SIDHARTH</h2>"
+                    "<p style='text-align:center; color:#0F3D7A; font-size:0.85rem; font-weight:700; letter-spacing:1px; margin-top:-10px;'>SHUTTER & AUTOMATION</p>", 
+                    unsafe_allow_html=True
+                )
 
             st.markdown("<p class='login-subtitle'>AMC Tracker Portal</p>", unsafe_allow_html=True)
 
+            # 2. Username Input
             user_id_input = st.text_input(
                 "Username / Name", 
-                placeholder="Enter User Name", 
+                placeholder="e.g. Parvesh Kumar or Vishak", 
                 key="login_userid"
             )
 
+            # 3. Checkboxes & Password Input
+            # Read state or default to False to prevent NameError
+            show_pwd = st.session_state.get("show_pwd_toggle", False)
+
             chk_col1, chk_col2 = st.columns(2)
-            # NEW (Fixed):
-            if show_password:
+            with chk_col1:
+                st.checkbox("Show Password", key="show_pwd_toggle")
+            with chk_col2:
+                st.checkbox("Remember Me", key="remember_me_toggle")
+
+            # Conditionally render input type based on checkbox value
+            if show_pwd:
                 password_input = st.text_input(
                     "Password / PIN", 
                     placeholder="Enter password", 
@@ -352,6 +365,7 @@ def render_login_form():
                     key="login_password_mask"
                 )
 
+            # 4. Form Submit Button
             submit_button = st.form_submit_button("🔑 LOGIN TO DASHBOARD", use_container_width=True)
 
             if submit_button:
@@ -385,10 +399,6 @@ def render_login_form():
                         st.rerun()
                     else:
                         st.error("❌ Invalid Username or Password. Please try again.")
-
-if not st.session_state.get("authenticated", False):
-    render_login_form()
-    st.stop()
 # -----------------------------------------------------------------------------
 # 6. SIDEBAR NAV & USER INFO
 # -----------------------------------------------------------------------------
