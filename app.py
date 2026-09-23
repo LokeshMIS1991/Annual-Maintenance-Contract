@@ -232,8 +232,9 @@ st.markdown("""
         color: #E2E8F0 !important;
     }
 
+    /* UPDATED: Changed from Green (#10B981) to Light Cyan Blue for high contrast on dark sidebar */
     .sidebar-logo-sub { 
-        color: #10B981 !important; 
+        color: #38BDF8 !important; 
         font-weight: 800; 
         font-size: 0.9rem; 
         letter-spacing: 2px; 
@@ -298,10 +299,10 @@ st.markdown("""
         box-shadow: 0 2px 8px rgba(0,0,0,0.03);
     }
 
-    /* Login Subtitle */
+    /* UPDATED: Changed from Green (#10B981) to Corporate Blue */
     .login-subtitle {
         text-align: center; 
-        color: #10B981; 
+        color: #0F3D7A; 
         font-size: 0.95rem; 
         font-weight: 800;
         letter-spacing: 1px;
@@ -339,9 +340,9 @@ st.markdown("""
         font-size: 1.2rem; 
     }
 
-    /* Buttons Styling */
+    /* UPDATED: Changed primary buttons from Green (#10B981) to Blue (#0F3D7A / #1D4ED8) */
     div[data-testid="stFormSubmitButton"] > button {
-        background-color: #10B981 !important; 
+        background-color: #0F3D7A !important; 
         color: #FFFFFF !important;
         border-radius: 8px !important; 
         font-weight: 700 !important; 
@@ -349,12 +350,13 @@ st.markdown("""
         height: 46px !important;
         border: none !important; 
         width: 100% !important;
-        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25) !important;
+        box-shadow: 0 4px 12px rgba(15, 61, 122, 0.25) !important;
         transition: all 0.2s ease;
     }
     
+    /* UPDATED: Button hover effect changed to slightly darker blue */
     div[data-testid="stFormSubmitButton"] > button:hover {
-        background-color: #059669 !important;
+        background-color: #1E40AF !important;
         transform: translateY(-1px);
     }
 
