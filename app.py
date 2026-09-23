@@ -216,22 +216,25 @@ EQUIPMENT_DATA = {
 
 st.markdown("""
 <style>
-    /* Global Page Styling */
-    .stApp { background-color: #F4F6F9 !important; }
+    /* Global Page Background */
+    .stApp { 
+        background-color: #F4F6F9 !important; 
+    }
+    
     .stTabs [data-baseweb="tab-highlight"] { background-color: #0F3D7A !important; }
     .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #0F3D7A !important; font-weight: 700 !important; }
     [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #E2E8F0; }
     .sidebar-logo-sub { color: #00A859; font-weight: 800; font-size: 0.85rem; letter-spacing: 1.5px; text-align: center; margin-top: 4px; }
     
-    /* Compact Professional Login Card Container */
-    .login-card-container {
-        background-color: #FFFFFF;
-        border: 1px solid #E2E8F0;
-        border-radius: 12px;
-        padding: 26px 28px 22px 28px;
-        box-shadow: 0px 8px 20px rgba(15, 61, 122, 0.06);
-        max-width: 410px;
-        margin: 20px auto 0 auto;
+    /* Target Streamlit Form Container directly to act as the Login Card */
+    div[data-testid="stForm"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 12px !important;
+        padding: 30px 28px 24px 28px !important;
+        box-shadow: 0px 8px 20px rgba(15, 61, 122, 0.08) !important;
+        max-width: 420px !important;
+        margin: 20px auto !important;
     }
 
     /* Subtitle Styling */
@@ -241,30 +244,28 @@ st.markdown("""
         font-size: 0.95rem; 
         font-weight: 700;
         letter-spacing: 0.5px;
-        margin-top: 8px; 
-        margin-bottom: 22px;
+        margin-top: 4px; 
+        margin-bottom: 20px;
         text-transform: uppercase;
     }
 
-    /* Input Field Labels */
+    /* Input Labels */
     .stTextInput > label {
         color: #0F3D7A !important;
         font-weight: 700 !important;
         font-size: 0.92rem !important;
     }
 
-    /* Custom Input Box Styling */
+    /* Input Field Boxes */
     div[data-testid="stTextInput"] > div[data-baseweb="input"] {
         background-color: #F8FAFC !important;
         border: 1.5px solid #CBD5E1 !important;
         border-radius: 8px !important;
         overflow: hidden !important;
-        transition: all 0.2s ease-in-out;
     }
 
     div[data-testid="stTextInput"] > div[data-baseweb="input"]:focus-within {
         border-color: #0F3D7A !important;
-        box-shadow: 0 0 0 1px #0F3D7A !important;
     }
 
     div[data-testid="stTextInput"] input {
@@ -272,8 +273,8 @@ st.markdown("""
         height: 42px !important;
     }
 
-    /* Primary Login Button */
-    div.stButton > button[kind="primary"], div.stButton > button {
+    /* Submit Button Styling */
+    div[data-testid="stFormSubmitButton"] > button {
         background-color: #00A859 !important; 
         color: #FFFFFF !important;
         border-radius: 8px !important; 
@@ -281,14 +282,13 @@ st.markdown("""
         font-size: 0.98rem !important;
         height: 44px !important;
         border: none !important; 
-        margin: 10px auto 0 auto !important; 
-        display: block !important;
+        width: 100% !important;
+        margin-top: 10px !important;
         box-shadow: 0 4px 10px rgba(0, 168, 89, 0.25) !important;
-        transition: all 0.2s ease-in-out;
     }
-    div.stButton > button:hover {
+    
+    div[data-testid="stFormSubmitButton"] > button:hover {
         background-color: #008F4C !important;
-        box-shadow: 0 6px 14px rgba(0, 168, 89, 0.35) !important;
     }
 
     /* Equipment Box for Checklist */
@@ -317,79 +317,76 @@ def render_login_form():
     col1, col2, col3 = st.columns([1, 1.8, 1])
     
     with col2:
-        st.markdown('<div class="login-card-container">', unsafe_allow_html=True)
-        
-        logo_path = get_logo_path()
-        if logo_path:
-            l_col1, l_col2, l_col3 = st.columns([0.2, 3.6, 0.2])
-            with l_col2:
-                st.image(logo_path, width=220)
-        else:
-            st.markdown("<h2 style='text-align:center; color:#0F3D7A; font-weight:800; margin-bottom:5px;'>SIDHARTH</h2><p style='text-align:center; color:#0F3D7A; font-size:0.85rem; font-weight:700; letter-spacing:1px; margin-top:-10px;'>SHUTTER & AUTOMATION</p>", unsafe_allow_html=True)
-
-        st.markdown("<p class='login-subtitle'>AMC Tracker Portal</p>", unsafe_allow_html=True)
-
-        user_id_input = st.text_input(
-            "Username / Name", 
-            placeholder="e.g. Parvesh Kumar or Vishak", 
-            key="login_userid"
-        )
-
-        chk_col1, chk_col2 = st.columns(2)
-        with chk_col1:
-            show_password = st.checkbox("Show Password", key="show_pwd_toggle")
-        with chk_col2:
-            st.checkbox("Remember Me", key="remember_me_toggle")
-
-        pwd_type = "text" if show_password else "password"
-        
-        password_input = st.text_input(
-            "Password / PIN", 
-            type=pwd_type, 
-            placeholder="Enter password", 
-            key="login_password"
-        )
-
-        st.write("")
-
-        if st.button("🔑 LOGIN TO DASHBOARD", type="primary", use_container_width=True):
-            u_val = user_id_input.strip() if user_id_input else ""
-            p_val = password_input.strip() if password_input else ""
-            
-            if not u_val or not p_val:
-                st.warning("⚠️ Please enter both Username and Password.")
+        # Streamlit Form acts directly as the bordered card
+        with st.form("main_login_form", clear_on_submit=False):
+            logo_path = get_logo_path()
+            if logo_path:
+                l_col1, l_col2, l_col3 = st.columns([0.1, 3.8, 0.1])
+                with l_col2:
+                    st.image(logo_path, use_column_width=True)
             else:
-                users_df = st.session_state.users_db
-                matched_user = users_df[
-                    (
-                        (users_df["User_ID"].astype(str).str.strip().str.lower() == u_val.lower()) |
-                        (users_df["Full_Name"].astype(str).str.strip().str.lower() == u_val.lower())
-                    ) & 
-                    (users_df["Password"].astype(str).str.strip() == p_val)
-                ]
-                
-                if not matched_user.empty:
-                    user_info = matched_user.iloc[0]
-                    st.session_state["authenticated"] = True
-                    st.session_state["user_id"] = str(user_info["User_ID"])
-                    st.session_state["user_name"] = str(user_info["Full_Name"])
-                    st.session_state["user_role"] = str(user_info["Role"])
-                    st.session_state["user"] = {
-                        "User_ID": str(user_info["User_ID"]),
-                        "Full_Name": str(user_info["Full_Name"]),
-                        "Role": str(user_info["Role"])
-                    }
-                    st.success(f"Welcome back, {user_info['Full_Name']}!")
-                    st.rerun()
-                else:
-                    st.error("❌ Invalid Username or Password. Please try again.")
+                st.markdown("<h2 style='text-align:center; color:#0F3D7A; font-weight:800; margin-bottom:5px;'>SIDHARTH</h2><p style='text-align:center; color:#0F3D7A; font-size:0.85rem; font-weight:700; letter-spacing:1px; margin-top:-10px;'>SHUTTER & AUTOMATION</p>", unsafe_allow_html=True)
 
-        st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("<p class='login-subtitle'>AMC Tracker Portal</p>", unsafe_allow_html=True)
+
+            user_id_input = st.text_input(
+                "Username / Name", 
+                placeholder="e.g. Parvesh Kumar or Vishak", 
+                key="login_userid"
+            )
+
+            chk_col1, chk_col2 = st.columns(2)
+            with chk_col1:
+                show_password = st.checkbox("Show Password", key="show_pwd_toggle")
+            with chk_col2:
+                st.checkbox("Remember Me", key="remember_me_toggle")
+
+            pwd_type = "text" if show_password else "password"
+            
+            password_input = st.text_input(
+                "Password / PIN", 
+                type=pwd_type, 
+                placeholder="Enter password", 
+                key="login_password"
+            )
+
+            submit_button = st.form_submit_button("🔑 LOGIN TO DASHBOARD", use_container_width=True)
+
+            if submit_button:
+                u_val = user_id_input.strip() if user_id_input else ""
+                p_val = password_input.strip() if password_input else ""
+                
+                if not u_val or not p_val:
+                    st.warning("⚠️ Please enter both Username and Password.")
+                else:
+                    users_df = st.session_state.users_db
+                    matched_user = users_df[
+                        (
+                            (users_df["User_ID"].astype(str).str.strip().str.lower() == u_val.lower()) |
+                            (users_df["Full_Name"].astype(str).str.strip().str.lower() == u_val.lower())
+                        ) & 
+                        (users_df["Password"].astype(str).str.strip() == p_val)
+                    ]
+                    
+                    if not matched_user.empty:
+                        user_info = matched_user.iloc[0]
+                        st.session_state["authenticated"] = True
+                        st.session_state["user_id"] = str(user_info["User_ID"])
+                        st.session_state["user_name"] = str(user_info["Full_Name"])
+                        st.session_state["user_role"] = str(user_info["Role"])
+                        st.session_state["user"] = {
+                            "User_ID": str(user_info["User_ID"]),
+                            "Full_Name": str(user_info["Full_Name"]),
+                            "Role": str(user_info["Role"])
+                        }
+                        st.success(f"Welcome back, {user_info['Full_Name']}!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Invalid Username or Password. Please try again.")
 
 if not st.session_state.get("authenticated", False):
     render_login_form()
     st.stop()
-
 # -----------------------------------------------------------------------------
 # 6. SIDEBAR NAV & USER INFO
 # -----------------------------------------------------------------------------
