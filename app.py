@@ -18,7 +18,41 @@ st.set_page_config(
 )
 
 # -----------------------------------------------------------------------------
-# 1. GOOGLE SHEETS CONNECTION & PERSISTENCE
+# 1. HELPER FUNCTIONS & LOGO RESOLUTION
+# -----------------------------------------------------------------------------
+
+def get_logo_path():
+    for name in ["Company Logo.jpeg", "Company Logo.png", "Company Logo.jpg"]:
+        if os.path.exists(name):
+            return name
+    return None
+
+def make_google_maps_link(address, city, pincode=""):
+    query = urllib.parse.quote(f"{address}, {city} {pincode}".strip())
+    return f"https://www.google.com/maps/search/?api=1&query={query}"
+
+def filter_df_by_date_range(df, date_col, filter_option):
+    if df.empty or date_col not in df.columns:
+        return df
+    
+    temp_df = df.copy()
+    temp_df[date_col] = pd.to_datetime(temp_df[date_col], errors='coerce')
+    today = pd.Timestamp(date.today())
+    
+    if filter_option == "Today":
+        return temp_df[temp_df[date_col].dt.date == date.today()]
+    elif filter_option == "Weekly (Last 7 Days)":
+        return temp_df[temp_df[date_col] >= (today - timedelta(days=7))]
+    elif filter_option == "Monthly (Last 30 Days)":
+        return temp_df[temp_df[date_col] >= (today - timedelta(days=30))]
+    elif filter_option == "3 Months":
+        return temp_df[temp_df[date_col] >= (today - timedelta(days=90))]
+    elif filter_option == "Yearly":
+        return temp_df[temp_df[date_col] >= (today - timedelta(days=365))]
+    return temp_df
+
+# -----------------------------------------------------------------------------
+# 2. GOOGLE SHEETS CONNECTION
 # -----------------------------------------------------------------------------
 
 @st.cache_resource
@@ -112,7 +146,7 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 # -----------------------------------------------------------------------------
-# 2. CHECKLIST DATA CONFIGURATION
+# 3. CHECKLIST DATA CONFIGURATION
 # -----------------------------------------------------------------------------
 
 EQUIPMENT_DATA = {
@@ -177,102 +211,73 @@ EQUIPMENT_DATA = {
 }
 
 # -----------------------------------------------------------------------------
-# 3. HELPER FUNCTIONS
-# -----------------------------------------------------------------------------
-
-def make_google_maps_link(address, city, pincode=""):
-    query = urllib.parse.quote(f"{address}, {city} {pincode}".strip())
-    return f"https://www.google.com/maps/search/?api=1&query={query}"
-
-def get_logo_path():
-    for name in ["Company Logo.jpeg", "Company Logo.png", "Company Logo.jpg"]:
-        if os.path.exists(name):
-            return name
-    return None
-
-def filter_df_by_date_range(df, date_col, filter_option):
-    if df.empty or date_col not in df.columns:
-        return df
-    
-    temp_df = df.copy()
-    temp_df[date_col] = pd.to_datetime(temp_df[date_col], errors='coerce')
-    today = pd.Timestamp(date.today())
-    
-    if filter_option == "Today":
-        return temp_df[temp_df[date_col].dt.date == date.today()]
-    elif filter_option == "Weekly (Last 7 Days)":
-        return temp_df[temp_df[date_col] >= (today - timedelta(days=7))]
-    elif filter_option == "Monthly (Last 30 Days)":
-        return temp_df[temp_df[date_col] >= (today - timedelta(days=30))]
-    elif filter_option == "3 Months":
-        return temp_df[temp_df[date_col] >= (today - timedelta(days=90))]
-    elif filter_option == "Yearly":
-        return temp_df[temp_df[date_col] >= (today - timedelta(days=365))]
-    return temp_df
-
-# -----------------------------------------------------------------------------
-# 4. BRANDED UI & MOBILE STYLING
+# 4. CUSTOM CSS STYLING
 # -----------------------------------------------------------------------------
 
 st.markdown("""
 <style>
-    /* Force consistent background color */
-    .stApp { background-color: #F4F6F9 !important; color: #212529 !important; }
+    /* Clean Light Theme Styling */
+    .stApp {
+        background-color: #F8FAFC !important;
+        color: #1E293B !important;
+    }
     
-    .stTabs [data-baseweb="tab-highlight"] { background-color: #0F3D7A !important; }
-    .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #0F3D7A !important; font-weight: 700 !important; }
-    [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #E2E8F0; }
-    .sidebar-logo-sub { color: #00A859; font-weight: 800; font-size: 0.85rem; letter-spacing: 1.5px; text-align: center; margin-top: 4px; }
-    
-    /* Responsive Block Container Padding */
-    .block-container {
-        padding-top: 1.5rem !important;
-        padding-bottom: 2rem !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
+    /* Login Page Title Styling */
+    .login-title {
+        text-align: center;
+        color: #1E3A8A;
+        font-size: 2.2rem;
+        font-weight: 700;
+        margin-bottom: 25px;
     }
 
-    /* Form Container */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #FFFFFF !important;
-        border: 2px solid #0F3D7A !important;
-        border-radius: 20px !important;
-        padding: 24px !important;
-        box-shadow: 0px 10px 25px rgba(15, 61, 122, 0.08) !important;
-        max-width: 440px !important;
-        margin: 20px auto 0 auto !important;
-    }
-
-    div[data-testid="stTextInput"] > div[data-baseweb="input"] {
-        background-color: #F0F4F8 !important;
-        border: 1.5px solid #0F3D7A !important;
+    /* Red Action Button (Matching Screenshot) */
+    div.stButton > button[kind="primary"], div.stButton > button {
+        background-color: #FF4B4B !important;
+        color: #FFFFFF !important;
+        border: none !important;
         border-radius: 8px !important;
-        overflow: hidden !important;
+        font-weight: 600 !important;
+        font-size: 1rem !important;
+        height: 48px !important;
+        transition: all 0.2s ease-in-out;
+    }
+    div.stButton > button:hover {
+        background-color: #E03E3E !important;
+        color: #FFFFFF !important;
+        border: none !important;
     }
 
-    div[data-testid="stTextInput"] input {
-        border: none !important; background-color: transparent !important; color: #1E293B !important; height: 42px !important;
-    }
-
-    .stButton > button {
-        border-radius: 8px !important;
-        font-weight: 700 !important;
-    }
-
+    /* Equipment Box for Checklist */
     .equipment-box {
-        background-color: #FFFFFF; border-left: 5px solid #0F3D7A;
-        border-radius: 8px; padding: 12px 18px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+        background-color: #FFFFFF;
+        border-left: 5px solid #1E3A8A;
+        border-radius: 8px;
+        padding: 12px 18px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.03);
     }
-    .equipment-title { color: #0F3D7A !important; font-weight: 700; margin: 0 0 10px 0; font-size: 1.25rem; }
+    .equipment-title {
+        color: #1E3A8A !important;
+        font-weight: 700;
+        margin: 0 0 10px 0;
+        font-size: 1.25rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 5. AUTHENTICATION & LOGIN FLOW
+# 5. AUTHENTICATION & LOGIN FORM
 # -----------------------------------------------------------------------------
 
 def render_login_form():
-    st.markdown("<h2 style='text-align: center; color: #0F3D7A;'>🔐 User Sign In</h2>", unsafe_allow_html=True)
+    logo_path = get_logo_path()
+    if logo_path:
+        col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
+        with col_l2:
+            st.image(logo_path, use_container_width=True)
+
+    st.markdown("<h1 class='login-title'>🔐 User Sign In</h1>", unsafe_allow_html=True)
     
     show_password = st.checkbox("Show password", key="show_pwd_toggle")
     pwd_type = "text" if show_password else "password"
@@ -332,11 +337,10 @@ with st.sidebar:
     if logo_path:
         st.image(logo_path, use_container_width=True)
     else:
-        st.markdown("<h3 style='color: #0F3D7A; text-align:center;'>⚙️ SIDHARTH</h3>", unsafe_allow_html=True)
-    st.markdown("<div class='sidebar-logo-sub'>AMC TRACKER</div>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #1E3A8A; text-align:center;'>⚙️ SIDHARTH</h3>", unsafe_allow_html=True)
+    st.markdown("<div style='color: #00A859; font-weight: 800; font-size: 0.85rem; letter-spacing: 1.5px; text-align: center; margin-top: 4px;'>AMC TRACKER</div>", unsafe_allow_html=True)
     st.divider()
 
-    # Safe lookup for user object attributes
     logged_name = st.session_state.get("user_name", "User")
     logged_role = st.session_state.get("user_role", "Technician")
 
@@ -352,7 +356,7 @@ with st.sidebar:
     st.markdown(f"**Logged User:** {logged_name}")
     st.markdown(f"**Role:** `{logged_role}`")
     
-    if st.button("Logout", type="secondary", use_container_width=True):
+    if st.button("Logout", use_container_width=True):
         st.session_state.authenticated = False
         st.session_state.user = None
         st.session_state.user_id = None
@@ -656,7 +660,7 @@ if logged_role == "Technician":
 # -----------------------------------------------------------------------------
 
 elif logged_role in ["Manager", "Admin"]:
-    st.markdown("<h1 style='color: #0F3D7A;'>📡 Dispatch, Progress Analytics & AMC Control Center</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='color: #1E3A8A;'>📡 Dispatch, Progress Analytics & AMC Control Center</h1>", unsafe_allow_html=True)
 
     # AMC Alerts
     contracts_df = st.session_state.amc_contracts_db
@@ -742,7 +746,7 @@ elif logged_role in ["Manager", "Admin"]:
 
             with chart_col1:
                 st.markdown("#### 📍 Sites Visited per Technician")
-                st.bar_chart(data=summary_grp, x="Tech_Name", y="Sites_Visited", color="#0F3D7A")
+                st.bar_chart(data=summary_grp, x="Tech_Name", y="Sites_Visited", color="#1E3A8A")
 
             with chart_col2:
                 st.markdown("#### 🚗 Total Travel Distance (KM)")
@@ -779,8 +783,7 @@ elif logged_role in ["Manager", "Admin"]:
                 label="📥 Download Detailed Progress Report (CSV)",
                 data=csv_data,
                 file_name=f"technician_progress_report_{date.today()}.csv",
-                mime="text/csv",
-                type="primary"
+                mime="text/csv"
             )
         else:
             st.info("ℹ️ No visit or progress records match the selected filter criteria.")
