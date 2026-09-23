@@ -1,55 +1,22 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime, date, time
 import zoneinfo
 import urllib.parse
 import os
-import io
 import gspread
 from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
 
-# -----------------------------------------------------------------------------
-# 1. PAGE CONFIGURATION & BASE STYLING
-# -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="AMC Annual Maintenance Tracker", 
     page_icon="🛠️", 
     layout="wide"
 )
 
-# Structural CSS rules that do not override BaseWeb dropdowns or button overlays
-st.markdown("""
-<style>
-    .login-container { 
-        border: 2px solid #1565C0; 
-        border-radius: 12px; 
-        padding: 24px; 
-        background-color: #FFFFFF;
-        max-width: 400px; 
-        margin: 40px auto; 
-    }
-    .section-banner {
-        background-color: #F1F5F9;
-        border-left: 6px solid #1565C0;
-        border-radius: 4px;
-        padding: 10px 16px;
-        margin-top: 15px;
-        margin-bottom: 15px;
-    }
-    .section-banner-title {
-        color: #0F172A !important;
-        font-weight: 700;
-        font-size: 1.15rem;
-        margin: 0;
-    }
-</style>
-""", unsafe_allow_html=True)
+# -----------------------------------------------------------------------------
+# 1. GOOGLE SHEETS CONNECTION & PERSISTENCE
+# -----------------------------------------------------------------------------
 
-# -----------------------------------------------------------------------------
-# 2. GOOGLE SHEETS & DRIVE CONNECTION
-# -----------------------------------------------------------------------------
 @st.cache_resource
 def get_gspread_client():
     scopes = [
@@ -69,12 +36,15 @@ except Exception as e:
     st.stop()
 
 def load_sheet_data(worksheet_name):
+    # Strict list of 19 base metadata columns
     service_report_cols = [
         "Report_ID", "Job_ID", "Tech_ID", "Tech_Name", "Client_Name", "Site_Location", 
         "AMC_Contract_No", "Category", "Equipment_Type", "Make_Model", "Door_Size", "Qty", 
         "Condition", "Checklist_Data", "Service_Date", "Visit_Number", "Next_Service_Due_Date", 
-        "Remarks", "Submitted_At", "Physical_Sheet_URL", "Site_Photos_URLs"
+        "Remarks", "Submitted_At"
     ]
+    
+    # Append strictly Q1_Choice, Q1_Remark through Q18_Choice, Q18_Remark (55 columns total)
     for i in range(1, 19):
         service_report_cols.extend([f"Q{i}_Choice", f"Q{i}_Remark"])
 
@@ -87,13 +57,18 @@ def load_sheet_data(worksheet_name):
     }
     
     cols = default_columns.get(worksheet_name, [])
+    
     try:
         ws = sh.worksheet(worksheet_name)
         records = ws.get_all_records()
         df = pd.DataFrame(records)
+        
+        # Guarantee all expected columns exist
         for col in cols:
             if col not in df.columns:
                 df[col] = ""
+                
+        # Return ONLY the defined columns to drop any rogue columns like P01_...
         return df[cols]
     except Exception:
         try:
@@ -113,23 +88,29 @@ def save_sheet_data(df, worksheet_name):
     except Exception as e:
         st.error(f"❌ Failed to save data to Google Sheets ({worksheet_name}): {e}")
 
-# Session State Persistence Initializations
+# Initialize Session Data
 if "users_db" not in st.session_state:
     st.session_state.users_db = load_sheet_data("Users")
+
 if "jobs_db" not in st.session_state:
     st.session_state.jobs_db = load_sheet_data("Jobs")
+
 if "tech_status_db" not in st.session_state:
     st.session_state.tech_status_db = load_sheet_data("TechStatus")
+
 if "service_reports_db" not in st.session_state:
     st.session_state.service_reports_db = load_sheet_data("ServiceReports")
+
 if "amc_contracts_db" not in st.session_state:
     st.session_state.amc_contracts_db = load_sheet_data("AMCContracts")
+
 if "selected_job_for_report" not in st.session_state:
     st.session_state.selected_job_for_report = None
 
 # -----------------------------------------------------------------------------
-# 3. CATEGORIZED EQUIPMENT CONFIGURATION
+# 2. CHECKLIST DATA CONFIGURATION
 # -----------------------------------------------------------------------------
+
 EQUIPMENT_DATA = {
     "Rolling Shutter": {
         "types": [
@@ -188,144 +169,12 @@ EQUIPMENT_DATA = {
             "Full Cycle High-Speed Opening & Closing Operation Check",
             "Safety Reversing Test on Obstacle Detection"
         ]
-    },
-    "Sectional Door": {
-        "types": [
-            "Industrial Sectional Door",
-            "Residential Overhead Door",
-            "Insulated Sectional Door",
-            "Vision / Full-Glazed Door",
-            "Other"
-        ],
-        "checklist": [
-            "Door Panels (Damage, Alignment, Cracks)",
-            "Torsion / Extension Spring Tension & Condition",
-            "Spring Anti-Drop Safety Device",
-            "Steel Lifting Cables (Fraying, Wear, Tension)",
-            "Cable Failure Safety Device (Bottom Bracket)",
-            "Side Vertical & Horizontal Guide Tracks",
-            "Track Rollers, Hinges & Shaft Bearings",
-            "Drive Motor Unit & Gearbox Condition",
-            "Control Panel & Electrical Wiring",
-            "Limit Switches (Open / Close Stop Positions)",
-            "Safety Edge / Safety Light Curtains",
-            "Infrared Safety Photocells",
-            "Remote Control & Push Button Switches",
-            "Manual Emergency Release (Chain / Declutch)",
-            "Rubber Bottom, Side & Top Weather Seals",
-            "Lubrication (Springs, Bearings, Rollers, Hinges)",
-            "Smooth Operation, Noise & Vibration Check",
-            "Final Functional & Auto-Reverse Safety Test"
-        ]
-    },
-    "Automatic Gate Barrier": {
-        "types": [
-            "Electromechanical Gate Barrier",
-            "Hydraulic Gate Barrier",
-            "Articulated Arm Barrier",
-            "Other"
-        ],
-        "checklist": [
-            "Barrier Housing / Cabinet (Physical Condition & Lock)",
-            "Barrier Boom Arm Condition & Alignment",
-            "Balancing Spring Tension & Adjustment",
-            "Motor & Gearbox / Hydraulic Pump Unit",
-            "Drive Lever, Mechanical Stops & Bearings",
-            "Control Panel & Microprocessor Board Settings",
-            "Electrical Wiring, Terminations & Grounding",
-            "Limit Switches (Open / Close Positioning)",
-            "Inductive Loop Detector & Ground Loops",
-            "Safety Photocells / Light Beams",
-            "Boom Rubber Safety Edge / LED Warning Lights",
-            "Access Control Integration (RFID / Card Reader / UHF)",
-            "Push Button Station & Remote Keyfobs",
-            "Manual Emergency Release Key Mechanism",
-            "Lubrication of Pivot Joints & Internal Linkages",
-            "Anchor Bolts & Foundation Stability",
-            "Abnormal Noise, Vibration & Slowdown Speed",
-            "Final Functional Test & Safety Auto-Reverse Check"
-        ]
-    },
-    "Sliding Gate": {
-        "types": [
-            "Tracked Sliding Gate",
-            "Cantilever Sliding Gate",
-            "Telescopic Sliding Gate",
-            "Heavy Industrial Sliding Gate",
-            "Other"
-        ],
-        "checklist": [
-            "Gate Leaf Physical Condition & Frame Structural Integrity",
-            "Bottom Track Rail / Cantilever Carriage Wheels Condition",
-            "Top Guide Rollers & Guide Channel Alignment",
-            "Gear Rack & Pinion Tooth Engagement & Alignment",
-            "Sliding Gate Motor Unit & Oil Level / Gearbox",
-            "Mechanical Physical End Stops (Open & Close Positions)",
-            "Limit Switches / Magnetic Limit Sensors",
-            "Control Board Wiring, Fuses & Earth Connections",
-            "Infrared Safety Photocells Alignment & Cleanliness",
-            "Safety Edge Bumper & Obstacle Sensitivity Force Adjustment",
-            "Flashing Warning Lamp & Audible Buzzer Operation",
-            "Push Button Station, Key Switch & Keyfob Operation",
-            "Access Control Integration (GSM / Intercom / Card Reader)",
-            "Manual Key Release Mechanism & Declutch Operation",
-            "Greasing of Rack, Wheels, Rollers & Bearings",
-            "Foundation Bolts & Motor Mounting Base Stability",
-            "Gate Travel Smoothness, Noise & Vibration Check",
-            "Final Functional Test & Safety Auto-Reverse Test"
-        ]
     }
 }
 
-if "active_category" not in st.session_state:
-    st.session_state.active_category = list(EQUIPMENT_DATA.keys())[0]
-
 # -----------------------------------------------------------------------------
-# 4. HELPER FUNCTIONS & GOOGLE DRIVE UPLOADER
+# 3. HELPER FUNCTIONS & DIALOG POPUPS
 # -----------------------------------------------------------------------------
-def upload_photos_to_drive(file_list, folder_name="AMC_Site_Photos"):
-    """Uploads files to a target Google Drive folder and returns direct share links."""
-    creds_dict = st.secrets["gcp_service_account"]
-    scopes = ["https://www.googleapis.com/auth/drive"]
-    credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-    drive_service = build("drive", "v3", credentials=credentials)
-
-    query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-    results = drive_service.files().list(q=query, fields="files(id)").execute()
-    folders = results.get("files", [])
-
-    if folders:
-        folder_id = folders[0]["id"]
-    else:
-        folder_metadata = {
-            "name": folder_name,
-            "mimeType": "application/vnd.google-apps.folder"
-        }
-        folder = drive_service.files().create(body=folder_metadata, fields="id").execute()
-        folder_id = folder.get("id")
-
-    uploaded_links = []
-
-    for file in file_list:
-        file_metadata = {
-            "name": f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{file.name}",
-            "parents": [folder_id]
-        }
-        media = MediaIoBaseUpload(io.BytesIO(file.getvalue()), mimetype=file.type, resumable=True)
-        uploaded_file = drive_service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields="id, webViewLink"
-        ).execute()
-
-        drive_service.permissions().create(
-            fileId=uploaded_file.get("id"),
-            body={"role": "reader", "type": "anyone"}
-        ).execute()
-
-        uploaded_links.append(uploaded_file.get("webViewLink"))
-
-    return uploaded_links
 
 def make_google_maps_link(address, city, pincode=""):
     query = urllib.parse.quote(f"{address}, {city} {pincode}".strip())
@@ -356,54 +205,115 @@ def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
         st.info("No work orders recorded for this technician.")
 
 # -----------------------------------------------------------------------------
+# 4. BRANDED UI STYLING
+# -----------------------------------------------------------------------------
+
+st.markdown("""
+<style>
+    .stTabs [data-baseweb="tab-highlight"] { background-color: #1565C0 !important; }
+    .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #1565C0 !important; font-weight: 700 !important; }
+    [data-testid="stSidebar"] { background-color: #F8FAFC !important; }
+    .sidebar-logo-sub { color: #10B981; font-weight: 800; font-size: 0.95rem; letter-spacing: 1.5px; text-align: center; margin-top: 6px; }
+    
+    .stButton > button, div[data-testid="stForm"] button { 
+        background-color: #1565C0 !important; 
+        color: #FFFFFF !important; 
+        border-radius: 8px !important; 
+        font-weight: 600 !important; 
+        width: 100% !important; 
+    }
+    .stButton > button:hover, div[data-testid="stForm"] button:hover { background-color: #0D47A1 !important; }
+    a { color: #1565C0 !important; }
+    
+    div[data-testid="stForm"] { 
+        background-color: #FFFFFF; 
+        border: 2px solid #1565C0; 
+        border-radius: 16px; 
+        padding: 24px; 
+    }
+    .login-container div[data-testid="stForm"] { padding: 20px 28px !important; max-width: 360px; margin: 0 auto; text-align: center; }
+
+    div[data-baseweb="select"] {
+        background-color: transparent !important;
+    }
+    div[data-baseweb="select"] > div {
+        background-color: #F8FAFC !important;
+        border-color: #CBD5E1 !important;
+        color: #0F172A !important;
+    }
+    
+    .equipment-box {
+        background-color: #F8FAFC;
+        border-left: 5px solid #0F172A;
+        border-radius: 8px;
+        padding: 12px 18px;
+        margin-bottom: 20px;
+    }
+    .equipment-title {
+        color: #0F172A !important;
+        font-weight: 700;
+        margin: 0 0 10px 0;
+        font-size: 1.25rem;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# -----------------------------------------------------------------------------
 # 5. LOGIN SCREEN
 # -----------------------------------------------------------------------------
+
 if "user" not in st.session_state:
     st.session_state.user = None
 
 if st.session_state.user is None:
-    st.markdown("<div class='login-container'>", unsafe_allow_html=True)
-    logo_path = get_logo_path()
-    if logo_path:
-        st.image(logo_path, use_container_width=True)
-    else:
-        st.markdown("<h2 style='text-align: center; color: #1565C0; margin:0;'>⚙️ SIDHARTH</h2>", unsafe_allow_html=True)
-    
-    st.markdown("<h3 style='text-align:center; color:#1565C0; margin-bottom: 20px;'>AMC Tracker</h3>", unsafe_allow_html=True)
-    user_id_input = st.text_input("User ID", placeholder="e.g. TECH01").strip().upper()
-    password_input = st.text_input("Password", type="password", placeholder="Enter password").strip()
-    
-    if st.button("Sign In", type="primary", use_container_width=True):
-        user_df = st.session_state.users_db
-        match = user_df[(user_df["User_ID"].astype(str) == user_id_input) & (user_df["Password"].astype(str) == password_input)]
-        if not match.empty:
-            st.session_state.user = match.iloc[0].to_dict()
-            st.rerun()
-        else:
-            st.error("❌ Invalid User ID or Password")
-    st.markdown("</div>", unsafe_allow_html=True)
+    col_left, col_center, col_right = st.columns([1.2, 1.3, 1.2])
+
+    with col_center:
+        st.markdown("<div class='login-container'>", unsafe_allow_html=True)
+        with st.form("login_form"):
+            logo_path = get_logo_path()
+            if logo_path:
+                st.image(logo_path, use_container_width=True)
+            else:
+                st.markdown("<h2 style='text-align: center; color: #0D47A1; margin:0;'>⚙️ SIDHARTH</h2>", unsafe_allow_html=True)
+            
+            st.markdown("<h3 style='text-align:center; color:#0D47A1;'>AMC Tracker</h3>", unsafe_allow_html=True)
+            user_id_input = st.text_input("User ID", placeholder="e.g. TECH01").strip().upper()
+            password_input = st.text_input("Password", type="password", placeholder="Enter password").strip()
+            
+            if st.form_submit_button("Sign In"):
+                user_df = st.session_state.users_db
+                match = user_df[(user_df["User_ID"].astype(str) == user_id_input) & (user_df["Password"].astype(str) == password_input)]
+                if not match.empty:
+                    st.session_state.user = match.iloc[0].to_dict()
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid User ID or Password")
+        st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
 # -----------------------------------------------------------------------------
 # 6. SIDEBAR
 # -----------------------------------------------------------------------------
+
 with st.sidebar:
     logo_path = get_logo_path()
     if logo_path:
         st.image(logo_path, use_container_width=True)
     else:
-        st.markdown("<h3 style='color: #1565C0; text-align:center;'>⚙️ SIDHARTH</h3>", unsafe_allow_html=True)
-    st.markdown("<div style='color: #10B981; font-weight: 800; font-size: 0.95rem; text-align: center;'>AMC TRACKER</div>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #0D47A1; text-align:center;'>⚙️ SIDHARTH</h3>", unsafe_allow_html=True)
+    st.markdown("<div class='sidebar-logo-sub'>AMC TRACKER</div>", unsafe_allow_html=True)
     st.divider()
     st.markdown(f"**Logged User:** {st.session_state.user['Full_Name']}")
     st.markdown(f"**Role:** `{st.session_state.user['Role']}`")
-    if st.button("Logout", use_container_width=True):
+    if st.button("Logout"):
         st.session_state.user = None
         st.rerun()
 
 # -----------------------------------------------------------------------------
-# 7. MAIN TECHNICIAN DASHBOARD
+# 7. TECHNICIAN DASHBOARD
 # -----------------------------------------------------------------------------
+
 if st.session_state.user["Role"] == "Technician":
     tech_id = str(st.session_state.user["User_ID"])
     tech_name = st.session_state.user["Full_Name"]
@@ -427,9 +337,7 @@ if st.session_state.user["Role"] == "Technician":
         "📜 Service History"
     ])
 
-    # -------------------------------------------------------------------------
-    # TAB 1: Assigned Work Orders
-    # -------------------------------------------------------------------------
+    # TAB 1: Assigned Jobs
     with tech_tab1:
         st.subheader("Assigned Maintenance Tasks")
         tech_jobs = all_tech_jobs[all_tech_jobs["Status"] != "Completed"]
@@ -468,9 +376,7 @@ if st.session_state.user["Role"] == "Technician":
                             st.toast(f"Selected {job['Job_ID']} for service report!")
                 st.divider()
 
-    # -------------------------------------------------------------------------
-    # TAB 2: Service Report Form (With Inline Choices & Drive Photo Uploads)
-    # -------------------------------------------------------------------------
+    # TAB 2: Service Report Form
     with tech_tab2:
         st.subheader("📝 Submit Client Service Report")
         
@@ -480,19 +386,19 @@ if st.session_state.user["Role"] == "Technician":
         ]
         
         if pending_tech_jobs.empty:
-            st.info("🎉 No pending tasks found. Select a task or assign a work order first.")
+            st.info("🎉 No pending or assigned tasks found for you to submit a report for.")
         else:
             job_options = pending_tech_jobs["Job_ID"].tolist()
+            
             default_index = 0
             if st.session_state.selected_job_for_report in job_options:
                 default_index = job_options.index(st.session_state.selected_job_for_report)
                 
-            selected_job_id = st.radio(
+            selected_job_id = st.selectbox(
                 "Select Assigned Job / Task*", 
-                options=job_options, 
+                job_options, 
                 index=default_index,
-                horizontal=True,
-                format_func=lambda x: f"{x} — {pending_tech_jobs[pending_tech_jobs['Job_ID'] == x]['Client_Name'].values[0]}"
+                format_func=lambda x: f"{x} — {pending_tech_jobs[pending_tech_jobs['Job_ID'] == x]['Client_Name'].values[0]} ({pending_tech_jobs[pending_tech_jobs['Job_ID'] == x]['City'].values[0]})"
             )
             
             selected_job = pending_tech_jobs[pending_tech_jobs["Job_ID"] == selected_job_id].iloc[0]
@@ -504,257 +410,347 @@ if st.session_state.user["Role"] == "Technician":
             contracts_df = st.session_state.amc_contracts_db
             contract_options = ["N/A"] + contracts_df["AMC_Contract_No"].astype(str).tolist() if not contracts_df.empty else ["N/A"]
 
-            # Header Info
-            h_col1, h_col2 = st.columns(2)
-            with h_col1:
+            c_header1, c_header2 = st.columns(2)
+            with c_header1:
                 st.text_input("Client Name", value=auto_client_name, disabled=True)
-                selected_contract_no = st.selectbox("Link AMC Contract Number (Optional)", contract_options, key="select_amc_contract")
-            with h_col2:
-                rpt_visit_num_str = st.radio(
-                    "AMC Visit Sequence*", 
-                    ["Visit 1 of 4", "Visit 2 of 4", "Visit 3 of 4", "Visit 4 of 4"], 
-                    horizontal=True,
-                    key="select_visit_seq"
-                )
-
-            st.divider()
-
-            # Inline Equipment Category Switcher
-            st.markdown("### Select Equipment Category*")
-            current_category = st.radio(
-                "Category",
-                options=list(EQUIPMENT_DATA.keys()),
-                horizontal=True,
-                key="active_category_radio",
-                label_visibility="collapsed"
-            )
-
-            st.divider()
-
-            category_data = EQUIPMENT_DATA[current_category]
-            category_types = category_data["types"]
-            category_checklist = category_data["checklist"]
-
-            st.markdown(f"### 1. Equipment Details — **{current_category}**")
-
-            # Inline Equipment Type Selector
-            st.markdown("**Equipment Type***")
-            eq_type = st.radio(
-                "Equipment Type",
-                options=category_types,
-                horizontal=True,
-                key=f"eq_type_radio_{current_category}",
-                label_visibility="collapsed"
-            )
-
-            eq_col1, eq_col2, eq_col3, eq_col4 = st.columns([2.5, 2.5, 1.5, 2.5])
-            with eq_col1:
-                eq_make_model = st.text_input("Make / Model", placeholder="e.g. Sidharth", key=f"eq_make_{current_category}")
-            with eq_col2:
-                eq_size = st.text_input("Door / Gate Size", placeholder="e.g. 4000x4500 mm", key=f"eq_size_{current_category}")
-            with eq_col3:
-                eq_qty = st.number_input("Qty", min_value=1, value=1, key=f"eq_qty_{current_category}")
-            with eq_col4:
-                eq_condition = st.radio("Condition*", ["Good", "Requires Repair", "Critical", "Replaced"], horizontal=True, key=f"eq_cond_{current_category}")
-
-            st.markdown("### General Visit Details")
-            c_det1, c_det2 = st.columns(2)
-            with c_det1:
-                rpt_site_location = st.text_input("Site / Location*", value=auto_address, key=f"loc_{current_category}")
-                rpt_service_date = st.date_input("Service Date", value=date.today(), key=f"sdate_{current_category}")
-            with c_det2:
-                rpt_next_due = st.date_input("Next Service Due Date", value=date.today() + pd.Timedelta(days=90), key=f"ndate_{current_category}")
-
-            st.markdown(f"### 2. Preventive Maintenance Checklist ({current_category})")
+                selected_contract_no = st.selectbox("Link AMC Contract Number (Optional)", contract_options)
             
-            checklist_results = {}
-            for idx, point in enumerate(category_checklist, 1):
-                col_num, col_point, col_status, col_remark = st.columns([0.5, 4.0, 3.5, 4.0])
-                with col_num:
-                    st.write(f"**{idx}.**")
-                with col_point:
-                    st.write(point)
-                with col_status:
-                    status = st.radio(
-                        "Status", 
-                        ["Satisfactory", "Repaired On-Site", "Action Required", "Not Applicable"], 
-                        horizontal=False, 
-                        key=f"chk_{current_category}_{idx}",
-                        label_visibility="collapsed"
-                    )
-                with col_remark:
-                    remark = st.text_input(
-                        "Remarks", 
-                        placeholder="Action taken / Remark", 
-                        key=f"rem_{current_category}_{idx}",
-                        label_visibility="collapsed"
-                    )
+            with c_header2:
+                selected_category = st.selectbox("Equipment Category*", ["Rolling Shutter", "High Speed Door"])
+                rpt_visit_num_str = st.selectbox("AMC Visit Sequence*", ["Visit 1 of 4", "Visit 2 of 4", "Visit 3 of 4", "Visit 4 of 4"])
+
+            st.divider()
+
+            with st.form(f"service_report_form_{tech_id}"):
+                st.markdown("### General Visit Details")
+                c_det1, c_det2 = st.columns(2)
+                with c_det1:
+                    rpt_site_location = st.text_input("Site / Location*", value=auto_address)
+                    rpt_service_date = st.date_input("Service Date", value=date.today())
+                with c_det2:
+                    rpt_next_due = st.date_input("Next Service Due Date", value=date.today() + pd.Timedelta(days=90))
+
+                # Section 1: Equipment Details
+                st.markdown("<div class='equipment-box'><h3 class='equipment-title'>1. Equipment Details</h3>", unsafe_allow_html=True)
+                eq_col1, eq_col2, eq_col3, eq_col4, eq_col5 = st.columns([3, 2, 2, 1, 2])
+                with eq_col1:
+                    eq_type = st.selectbox("Equipment Type", EQUIPMENT_DATA[selected_category]["types"])
+                with eq_col2:
+                    eq_make_model = st.text_input("Make / Model", placeholder="e.g. Sidharth / Standard")
+                with eq_col3:
+                    eq_size = st.text_input("Door Size (W x H)", placeholder="e.g. 4000x4500 mm")
+                with eq_col4:
+                    eq_qty = st.number_input("Qty", min_value=1, value=1)
+                with eq_col5:
+                    eq_condition = st.selectbox("Condition", ["Good", "Requires Repair", "Critical", "Replaced"])
+                st.markdown("</div>", unsafe_allow_html=True)
+
+                # Section 2: Preventive Maintenance Checklist
+                st.markdown(f"### 2. Preventive Maintenance Checklist ({selected_category})")
                 
-                checklist_results[f"Q{idx}"] = {
-                    "choice": status, 
-                    "remark": remark.strip() if remark.strip() else "N/A"
-                }
-                st.divider()
-
-            st.markdown("### 3. Remarks & Recommendations")
-            rpt_remarks = st.text_area("General Remarks*", placeholder="Overall observations, work executed, recommendations...", key=f"rem_area_{current_category}")
-
-            # Photo Upload Options
-            st.divider()
-            st.markdown("### 📷 Site & Sheet Documentation")
-
-            col_img1, col_img2 = st.columns(2)
-            with col_img1:
-                sheet_photo = st.file_uploader(
-                    "Upload Physical Sheet Photo (Optional)", 
-                    type=["jpg", "jpeg", "png"], 
-                    key=f"sheet_upload_{current_category}"
-                )
-
-            with col_img2:
-                site_photos = st.file_uploader(
-                    "Upload Site Photos (4 to 8 Photos Required)*", 
-                    type=["jpg", "jpeg", "png"], 
-                    accept_multiple_files=True, 
-                    key=f"site_photos_{current_category}"
-                )
-
-            if site_photos:
-                if 4 <= len(site_photos) <= 8:
-                    st.success(f"✅ {len(site_photos)} site photos selected.")
-                else:
-                    st.warning(f"⚠️ Selected {len(site_photos)} photos. Please attach between 4 and 8 site photos.")
-
-            st.divider()
-
-            if st.button("Submit Service Report", type="primary", key=f"submit_btn_{current_category}", use_container_width=True):
-                if not rpt_site_location or not rpt_remarks:
-                    st.error("⚠️ Please fill in all required text fields marked with *")
-                elif not site_photos or len(site_photos) < 4 or len(site_photos) > 8:
-                    st.error("⚠️ Please attach between 4 and 8 site photos before submitting.")
-                else:
-                    with st.spinner("📤 Uploading site photos to Google Drive... Please wait."):
-                        sheet_link = ""
-                        if sheet_photo:
-                            uploaded_sheet = upload_photos_to_drive([sheet_photo], folder_name="AMC_Physical_Sheets")
-                            if uploaded_sheet:
-                                sheet_link = uploaded_sheet[0]
-
-                        site_photo_links = upload_photos_to_drive(site_photos, folder_name="AMC_Site_Photos")
-                        site_links_str = " | ".join(site_photo_links)
-
-                    try:
-                        local_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
-                        submit_time_str = datetime.now(local_tz).strftime("%Y-%m-%d %I:%M %p")
-                    except Exception:
-                        submit_time_str = datetime.now().strftime("%Y-%m-%d %I:%M %p")
-
-                    report_entry = {
-                        "Report_ID": f"RPT-{len(st.session_state.service_reports_db) + 1001}",
-                        "Job_ID": selected_job_id,
-                        "Tech_ID": tech_id,
-                        "Tech_Name": tech_name,
-                        "Client_Name": auto_client_name,
-                        "Site_Location": rpt_site_location,
-                        "AMC_Contract_No": selected_contract_no,
-                        "Category": current_category,
-                        "Equipment_Type": eq_type,
-                        "Make_Model": eq_make_model,
-                        "Door_Size": eq_size,
-                        "Qty": str(eq_qty),
-                        "Condition": eq_condition,
-                        "Checklist_Data": "Stored in Q1-Q18 columns",
-                        "Service_Date": str(rpt_service_date),
-                        "Visit_Number": rpt_visit_num_str,
-                        "Next_Service_Due_Date": str(rpt_next_due),
-                        "Remarks": rpt_remarks,
-                        "Submitted_At": submit_time_str,
-                        "Physical_Sheet_URL": sheet_link,
-                        "Site_Photos_URLs": site_links_str
+                checklist_results = {}
+                checklist_items = EQUIPMENT_DATA[selected_category]["checklist"]
+                
+                for idx, point in enumerate(checklist_items, 1):
+                    col_num, col_point, col_status, col_remark = st.columns([0.5, 4.0, 3.5, 4.0])
+                    with col_num:
+                        st.write(f"**{idx}.**")
+                    with col_point:
+                        st.write(point)
+                    with col_status:
+                        status = st.radio(
+                            "Status", 
+                            ["Satisfactory", "Repaired On-Site", "Action Required", "Not Applicable"], 
+                            horizontal=False, 
+                            key=f"check_{selected_category}_{idx}",
+                            label_visibility="collapsed"
+                        )
+                    with col_remark:
+                        remark = st.text_input(
+                            "Remarks", 
+                            placeholder="Action taken / Remark", 
+                            key=f"rem_{selected_category}_{idx}",
+                            label_visibility="collapsed"
+                        )
+                    
+                    # Save status and remark under Q1..Q18 numerical keys
+                    checklist_results[f"Q{idx}"] = {
+                        "choice": status, 
+                        "remark": remark.strip() if remark.strip() else "N/A"
                     }
+                    st.divider()
 
-                    for idx in range(1, 19):
-                        q_key = f"Q{idx}"
-                        if q_key in checklist_results:
-                            report_entry[f"Q{idx}_Choice"] = checklist_results[q_key]["choice"]
-                            report_entry[f"Q{idx}_Remark"] = checklist_results[q_key]["remark"]
-                        else:
-                            report_entry[f"Q{idx}_Choice"] = "N/A"
-                            report_entry[f"Q{idx}_Remark"] = "N/A"
+                # Section 3: Overall Remarks
+                st.markdown("### 3. Remarks / Recommendations")
+                rpt_remarks = st.text_area("General Remarks & Summary*", placeholder="Overall observations, recommendations...")
 
-                    valid_columns = load_sheet_data("ServiceReports").columns.tolist()
-                    new_row_df = pd.DataFrame([report_entry])[valid_columns]
+                submit_report = st.form_submit_button("Submit Service Report")
+                
+                if submit_report:
+                    if not rpt_site_location or not rpt_remarks:
+                        st.error("⚠️ Please fill in all required fields marked with *")
+                    else:
+                        try:
+                            local_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
+                            submit_time_str = datetime.now(local_tz).strftime("%Y-%m-%d %I:%M %p")
+                        except Exception:
+                            submit_time_str = datetime.now().strftime("%Y-%m-%d %I:%M %p")
 
-                    st.session_state.service_reports_db = pd.concat([st.session_state.service_reports_db[valid_columns], new_row_df], ignore_index=True)
-                    save_sheet_data(st.session_state.service_reports_db, "ServiceReports")
-                    
-                    st.session_state.jobs_db.loc[st.session_state.jobs_db["Job_ID"] == selected_job_id, "Status"] = "Completed"
-                    save_sheet_data(st.session_state.jobs_db, "Jobs")
-                    
-                    st.session_state.selected_job_for_report = None
-                    st.toast(f"✅ Service report & photos submitted successfully for {selected_job_id}!", icon="📄")
-                    st.rerun()
+                        # Core metadata record (NO legacy P01..P18 keys)
+                        report_entry = {
+                            "Report_ID": f"RPT-{len(st.session_state.service_reports_db) + 1001}",
+                            "Job_ID": selected_job_id,
+                            "Tech_ID": tech_id,
+                            "Tech_Name": tech_name,
+                            "Client_Name": auto_client_name,
+                            "Site_Location": rpt_site_location,
+                            "AMC_Contract_No": selected_contract_no,
+                            "Category": selected_category,
+                            "Equipment_Type": eq_type,
+                            "Make_Model": eq_make_model,
+                            "Door_Size": eq_size,
+                            "Qty": str(eq_qty),
+                            "Condition": eq_condition,
+                            "Checklist_Data": "Stored in Q1-Q18 columns",
+                            "Service_Date": str(rpt_service_date),
+                            "Visit_Number": rpt_visit_num_str,
+                            "Next_Service_Due_Date": str(rpt_next_due),
+                            "Remarks": rpt_remarks,
+                            "Submitted_At": submit_time_str
+                        }
 
-    # -------------------------------------------------------------------------
-    # TAB 3: Broadcast Location & Status
-    # -------------------------------------------------------------------------
+                        # Dynamically populate EXCLUSIVELY Q1_Choice, Q1_Remark through Q18_Choice, Q18_Remark
+                        for idx in range(1, 19):
+                            q_key = f"Q{idx}"
+                            if q_key in checklist_results:
+                                report_entry[f"Q{idx}_Choice"] = checklist_results[q_key]["choice"]
+                                report_entry[f"Q{idx}_Remark"] = checklist_results[q_key]["remark"]
+                            else:
+                                report_entry[f"Q{idx}_Choice"] = "N/A"
+                                report_entry[f"Q{idx}_Remark"] = "N/A"
+
+                        # Ensure DataFrame conforms strictly to approved columns (19 base + 36 Q-cols)
+                        valid_columns = load_sheet_data("ServiceReports").columns.tolist()
+                        new_row_df = pd.DataFrame([report_entry])[valid_columns]
+
+                        st.session_state.service_reports_db = pd.concat([st.session_state.service_reports_db[valid_columns], new_row_df], ignore_index=True)
+                        save_sheet_data(st.session_state.service_reports_db, "ServiceReports")
+                        
+                        # Set job status to Completed
+                        st.session_state.jobs_db.loc[st.session_state.jobs_db["Job_ID"] == selected_job_id, "Status"] = "Completed"
+                        save_sheet_data(st.session_state.jobs_db, "Jobs")
+                        
+                        st.session_state.selected_job_for_report = None
+                        st.toast(f"✅ Service report submitted for {selected_job_id}!", icon="📄")
+                        st.rerun()
+
+    # TAB 3: Broadcast Location
     with tech_tab3:
         st.subheader("Broadcast Live Location & Next Target")
         curr_rec = st.session_state.tech_status_db[st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id]
         
-        c_curr_city = curr_rec["Current_City"].values[0] if not curr_rec.empty else ""
-        c_curr_pin = curr_rec["Current_Pincode"].values[0] if not curr_rec.empty else ""
-        c_curr_stat = curr_rec["Current_Status"].values[0] if not curr_rec.empty else "Available"
-        c_next_city = curr_rec["Next_City"].values[0] if not curr_rec.empty else ""
-        c_next_pin = curr_rec["Next_Pincode"].values[0] if not curr_rec.empty else ""
-        c_eta = curr_rec["ETA"].values[0] if not curr_rec.empty else ""
+        c_city = str(curr_rec["Current_City"].values[0]) if not curr_rec.empty and "Current_City" in curr_rec.columns else ""
+        c_pin = str(curr_rec["Current_Pincode"].values[0]) if not curr_rec.empty and "Current_Pincode" in curr_rec.columns else ""
+        c_status_raw = str(curr_rec["Current_Status"].values[0]).strip().title() if not curr_rec.empty and "Current_Status" in curr_rec.columns else "Available"
+        n_city = str(curr_rec["Next_City"].values[0]) if not curr_rec.empty and "Next_City" in curr_rec.columns else ""
+        n_pin = str(curr_rec["Next_Pincode"].values[0]) if not curr_rec.empty and "Next_Pincode" in curr_rec.columns else ""
+        eta_val = str(curr_rec["ETA"].values[0]) if not curr_rec.empty and "ETA" in curr_rec.columns else ""
 
-        col_s1, col_s2 = st.columns(2)
-        with col_s1:
-            st.markdown("##### 📍 Current Location")
-            t_curr_city = st.text_input("Current City", value=c_curr_city, key="ts_curr_city")
-            t_curr_pin = st.text_input("Current Pincode", value=c_curr_pin, key="ts_curr_pin")
-            t_curr_stat = st.selectbox("Current Status", ["Available", "In Transit", "Working On Site", "Off Duty"], index=["Available", "In Transit", "Working On Site", "Off Duty"].index(c_curr_stat) if c_curr_stat in ["Available", "In Transit", "Working On Site", "Off Duty"] else 0, key="ts_curr_stat")
-        
-        with col_s2:
-            st.markdown("##### 🎯 Next Destination (Optional)")
-            t_next_city = st.text_input("Next City / Target Location", value=c_next_city, key="ts_next_city")
-            t_next_pin = st.text_input("Next Pincode", value=c_next_pin, key="ts_next_pin")
-            t_eta = st.text_input("Estimated Arrival Time (ETA)", value=c_eta, placeholder="e.g. 02:30 PM", key="ts_eta")
+        with st.form(f"broadcast_location_form_{tech_id}"):
+            c1, c2 = st.columns(2)
+            with c1:
+                input_curr_city = st.text_input("Current City", value=c_city)
+                input_curr_pin = st.text_input("Current Pin Code", value=c_pin, max_chars=6)
+                status_options = ["Available", "On Site", "In Transit"]
+                selected_idx = status_options.index(c_status_raw) if c_status_raw in status_options else 0
+                input_status = st.radio("Current Activity", status_options, index=selected_idx, horizontal=True)
+                
+            with c2:
+                input_next_city = st.text_input("Next Target City", value=n_city)
+                input_next_pin = st.text_input("Next Target Pin Code", value=n_pin, max_chars=6)
+                input_eta = st.text_input("ETA Arrival Time", value=eta_val)
+                
+            if st.form_submit_button("Broadcast Location Update"):
+                try:
+                    local_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
+                    now_str = datetime.now(local_tz).strftime("%I:%M %p")
+                except Exception:
+                    now_str = datetime.now().strftime("%I:%M %p")
+                
+                if tech_id in st.session_state.tech_status_db["Tech_ID"].astype(str).values:
+                    st.session_state.tech_status_db.loc[
+                        st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id,
+                        ["Current_City", "Current_Pincode", "Current_Status", "Next_City", "Next_Pincode", "ETA", "Last_Updated"]
+                    ] = [input_curr_city, input_curr_pin, input_status, input_next_city, input_next_pin, input_eta, now_str]
+                else:
+                    new_row = {"Tech_ID": tech_id, "Current_City": input_curr_city, "Current_Pincode": input_curr_pin, "Current_Status": input_status, "Next_City": input_next_city, "Next_Pincode": input_next_pin, "ETA": input_eta, "Last_Updated": now_str}
+                    st.session_state.tech_status_db = pd.concat([st.session_state.tech_status_db, pd.DataFrame([new_row])], ignore_index=True)
+                
+                save_sheet_data(st.session_state.tech_status_db, "TechStatus")
+                st.toast(f"📍 Location Broadcast Updated at {now_str}!", icon="✅")
+                st.rerun()
 
-        if st.button("Update Location & Status", type="primary", use_container_width=True):
-            try:
-                local_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
-                upd_time_str = datetime.now(local_tz).strftime("%Y-%m-%d %I:%M %p")
-            except Exception:
-                upd_time_str = datetime.now().strftime("%Y-%m-%d %I:%M %p")
-
-            status_entry = {
-                "Tech_ID": tech_id,
-                "Current_City": t_curr_city,
-                "Current_Pincode": t_curr_pin,
-                "Current_Status": t_curr_stat,
-                "Next_City": t_next_city,
-                "Next_Pincode": t_next_pin,
-                "ETA": t_eta,
-                "Last_Updated": upd_time_str
-            }
-            
-            df_status = st.session_state.tech_status_db
-            df_status = df_status[df_status["Tech_ID"].astype(str) != tech_id]
-            st.session_state.tech_status_db = pd.concat([df_status, pd.DataFrame([status_entry])], ignore_index=True)
-            save_sheet_data(st.session_state.tech_status_db, "TechStatus")
-            st.toast("✅ Location & Status successfully broadcasted!")
-            st.rerun()
-
-    # -------------------------------------------------------------------------
-    # TAB 4: Service History
-    # -------------------------------------------------------------------------
+    # TAB 4: History
     with tech_tab4:
-        st.subheader("📜 Submitted Service Reports History")
-        tech_reports = st.session_state.service_reports_db[st.session_state.service_reports_db["Tech_ID"].astype(str) == tech_id]
-        
-        if tech_reports.empty:
-            st.info("No submitted service reports found.")
+        st.subheader("My Service Record History")
+        reports_df = st.session_state.service_reports_db
+        if not reports_df.empty and "Tech_ID" in reports_df.columns:
+            my_reports = reports_df[reports_df["Tech_ID"].astype(str) == tech_id]
+            st.dataframe(my_reports, use_container_width=True)
         else:
-            st.dataframe(tech_reports, use_container_width=True)
+            st.info("📜 No service reports submitted yet.")
+
+# -----------------------------------------------------------------------------
+# 8. MANAGER COMMAND DASHBOARD
+# -----------------------------------------------------------------------------
+
+elif st.session_state.user["Role"] in ["Manager", "Admin"]:
+    st.markdown("<h1 style='color: #0D47A1;'>📡 Dispatch & AMC Control Center</h1>", unsafe_allow_html=True)
+
+    mgr_tab1, mgr_tab2, mgr_tab3, mgr_tab4 = st.tabs([
+        "MAP / Live Radar", 
+        "📄 Client Service Reports",
+        "📅 AMC Contract Manager",
+        "➕ Create Task / User"
+    ])
+
+    with mgr_tab1:
+        st.subheader("Technician Fleet Live Radar")
+        full_radar = pd.merge(st.session_state.tech_status_db, st.session_state.users_db[["User_ID", "Full_Name"]], left_on="Tech_ID", right_on="User_ID", how="left")
+        st.dataframe(full_radar, use_container_width=True)
+        
+        st.divider()
+        st.subheader("Inspect Technician Task Breakdown")
+        
+        tech_users = st.session_state.users_db[st.session_state.users_db["Role"] == "Technician"]
+        if not tech_users.empty:
+            c_sel_tech, c_btn_popup = st.columns([3, 1])
+            with c_sel_tech:
+                inspect_tech_id = st.selectbox(
+                    "Select Technician to View Stats", 
+                    tech_users["User_ID"].tolist(),
+                    format_func=lambda x: f"{x} - {tech_users[tech_users['User_ID']==x]['Full_Name'].values[0]}"
+                )
+            
+            with c_btn_popup:
+                st.write("")
+                if st.button("📊 Open Tech Task Popup"):
+                    selected_tech_name = tech_users[tech_users["User_ID"] == inspect_tech_id]["Full_Name"].values[0]
+                    tech_jobs = st.session_state.jobs_db[st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == str(inspect_tech_id)]
+                    tot_cnt = len(tech_jobs)
+                    comp_cnt = len(tech_jobs[tech_jobs["Status"] == "Completed"])
+                    pend_cnt = tot_cnt - comp_cnt
+                    show_task_summary_popup(selected_tech_name, tot_cnt, comp_cnt, pend_cnt)
+
+        st.divider()
+        st.subheader("All Active Work Orders")
+        st.dataframe(st.session_state.jobs_db, use_container_width=True)
+
+    with mgr_tab2:
+        st.subheader("📋 Field Service Visit Reports Log")
+        st.dataframe(st.session_state.service_reports_db, use_container_width=True)
+
+    with mgr_tab3:
+        st.subheader("🗓️ AMC Client Contracts Management")
+        st.dataframe(st.session_state.amc_contracts_db, use_container_width=True)
+        st.divider()
+        st.markdown("### ✏️ Register / Update AMC Contract Limits")
+        
+        with st.form("edit_amc_contract_form"):
+            col_c1, col_c2 = st.columns(2)
+            with col_c1:
+                contract_no = st.text_input("AMC Contract Number*", placeholder="e.g. AMC-2026-88").strip()
+                c_client_name = st.text_input("Client Name*", placeholder="e.g. Apex Industries").strip()
+                visits_allowed = st.selectbox("Annual Allowed Visits Limit*", [2, 3, 4], index=2)
+            with col_c2:
+                contract_start = st.date_input("Contract Start Date", value=date.today())
+                contract_end = st.date_input("Contract End Date", value=date.today() + pd.Timedelta(days=365))
+            
+            if st.form_submit_button("Save / Update AMC Contract"):
+                if not contract_no or not c_client_name:
+                    st.error("⚠️ Contract Number and Client Name are required.")
+                else:
+                    contracts_df = st.session_state.amc_contracts_db
+                    if not contracts_df.empty and contract_no in contracts_df["AMC_Contract_No"].astype(str).values:
+                        st.session_state.amc_contracts_db.loc[
+                            st.session_state.amc_contracts_db["AMC_Contract_No"].astype(str) == contract_no,
+                            ["Client_Name", "Start_Date", "End_Date", "Allowed_Visits"]
+                        ] = [c_client_name, str(contract_start), str(contract_end), visits_allowed]
+                    else:
+                        new_contract = {
+                            "AMC_Contract_No": contract_no,
+                            "Client_Name": c_client_name,
+                            "Start_Date": str(contract_start),
+                            "End_Date": str(contract_end),
+                            "Allowed_Visits": visits_allowed
+                        }
+                        st.session_state.amc_contracts_db = pd.concat([st.session_state.amc_contracts_db, pd.DataFrame([new_contract])], ignore_index=True)
+                    
+                    save_sheet_data(st.session_state.amc_contracts_db, "AMCContracts")
+                    st.toast(f"✅ Contract {contract_no} saved!")
+                    st.rerun()
+
+    with mgr_tab4:
+        col_mgr_a, col_mgr_b = st.columns(2)
+        
+        with col_mgr_a:
+            st.subheader("Dispatch New Task")
+            with st.form("new_job_form"):
+                j_id = f"JOB-{len(st.session_state.jobs_db) + 101}"
+                client_name = st.text_input("Client Name")
+                client_phone = st.text_input("Client Phone")
+                address = st.text_input("Site Address")
+                city = st.text_input("City")
+                pincode = st.text_input("Pin Code", max_chars=6)
+                issue = st.text_area("Service Notes")
+                
+                tech_list = st.session_state.users_db[st.session_state.users_db["Role"] == "Technician"]
+                assigned_tech = st.selectbox(
+                    "Assign Technician", 
+                    options=tech_list["User_ID"].tolist(), 
+                    format_func=lambda x: f"{x} - {tech_list[tech_list['User_ID']==x]['Full_Name'].values[0]}"
+                )
+                
+                st.markdown("**Scheduled Date & Time**")
+                sched_col1, sched_col2 = st.columns(2)
+                with sched_col1:
+                    sched_date = st.date_input("Scheduled Date", min_value=date.today(), value=date.today())
+                with sched_col2:
+                    sched_time = st.time_input("Scheduled Time", value=time(14, 0))
+                
+                if st.form_submit_button("Task Created"):
+                    selected_datetime = datetime.combine(sched_date, sched_time)
+                    if selected_datetime < datetime.now():
+                        st.error("⚠️ Cannot schedule a task for a time that has already passed today.")
+                    else:
+                        scheduled_time_str = f"{sched_date.strftime('%d-%b-%Y')} at {sched_time.strftime('%I:%M %p')}"
+                        new_job_entry = {
+                            "Job_ID": j_id, "Assigned_Tech_ID": str(assigned_tech), "Client_Name": client_name,
+                            "Client_Phone": client_phone, "Address": address, "City": city, "Pincode": pincode,
+                            "Issue_Description": issue, "Status": "Assigned", "Scheduled_Time": scheduled_time_str
+                        }
+                        st.session_state.jobs_db = pd.concat([st.session_state.jobs_db, pd.DataFrame([new_job_entry])], ignore_index=True)
+                        save_sheet_data(st.session_state.jobs_db, "Jobs")
+                        st.toast(f"✅ Task Created ({j_id})!")
+                        st.rerun()
+
+        with col_mgr_b:
+            st.subheader("Register System User")
+            if st.session_state.user.get("Role") != "Admin":
+                st.info("🔒 System User Registration is restricted. It can be created by Admin only.")
+            else:
+                with st.form("add_user_form"):
+                    new_uid = st.text_input("User ID (e.g. TECH03)").strip().upper()
+                    new_name = st.text_input("Full Name")
+                    new_role = st.selectbox("Role", ["Technician", "Manager", "Admin"])
+                    new_pass = st.text_input("Password", type="password").strip()
+                    
+                    if st.form_submit_button("Create Account"):
+                        if new_uid in st.session_state.users_db["User_ID"].astype(str).values:
+                            st.error("User ID already exists!")
+                        else:
+                            user_entry = {"User_ID": new_uid, "Full_Name": new_name, "Role": new_role, "Password": new_pass}
+                            st.session_state.users_db = pd.concat([st.session_state.users_db, pd.DataFrame([user_entry])], ignore_index=True)
+                            save_sheet_data(st.session_state.users_db, "Users")
+                            st.toast(f"✅ Account for {new_name} created!")
+                            st.rerun()
