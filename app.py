@@ -224,11 +224,11 @@ st.markdown("""
     [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #E2E8F0; }
     .sidebar-logo-sub { color: #00A859; font-weight: 800; font-size: 0.85rem; letter-spacing: 1.5px; text-align: center; margin-top: 4px; }
     
-    /* =============================================================================
-   UPDATED LOGIN FORM STYLING
+   /* =============================================================================
+   LOGIN FORM STYLING (UPDATED)
    ============================================================================= */
 
-/* 1. Main Login Card Container (Replaces broken .login-box-container HTML div) */
+/* 1. Main Login Card Container */
 div[data-testid="stVerticalBlockBorderWrapper"] {
     background-color: #FFFFFF !important;
     border: 2px solid #0F3D7A !important;
@@ -265,25 +265,32 @@ div[data-testid="stForm"] {
     margin-top: 12px;
 }
 
-/* 4. Form Text Inputs */
+/* 4. Form Text Inputs with Blue Outline */
 div[data-testid="stTextInput"] input {
     background-color: #F0F4F8 !important;
-    border: 1px solid #E2E8F0 !important;
+    border: 1.5px solid #0F3D7A !important; /* Added Blue Outline */
     border-radius: 8px !important;
     color: #1E293B !important;
     height: 42px !important;
 }
 
-/* 5. Green Submit Button Styling */
+div[data-testid="stTextInput"] input:focus {
+    border-color: #0F3D7A !important;
+    box-shadow: 0 0 0 2px rgba(15, 61, 122, 0.2) !important;
+}
+
+/* 5. Center-Aligned Green Login Button */
 div[data-testid="stForm"] button[kind="primary"] {
-    background-color: #00A859 !important;
+    background-color: #00A859 !important; /* Green color matching the logo dot */
     color: #FFFFFF !important;
     border-radius: 8px !important;
     font-weight: 800 !important;
     font-size: 1rem !important;
-    padding: 12px 0px !important;
+    padding: 12px 24px !important;
     border: none !important;
-    width: 100% !important;
+    width: auto !important; /* Resized to fit content */
+    margin: 15px auto 0 auto !important; /* Centers the button horizontally */
+    display: block !important;
     box-shadow: 0 4px 10px rgba(0, 168, 89, 0.25) !important;
     transition: all 0.2s ease-in-out !important;
 }
@@ -292,8 +299,7 @@ div[data-testid="stForm"] button[kind="primary"]:hover {
     background-color: #008D4B !important;
     box-shadow: 0 6px 14px rgba(0, 168, 89, 0.35) !important;
     cursor: pointer !important;
-}
-    
+}    
     /* WhatsApp / Action Buttons */
     .wa-btn {
         display: inline-block;
@@ -350,7 +356,7 @@ if st.session_state.user is None:
             
             with st.form("login_form", clear_on_submit=False):
                 st.markdown("<div class='login-field-label'>Username / Name</div>", unsafe_allow_html=True)
-                user_input = st.text_input("Username / Name", placeholder="e.g. Parvesh Kumar or Vishak", label_visibility="collapsed").strip()
+                user_input = st.text_input("Username", placeholder="User Name", label_visibility="collapsed").strip()
                 
                 st.markdown("<div class='login-field-label'>Password / PIN</div>", unsafe_allow_html=True)
                 password_input = st.text_input("Password / PIN", type="password", placeholder="Enter password", label_visibility="collapsed").strip()
