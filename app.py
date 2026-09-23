@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 import zoneinfo
 import urllib.parse
 import os
@@ -36,15 +36,14 @@ except Exception as e:
     st.stop()
 
 def load_sheet_data(worksheet_name):
-    # Strict list of 19 base metadata columns
     service_report_cols = [
-        "Report_ID", "Job_ID", "Tech_ID", "Tech_Name", "Client_Name", "Site_Location", 
-        "AMC_Contract_No", "Category", "Equipment_Type", "Make_Model", "Door_Size", "Qty", 
-        "Condition", "Checklist_Data", "Service_Date", "Visit_Number", "Next_Service_Due_Date", 
-        "Remarks", "Submitted_At"
+        "Report_ID", "Job_ID", "Tech_ID", "Tech_Name", "Client_Name", "PO_Number", 
+        "Site_Location", "AMC_Contract_No", "Category", "Equipment_Type", "Make_Model", 
+        "Door_Size", "Qty", "Condition", "Checklist_Data", "Service_Date", "Visit_Number", 
+        "Next_Service_Due_Date", "Distance_Travelled_KM", "Time_Taken_Hours", "Work_Done_Details", 
+        "Site_Photo", "Problems_Faced", "Remarks", "Submitted_At"
     ]
     
-    # Append strictly Q1_Choice, Q1_Remark through Q18_Choice, Q18_Remark (55 columns total)
     for i in range(1, 19):
         service_report_cols.extend([f"Q{i}_Choice", f"Q{i}_Remark"])
 
@@ -53,7 +52,7 @@ def load_sheet_data(worksheet_name):
         "Jobs": ["Job_ID", "Assigned_Tech_ID", "Client_Name", "Client_Phone", "Address", "City", "Pincode", "Issue_Description", "Status", "Scheduled_Time"],
         "TechStatus": ["Tech_ID", "Current_City", "Current_Pincode", "Current_Status", "Next_City", "Next_Pincode", "ETA", "Last_Updated"],
         "ServiceReports": service_report_cols,
-        "AMCContracts": ["AMC_Contract_No", "Client_Name", "Start_Date", "End_Date", "Allowed_Visits"]
+        "AMCContracts": ["AMC_Contract_No", "PO_Number", "Client_Name", "Start_Date", "End_Date", "Allowed_Visits", "Next_Visit_Due"]
     }
     
     cols = default_columns.get(worksheet_name, [])
@@ -63,12 +62,10 @@ def load_sheet_data(worksheet_name):
         records = ws.get_all_records()
         df = pd.DataFrame(records)
         
-        # Guarantee all expected columns exist
         for col in cols:
             if col not in df.columns:
                 df[col] = ""
                 
-        # Return ONLY the defined columns to drop any rogue columns like P01_...
         return df[cols]
     except Exception:
         try:
@@ -173,7 +170,7 @@ EQUIPMENT_DATA = {
 }
 
 # -----------------------------------------------------------------------------
-# 3. HELPER FUNCTIONS & DIALOG POPUPS
+# 3. HELPER FUNCTIONS
 # -----------------------------------------------------------------------------
 
 def make_google_maps_link(address, city, pincode=""):
@@ -186,23 +183,25 @@ def get_logo_path():
             return name
     return None
 
-@st.dialog("📊 Task Progress Summary")
-def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
-    st.write(f"### Performance Overview for **{tech_name}**")
-    st.divider()
+def filter_df_by_date_range(df, date_col, filter_option):
+    if df.empty or date_col not in df.columns:
+        return df
     
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Assigned", total_cnt)
-    col2.metric("Completed", completed_cnt, delta=f"{completed_cnt} Done", delta_color="normal")
-    col3.metric("Pending", pending_cnt, delta=f"-{pending_cnt} Remaining", delta_color="inverse")
+    temp_df = df.copy()
+    temp_df[date_col] = pd.to_datetime(temp_df[date_col], errors='coerce')
+    today = pd.Timestamp(date.today())
     
-    st.divider()
-    if total_cnt > 0:
-        completion_pct = int((completed_cnt / total_cnt) * 100)
-        st.write(f"**Completion Rate:** {completion_pct}%")
-        st.progress(completion_pct / 100)
-    else:
-        st.info("No work orders recorded for this technician.")
+    if filter_option == "Today":
+        return temp_df[temp_df[date_col].dt.date == date.today()]
+    elif filter_option == "Weekly (Last 7 Days)":
+        return temp_df[temp_df[date_col] >= (today - timedelta(days=7))]
+    elif filter_option == "Monthly (Last 30 Days)":
+        return temp_df[temp_df[date_col] >= (today - timedelta(days=30))]
+    elif filter_option == "3 Months":
+        return temp_df[temp_df[date_col] >= (today - timedelta(days=90))]
+    elif filter_option == "Yearly":
+        return temp_df[temp_df[date_col] >= (today - timedelta(days=365))]
+    return temp_df
 
 # -----------------------------------------------------------------------------
 # 4. BRANDED UI STYLING
@@ -210,17 +209,12 @@ def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
 
 st.markdown("""
 <style>
-    /* Global Page Styling */
-    .stApp {
-        background-color: #F4F6F9 !important;
-    }
-
+    .stApp { background-color: #F4F6F9 !important; }
     .stTabs [data-baseweb="tab-highlight"] { background-color: #0F3D7A !important; }
     .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #0F3D7A !important; font-weight: 700 !important; }
     [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #E2E8F0; }
     .sidebar-logo-sub { color: #00A859; font-weight: 800; font-size: 0.85rem; letter-spacing: 1.5px; text-align: center; margin-top: 4px; }
     
-    /* Login Card Container */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #FFFFFF !important;
         border: 2px solid #0F3D7A !important;
@@ -231,7 +225,6 @@ st.markdown("""
         margin: 20px auto 0 auto !important;
     }
 
-    /* Reset Default Streamlit Form Border & Padding */
     div[data-testid="stForm"] {
         border: none !important;
         padding: 0 !important;
@@ -239,25 +232,16 @@ st.markdown("""
         box-shadow: none !important;
     }
 
-    /* Typography & Field Labels */
     .login-subtitle {
-        text-align: center;
-        color: #556B82;
-        font-size: 0.95rem;
-        font-weight: 600;
-        margin-top: -10px;
-        margin-bottom: 25px;
+        text-align: center; color: #556B82; font-size: 0.95rem; font-weight: 600;
+        margin-top: -10px; margin-bottom: 25px;
     }
 
     .login-field-label {
-        color: #0F3D7A;
-        font-weight: 700;
-        font-size: 0.95rem;
-        margin-bottom: 4px;
-        margin-top: 12px;
+        color: #0F3D7A; font-weight: 700; font-size: 0.95rem;
+        margin-bottom: 4px; margin-top: 12px;
     }
 
-    /* Input Outline Styling */
     div[data-testid="stTextInput"] > div[data-baseweb="input"] {
         background-color: #F0F4F8 !important;
         border: 1.5px solid #0F3D7A !important;
@@ -266,69 +250,21 @@ st.markdown("""
     }
 
     div[data-testid="stTextInput"] input {
-        border: none !important;
-        background-color: transparent !important;
-        color: #1E293B !important;
-        height: 42px !important;
+        border: none !important; background-color: transparent !important; color: #1E293B !important; height: 42px !important;
     }
 
-    div[data-testid="stTextInput"] > div[data-baseweb="input"]:focus-within {
-        border-color: #0F3D7A !important;
-        box-shadow: 0 0 0 2px rgba(15, 61, 122, 0.25) !important;
-    }
-
-    /* Green Login Button */
-    div[data-testid="stFormSubmitButton"], 
-    div[class*="stFormSubmitButton"] {
-        display: flex !important;
-        justify-content: center !important;
-        align-items: center !important;
-        width: 100% !important;
-        margin-top: 15px !important;
-    }
-
-    div[data-testid="stFormSubmitButton"] > button,
-    div[class*="stFormSubmitButton"] > button,
-    div[data-testid="stForm"] button {
-        background-color: #00A859 !important;
-        background: #00A859 !important;
-        color: #FFFFFF !important;
-        border-radius: 8px !important;
-        font-weight: 800 !important;
-        font-size: 1rem !important;
-        padding: 12px 28px !important;
-        border: none !important;
-        outline: none !important;
-        margin: 0 auto !important;
-        display: block !important;
+    div[data-testid="stFormSubmitButton"] > button {
+        background-color: #00A859 !important; color: #FFFFFF !important;
+        border-radius: 8px !important; font-weight: 800 !important; font-size: 1rem !important;
+        padding: 12px 28px !important; border: none !important; margin: 0 auto !important; display: block !important;
         box-shadow: 0 4px 10px rgba(0, 168, 89, 0.25) !important;
-        transition: all 0.2s ease-in-out !important;
-    }
-
-    div[data-testid="stFormSubmitButton"] > button:hover,
-    div[class*="stFormSubmitButton"] > button:hover,
-    div[data-testid="stForm"] button:hover {
-        background-color: #008D4B !important;
-        background: #008D4B !important;
-        color: #FFFFFF !important;
-        box-shadow: 0 6px 14px rgba(0, 168, 89, 0.35) !important;
-        cursor: pointer !important;
     }
 
     .equipment-box {
-        background-color: #FFFFFF;
-        border-left: 5px solid #0F3D7A;
-        border-radius: 8px;
-        padding: 12px 18px;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+        background-color: #FFFFFF; border-left: 5px solid #0F3D7A;
+        border-radius: 8px; padding: 12px 18px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.03);
     }
-    .equipment-title {
-        color: #0F3D7A !important;
-        font-weight: 700;
-        margin: 0 0 10px 0;
-        font-size: 1.25rem;
-    }
+    .equipment-title { color: #0F3D7A !important; font-weight: 700; margin: 0 0 10px 0; font-size: 1.25rem; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -348,24 +284,16 @@ if st.session_state.user is None:
             if logo_path:
                 st.image(logo_path, use_container_width=True)
             else:
-                st.markdown("<h2 style='text-align: center; color: #0F3D7A; font-weight: 900; margin-bottom: 0;'>SIDHARTH</h2>", unsafe_allow_html=True)
-                st.markdown("<p style='text-align: center; color: #0F3D7A; font-weight: 800; font-size: 0.8rem; letter-spacing: 2px; margin-top: -5px;'>SHUTTER & AUTOMATION</p>", unsafe_allow_html=True)
+                st.markdown("<h2 style='text-align: center; color: #0F3D7A; font-weight: 900;'>SIDHARTH</h2>", unsafe_allow_html=True)
+                st.markdown("<p style='text-align: center; color: #0F3D7A; font-weight: 800; font-size: 0.8rem;'>SHUTTER & AUTOMATION</p>", unsafe_allow_html=True)
             
             st.markdown("<div class='login-subtitle'>Enterprise Operations & Field Portal</div>", unsafe_allow_html=True)
             
             with st.form("login_form", clear_on_submit=False):
-                # Username Field
                 st.markdown("<div class='login-field-label'>Username</div>", unsafe_allow_html=True)
-                user_id_input = st.text_input(
-                    "Username Input Field", 
-                    placeholder="User Name", 
-                    key="login_user_id", 
-                    label_visibility="collapsed"
-                ).strip().upper()
+                user_id_input = st.text_input("Username Input Field", placeholder="User Name", key="login_user_id", label_visibility="collapsed").strip().upper()
                 
-                # Password / PIN Field
                 st.markdown("<div class='login-field-label'>Password / PIN</div>", unsafe_allow_html=True)
-                
                 c_chk1, c_chk2 = st.columns(2)
                 with c_chk1:
                     show_pwd = st.checkbox("Show Password", key="chk_show_pwd")
@@ -373,13 +301,7 @@ if st.session_state.user is None:
                     st.checkbox("Remember Me", value=True, key="chk_remember_me")
                     
                 pwd_type = "text" if show_pwd else "password"
-                password_input = st.text_input(
-                    "Password Input Field", 
-                    type=pwd_type, 
-                    placeholder="Enter password", 
-                    key="login_password", 
-                    label_visibility="collapsed"
-                ).strip()
+                password_input = st.text_input("Password Input Field", type=pwd_type, placeholder="Enter password", key="login_password", label_visibility="collapsed").strip()
 
                 st.write("")
                 b_col1, b_col2, b_col3 = st.columns([0.2, 0.6, 0.2])
@@ -424,26 +346,17 @@ if st.session_state.user["Role"] == "Technician":
 
     st.markdown(f"<h1>🛠️ Technician Dashboard — <span style='color:#64748B;'>{tech_name}</span></h1>", unsafe_allow_html=True)
 
-    all_tech_jobs = st.session_state.jobs_db[st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id]
-    total_tasks = len(all_tech_jobs)
-    completed_tasks = len(all_tech_jobs[all_tech_jobs["Status"] == "Completed"])
-    pending_tasks = total_tasks - completed_tasks
-
-    summary_col1, summary_col2 = st.columns([3, 1])
-    with summary_col2:
-        if st.button("📊 View Task Summary"):
-            show_task_summary_popup(tech_name, total_tasks, completed_tasks, pending_tasks)
-
     tech_tab1, tech_tab2, tech_tab3, tech_tab4 = st.tabs([
         "📋 Assigned Work Orders", 
-        "📝 Submit Client Service Report",
-        "📍 Update Status & Destination", 
-        "📜 Service History"
+        "📝 Submit Service Report",
+        "📍 Update Live Status", 
+        "📈 My Reports & Progress History"
     ])
 
     # TAB 1: Assigned Jobs
     with tech_tab1:
         st.subheader("Assigned Maintenance Tasks")
+        all_tech_jobs = st.session_state.jobs_db[st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id]
         tech_jobs = all_tech_jobs[all_tech_jobs["Status"] != "Completed"]
         
         if tech_jobs.empty:
@@ -480,9 +393,9 @@ if st.session_state.user["Role"] == "Technician":
                             st.toast(f"Selected {job['Job_ID']} for service report!")
                 st.divider()
 
-    # TAB 2: Service Report Form
+    # TAB 2: Service Report Form (WITH PO NUMBER, TIME & DISTANCE TRACKING)
     with tech_tab2:
-        st.subheader("📝 Submit Client Service Report")
+        st.subheader("📝 Submit Field Service Visit Report")
         
         pending_tech_jobs = st.session_state.jobs_db[
             (st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id) & 
@@ -493,10 +406,7 @@ if st.session_state.user["Role"] == "Technician":
             st.info("🎉 No pending or assigned tasks found for you to submit a report for.")
         else:
             job_options = pending_tech_jobs["Job_ID"].tolist()
-            
-            default_index = 0
-            if st.session_state.selected_job_for_report in job_options:
-                default_index = job_options.index(st.session_state.selected_job_for_report)
+            default_index = job_options.index(st.session_state.selected_job_for_report) if st.session_state.selected_job_for_report in job_options else 0
                 
             selected_job_id = st.selectbox(
                 "Select Assigned Job / Task*", 
@@ -517,7 +427,16 @@ if st.session_state.user["Role"] == "Technician":
             c_header1, c_header2 = st.columns(2)
             with c_header1:
                 st.text_input("Client Name", value=auto_client_name, disabled=True)
-                selected_contract_no = st.selectbox("Link AMC Contract Number (Optional)", contract_options)
+                selected_contract_no = st.selectbox("Link AMC Contract Number", contract_options)
+                
+                # Auto-populate PO Number associated with Contract Number if available
+                auto_po = "N/A"
+                if selected_contract_no != "N/A" and not contracts_df.empty:
+                    po_match = contracts_df[contracts_df["AMC_Contract_No"] == selected_contract_no]["PO_Number"].values
+                    if len(po_match) > 0 and str(po_match[0]).strip():
+                        auto_po = str(po_match[0])
+                
+                rpt_po_number = st.text_input("PO Number (Auto Linked or Manual)", value=auto_po)
             
             with c_header2:
                 selected_category = st.selectbox("Equipment Category*", ["Rolling Shutter", "High Speed Door"])
@@ -526,13 +445,15 @@ if st.session_state.user["Role"] == "Technician":
             st.divider()
 
             with st.form(f"service_report_form_{tech_id}"):
-                st.markdown("### General Visit Details")
+                st.markdown("### General Visit Details & Travel Metrics")
                 c_det1, c_det2 = st.columns(2)
                 with c_det1:
                     rpt_site_location = st.text_input("Site / Location*", value=auto_address)
                     rpt_service_date = st.date_input("Service Date", value=date.today())
+                    rpt_distance = st.number_input("Distance Travelled to Site (KM)*", min_value=0.0, value=10.0, step=0.5)
                 with c_det2:
                     rpt_next_due = st.date_input("Next Service Due Date", value=date.today() + pd.Timedelta(days=90))
+                    rpt_time_taken = st.number_input("Time Spent on Site (Hours)*", min_value=0.25, value=1.5, step=0.25)
 
                 # Section 1: Equipment Details
                 st.markdown("<div class='equipment-box'><h3 class='equipment-title'>1. Equipment Details</h3>", unsafe_allow_html=True)
@@ -562,36 +483,37 @@ if st.session_state.user["Role"] == "Technician":
                     with col_point:
                         st.write(point)
                     with col_status:
-                        status = st.radio(
-                            "Status", 
-                            ["Satisfactory", "Repaired On-Site", "Action Required", "Not Applicable"], 
-                            horizontal=False, 
-                            key=f"check_{selected_category}_{idx}",
-                            label_visibility="collapsed"
-                        )
+                        status = st.radio("Status", ["Satisfactory", "Repaired On-Site", "Action Required", "Not Applicable"], horizontal=False, key=f"check_{selected_category}_{idx}", label_visibility="collapsed")
                     with col_remark:
-                        remark = st.text_input(
-                            "Remarks", 
-                            placeholder="Action taken / Remark", 
-                            key=f"rem_{selected_category}_{idx}",
-                            label_visibility="collapsed"
-                        )
+                        remark = st.text_input("Remarks", placeholder="Action taken / Remark", key=f"rem_{selected_category}_{idx}", label_visibility="collapsed")
                     
-                    # Save status and remark under Q1..Q18 numerical keys
                     checklist_results[f"Q{idx}"] = {
                         "choice": status, 
                         "remark": remark.strip() if remark.strip() else "N/A"
                     }
                     st.divider()
 
-                # Section 3: Overall Remarks
-                st.markdown("### 3. Remarks / Recommendations")
-                rpt_remarks = st.text_area("General Remarks & Summary*", placeholder="Overall observations, recommendations...")
+                # Section 3: Work Execution & Site Media
+                st.markdown("### 3. Work Done, Site Photo & Obstacles")
+                rpt_work_done = st.text_area("Detailed Action Taken / Work Done*", placeholder="Describe parts replaced, adjustments made, greasing performed...")
+                
+                media_col1, media_col2 = st.columns(2)
+                with media_col1:
+                    site_photo_file = st.file_uploader("📷 Upload Site Photo", type=["jpg", "jpeg", "png"], key=f"uploader_{selected_job_id}")
+                
+                with media_col2:
+                    problems_faced_input = st.text_area("⚠️ Problems / Challenges Faced", placeholder="e.g. Power supply delay, inaccessible high height...", key=f"problems_{selected_job_id}")
 
-                submit_report = st.form_submit_button("Submit Service Report")
+                st.divider()
+
+                # Section 4: General Remarks
+                st.markdown("### 4. General Remarks / Client Recommendations")
+                rpt_remarks = st.text_area("General Remarks*", placeholder="Overall observations...")
+
+                submit_report = st.form_submit_button("Submit Final Service Report")
                 
                 if submit_report:
-                    if not rpt_site_location or not rpt_remarks:
+                    if not rpt_site_location or not rpt_remarks or not rpt_work_done:
                         st.error("⚠️ Please fill in all required fields marked with *")
                     else:
                         try:
@@ -600,13 +522,15 @@ if st.session_state.user["Role"] == "Technician":
                         except Exception:
                             submit_time_str = datetime.now().strftime("%Y-%m-%d %I:%M %p")
 
-                        # Core metadata record (NO legacy P01..P18 keys)
+                        photo_filename = site_photo_file.name if site_photo_file is not None else "No Photo Uploaded"
+
                         report_entry = {
                             "Report_ID": f"RPT-{len(st.session_state.service_reports_db) + 1001}",
                             "Job_ID": selected_job_id,
                             "Tech_ID": tech_id,
                             "Tech_Name": tech_name,
                             "Client_Name": auto_client_name,
+                            "PO_Number": rpt_po_number,
                             "Site_Location": rpt_site_location,
                             "AMC_Contract_No": selected_contract_no,
                             "Category": selected_category,
@@ -619,11 +543,15 @@ if st.session_state.user["Role"] == "Technician":
                             "Service_Date": str(rpt_service_date),
                             "Visit_Number": rpt_visit_num_str,
                             "Next_Service_Due_Date": str(rpt_next_due),
+                            "Distance_Travelled_KM": float(rpt_distance),
+                            "Time_Taken_Hours": float(rpt_time_taken),
+                            "Work_Done_Details": rpt_work_done,
+                            "Site_Photo": photo_filename,
+                            "Problems_Faced": problems_faced_input.strip() if problems_faced_input.strip() else "None",
                             "Remarks": rpt_remarks,
                             "Submitted_At": submit_time_str
                         }
 
-                        # Dynamically populate EXCLUSIVELY Q1_Choice, Q1_Remark through Q18_Choice, Q18_Remark
                         for idx in range(1, 19):
                             q_key = f"Q{idx}"
                             if q_key in checklist_results:
@@ -633,14 +561,12 @@ if st.session_state.user["Role"] == "Technician":
                                 report_entry[f"Q{idx}_Choice"] = "N/A"
                                 report_entry[f"Q{idx}_Remark"] = "N/A"
 
-                        # Ensure DataFrame conforms strictly to approved columns (19 base + 36 Q-cols)
                         valid_columns = load_sheet_data("ServiceReports").columns.tolist()
                         new_row_df = pd.DataFrame([report_entry])[valid_columns]
 
                         st.session_state.service_reports_db = pd.concat([st.session_state.service_reports_db[valid_columns], new_row_df], ignore_index=True)
                         save_sheet_data(st.session_state.service_reports_db, "ServiceReports")
                         
-                        # Set job status to Completed
                         st.session_state.jobs_db.loc[st.session_state.jobs_db["Job_ID"] == selected_job_id, "Status"] = "Completed"
                         save_sheet_data(st.session_state.jobs_db, "Jobs")
                         
@@ -694,107 +620,181 @@ if st.session_state.user["Role"] == "Technician":
                 st.toast(f"📍 Location Broadcast Updated at {now_str}!", icon="✅")
                 st.rerun()
 
-    # TAB 4: History
+    # TAB 4: Technician Individual Reports & Progress History
     with tech_tab4:
-        st.subheader("My Service Record History")
+        st.subheader("📈 My Personal Performance Summary")
         reports_df = st.session_state.service_reports_db
+        
         if not reports_df.empty and "Tech_ID" in reports_df.columns:
             my_reports = reports_df[reports_df["Tech_ID"].astype(str) == tech_id]
+            
+            # Progress Summary Metrics
+            m1, m2, m3, m4 = st.columns(4)
+            sites_visited = len(my_reports)
+            
+            # Numeric calculations safely
+            tot_km = pd.to_numeric(my_reports.get("Distance_Travelled_KM", 0), errors='coerce').sum()
+            tot_hrs = pd.to_numeric(my_reports.get("Time_Taken_Hours", 0), errors='coerce').sum()
+            
+            m1.metric("Sites Visited", sites_visited)
+            m2.metric("Total Travelled", f"{tot_km:.1f} KM")
+            m3.metric("Time Spent On-Site", f"{tot_hrs:.1f} Hrs")
+            m4.metric("Avg Time / Site", f"{(tot_hrs / sites_visited):.1f} Hrs" if sites_visited > 0 else "0 Hrs")
+            
+            st.divider()
+            st.markdown("### Detailed Reports Log")
             st.dataframe(my_reports, use_container_width=True)
         else:
             st.info("📜 No service reports submitted yet.")
 
 # -----------------------------------------------------------------------------
-# 8. MANAGER COMMAND DASHBOARD
+# 8. MANAGER COMMAND DASHBOARD & ANALYTICS
 # -----------------------------------------------------------------------------
 
 elif st.session_state.user["Role"] in ["Manager", "Admin"]:
-    st.markdown("<h1 style='color: #0F3D7A;'>📡 Dispatch & AMC Control Center</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='color: #0F3D7A;'>📡 Dispatch, Progress Analytics & AMC Control Center</h1>", unsafe_allow_html=True)
 
-    mgr_tab1, mgr_tab2, mgr_tab3, mgr_tab4 = st.tabs([
+    # MANAGER NOTIFICATIONS: UPCOMING AMC VISITS
+    contracts_df = st.session_state.amc_contracts_db
+    if not contracts_df.empty and "Next_Visit_Due" in contracts_df.columns:
+        contracts_df["Next_Visit_Due_DT"] = pd.to_datetime(contracts_df["Next_Visit_Due"], errors="coerce")
+        today_dt = pd.Timestamp(date.today())
+        upcoming_due = contracts_df[
+            (contracts_df["Next_Visit_Due_DT"] >= today_dt) & 
+            (contracts_df["Next_Visit_Due_DT"] <= (today_dt + timedelta(days=7)))
+        ]
+        
+        if not upcoming_due.empty:
+            st.warning(f"🔔 **Upcoming AMC Visit Alerts ({len(upcoming_due)} Due in Next 7 Days)**")
+            for _, u_row in upcoming_due.iterrows():
+                st.caption(f"• **{u_row['Client_Name']}** (Contract: `{u_row['AMC_Contract_No']}`, PO: `{u_row.get('PO_Number','N/A')}`) — Visit Due Date: **{u_row['Next_Visit_Due']}**")
+            st.divider()
+
+    mgr_tab1, mgr_tab2, mgr_tab3, mgr_tab4, mgr_tab5 = st.tabs([
+        "📊 Progress Reports & Analytics",
         "MAP / Live Radar", 
-        "📄 Client Service Reports",
+        "📄 All Service Reports",
         "📅 AMC Contract Manager",
         "➕ Create Task / User"
     ])
 
+    # TAB 1: Filterable Progress Reports & Performance
     with mgr_tab1:
+        st.subheader("📈 Technician Field Operations & Travel Progress")
+        
+        f_col1, f_col2 = st.columns(2)
+        with f_col1:
+            time_filter = st.selectbox(
+                "🗓️ Filter Time Period", 
+                ["All Time", "Today", "Weekly (Last 7 Days)", "Monthly (Last 30 Days)", "3 Months", "Yearly"]
+            )
+        
+        tech_users = st.session_state.users_db[st.session_state.users_db["Role"] == "Technician"]
+        tech_options = ["All Technicians"] + tech_users["Full_Name"].tolist()
+        
+        with f_col2:
+            tech_filter = st.selectbox("👷 Filter Technician", tech_options)
+
+        all_reports = st.session_state.service_reports_db.copy()
+        
+        # Apply Filters
+        if time_filter != "All Time":
+            all_reports = filter_df_by_date_range(all_reports, "Service_Date", time_filter)
+            
+        if tech_filter != "All Technicians":
+            all_reports = all_reports[all_reports["Tech_Name"] == tech_filter]
+
+        st.divider()
+
+        # Aggregate Metrics
+        tot_visited = len(all_reports)
+        all_reports["Distance_Travelled_KM"] = pd.to_numeric(all_reports.get("Distance_Travelled_KM", 0), errors='coerce').fillna(0)
+        all_reports["Time_Taken_Hours"] = pd.to_numeric(all_reports.get("Time_Taken_Hours", 0), errors='coerce').fillna(0)
+        
+        tot_dist = all_reports["Distance_Travelled_KM"].sum()
+        tot_time = all_reports["Time_Taken_Hours"].sum()
+
+        p_col1, p_col2, p_col3, p_col4 = st.columns(4)
+        p_col1.metric("Total Sites Visited", tot_visited)
+        p_col2.metric("Total Distance Travelled", f"{tot_dist:.1f} KM")
+        p_col3.metric("Total Field Hours", f"{tot_time:.1f} Hours")
+        p_col4.metric("Avg Time Spent / Site", f"{(tot_time / tot_visited):.1f} Hours" if tot_visited > 0 else "0 Hours")
+
+        st.divider()
+        st.markdown("### Technician Summary Table")
+        
+        if not all_reports.empty and "Tech_Name" in all_reports.columns:
+            summary_grp = all_reports.groupby("Tech_Name").agg(
+                Sites_Visited=("Report_ID", "count"),
+                Total_KM=("Distance_Travelled_KM", "sum"),
+                Total_Hours=("Time_Taken_Hours", "sum")
+            ).reset_index()
+            st.dataframe(summary_grp, use_container_width=True)
+        else:
+            st.info("No visit records matching selected criteria.")
+
+    # TAB 2: MAP / Live Radar
+    with mgr_tab2:
         st.subheader("Technician Fleet Live Radar")
         full_radar = pd.merge(st.session_state.tech_status_db, st.session_state.users_db[["User_ID", "Full_Name"]], left_on="Tech_ID", right_on="User_ID", how="left")
         st.dataframe(full_radar, use_container_width=True)
         
         st.divider()
-        st.subheader("Inspect Technician Task Breakdown")
-        
-        tech_users = st.session_state.users_db[st.session_state.users_db["Role"] == "Technician"]
-        if not tech_users.empty:
-            c_sel_tech, c_btn_popup = st.columns([3, 1])
-            with c_sel_tech:
-                inspect_tech_id = st.selectbox(
-                    "Select Technician to View Stats", 
-                    tech_users["User_ID"].tolist(),
-                    format_func=lambda x: f"{x} - {tech_users[tech_users['User_ID']==x]['Full_Name'].values[0]}"
-                )
-            
-            with c_btn_popup:
-                st.write("")
-                if st.button("📊 Open Tech Task Popup"):
-                    selected_tech_name = tech_users[tech_users["User_ID"] == inspect_tech_id]["Full_Name"].values[0]
-                    tech_jobs = st.session_state.jobs_db[st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == str(inspect_tech_id)]
-                    tot_cnt = len(tech_jobs)
-                    comp_cnt = len(tech_jobs[tech_jobs["Status"] == "Completed"])
-                    pend_cnt = tot_cnt - comp_cnt
-                    show_task_summary_popup(selected_tech_name, tot_cnt, comp_cnt, pend_cnt)
-
-        st.divider()
         st.subheader("All Active Work Orders")
         st.dataframe(st.session_state.jobs_db, use_container_width=True)
 
-    with mgr_tab2:
+    # TAB 3: Service Reports Log
+    with mgr_tab3:
         st.subheader("📋 Field Service Visit Reports Log")
         st.dataframe(st.session_state.service_reports_db, use_container_width=True)
 
-    with mgr_tab3:
-        st.subheader("🗓️ AMC Client Contracts Management")
+    # TAB 4: Contract Manager with PO Number & Next Visit Due
+    with mgr_tab4:
+        st.subheader("🗓️ AMC Client Contracts & PO Number Management")
         st.dataframe(st.session_state.amc_contracts_db, use_container_width=True)
         st.divider()
-        st.markdown("### ✏️ Register / Update AMC Contract Limits")
+        st.markdown("### ✏️ Register / Update AMC Contract & PO Details")
         
         with st.form("edit_amc_contract_form"):
             col_c1, col_c2 = st.columns(2)
             with col_c1:
                 contract_no = st.text_input("AMC Contract Number*", placeholder="e.g. AMC-2026-88").strip()
+                po_number = st.text_input("PO Number*", placeholder="e.g. PO-998877").strip()
                 c_client_name = st.text_input("Client Name*", placeholder="e.g. Apex Industries").strip()
                 visits_allowed = st.selectbox("Annual Allowed Visits Limit*", [2, 3, 4], index=2)
             with col_c2:
                 contract_start = st.date_input("Contract Start Date", value=date.today())
                 contract_end = st.date_input("Contract End Date", value=date.today() + pd.Timedelta(days=365))
+                next_visit_due = st.date_input("Next Scheduled Visit Due*", value=date.today() + pd.Timedelta(days=90))
             
             if st.form_submit_button("Save / Update AMC Contract"):
-                if not contract_no or not c_client_name:
-                    st.error("⚠️ Contract Number and Client Name are required.")
+                if not contract_no or not c_client_name or not po_number:
+                    st.error("⚠️ Contract Number, PO Number, and Client Name are required.")
                 else:
                     contracts_df = st.session_state.amc_contracts_db
                     if not contracts_df.empty and contract_no in contracts_df["AMC_Contract_No"].astype(str).values:
                         st.session_state.amc_contracts_db.loc[
                             st.session_state.amc_contracts_db["AMC_Contract_No"].astype(str) == contract_no,
-                            ["Client_Name", "Start_Date", "End_Date", "Allowed_Visits"]
-                        ] = [c_client_name, str(contract_start), str(contract_end), visits_allowed]
+                            ["PO_Number", "Client_Name", "Start_Date", "End_Date", "Allowed_Visits", "Next_Visit_Due"]
+                        ] = [po_number, c_client_name, str(contract_start), str(contract_end), visits_allowed, str(next_visit_due)]
                     else:
                         new_contract = {
                             "AMC_Contract_No": contract_no,
+                            "PO_Number": po_number,
                             "Client_Name": c_client_name,
                             "Start_Date": str(contract_start),
                             "End_Date": str(contract_end),
-                            "Allowed_Visits": visits_allowed
+                            "Allowed_Visits": visits_allowed,
+                            "Next_Visit_Due": str(next_visit_due)
                         }
                         st.session_state.amc_contracts_db = pd.concat([st.session_state.amc_contracts_db, pd.DataFrame([new_contract])], ignore_index=True)
                     
                     save_sheet_data(st.session_state.amc_contracts_db, "AMCContracts")
-                    st.toast(f"✅ Contract {contract_no} saved!")
+                    st.toast(f"✅ Contract {contract_no} with PO {po_number} saved!")
                     st.rerun()
 
-    with mgr_tab4:
+    # TAB 5: Create Tasks/Users
+    with mgr_tab5:
         col_mgr_a, col_mgr_b = st.columns(2)
         
         with col_mgr_a:
