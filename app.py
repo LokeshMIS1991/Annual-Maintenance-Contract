@@ -218,29 +218,31 @@ st.markdown("""
 <style>
     /* Global Page Background */
     .stApp {
-        background-color: #F4F6F9 !important;
+        background-color: #F8FAFC !important;
         color: #1E293B !important;
     }
     
-    /* Login Card Container */
+    /* Clean Professional Login Card Container (No blue outlines) */
     .login-card {
         background-color: #FFFFFF;
-        border: 2.5px solid #0F4C81;
-        border-radius: 20px;
-        padding: 30px 25px 25px 25px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.06);
-        max-width: 480px;
-        margin: 20px auto 0 auto;
+        border: 1px solid #E2E8F0;
+        border-radius: 12px;
+        padding: 28px 30px 24px 30px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.04);
+        max-width: 400px;
+        margin: 30px auto 0 auto;
     }
 
     /* Subtitle Styling */
     .login-subtitle {
         text-align: center;
-        color: #64748B;
-        font-size: 1.05rem;
-        font-weight: 600;
-        margin-top: -5px;
-        margin-bottom: 25px;
+        color: #475569;
+        font-size: 0.95rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        margin-top: 10px;
+        margin-bottom: 20px;
+        text-transform: uppercase;
     }
 
     /* Green Login Button */
@@ -248,12 +250,12 @@ st.markdown("""
         background-color: #00A859 !important;
         color: #FFFFFF !important;
         border: none !important;
-        border-radius: 10px !important;
+        border-radius: 8px !important;
         font-weight: 700 !important;
-        font-size: 1.05rem !important;
-        height: 52px !important;
+        font-size: 0.98rem !important;
+        height: 44px !important;
         letter-spacing: 0.5px;
-        box-shadow: 0 4px 12px rgba(0, 168, 89, 0.25);
+        box-shadow: 0 2px 8px rgba(0, 168, 89, 0.2);
         transition: all 0.2s ease-in-out;
     }
     div.stButton > button:hover {
@@ -266,7 +268,7 @@ st.markdown("""
     .stTextInput > label {
         color: #0F4C81 !important;
         font-weight: 600 !important;
-        font-size: 1.02rem !important;
+        font-size: 0.92rem !important;
     }
 
     /* Equipment Box for Checklist */
@@ -292,21 +294,21 @@ st.markdown("""
 # -----------------------------------------------------------------------------
 
 def render_login_form():
-    col1, col2, col3 = st.columns([1, 2.2, 1])
+    col1, col2, col3 = st.columns([1, 1.8, 1])
     
     with col2:
         st.markdown('<div class="login-card">', unsafe_allow_html=True)
         
         logo_path = get_logo_path()
         if logo_path:
-            # Centered, compact logo size
-            l_col1, l_col2, l_col3 = st.columns([1, 2, 1])
+            # Centered, crisp logo size scaled to fit form nicely
+            l_col1, l_col2, l_col3 = st.columns([0.2, 3.6, 0.2])
             with l_col2:
-                st.image(logo_path, width=180)
+                st.image(logo_path, width=220)
         else:
             st.markdown("<h2 style='text-align:center; color:#0F4C81; font-weight:800; margin-bottom:5px;'>SIDHARTH</h2><p style='text-align:center; color:#0F4C81; font-size:0.85rem; font-weight:700; letter-spacing:1px; margin-top:-10px;'>SHUTTER & AUTOMATION</p>", unsafe_allow_html=True)
 
-        st.markdown("<p class='login-subtitle'>Enterprise Operations & Field Portal</p>", unsafe_allow_html=True)
+        st.markdown("<p class='login-subtitle'>AMC Tracker Portal</p>", unsafe_allow_html=True)
 
         user_id_input = st.text_input(
             "Username / Name", 
@@ -378,7 +380,7 @@ with st.sidebar:
     if logo_path:
         sb_c1, sb_c2, sb_c3 = st.columns([1, 2, 1])
         with sb_c2:
-            st.image(logo_path, width=150)
+            st.image(logo_path, width=140)
     else:
         st.markdown("<h3 style='color: #0F4C81; text-align:center;'>⚙️ SIDHARTH</h3>", unsafe_allow_html=True)
     st.markdown("<div style='color: #00A859; font-weight: 800; font-size: 0.85rem; letter-spacing: 1.5px; text-align: center; margin-top: 4px;'>AMC TRACKER PORTAL</div>", unsafe_allow_html=True)
