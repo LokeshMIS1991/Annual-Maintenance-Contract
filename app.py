@@ -211,100 +211,166 @@ EQUIPMENT_DATA = {
 }
 
 # -----------------------------------------------------------------------------
-# 4. BRANDED UI STYLING
+# 4. BRANDED UI STYLING (FIXED AND ENHANCED)
 # -----------------------------------------------------------------------------
 
 st.markdown("""
 <style>
-    /* Global Page Background */
+    /* Global Page Styling */
     .stApp { 
-        background-color: #F4F6F9 !important; 
+        background-color: #F8FAFC !important; 
     }
     
-    .stTabs [data-baseweb="tab-highlight"] { background-color: #0F3D7A !important; }
-    .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #0F3D7A !important; font-weight: 700 !important; }
-    [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #E2E8F0; }
-    .sidebar-logo-sub { color: #00A859; font-weight: 800; font-size: 0.85rem; letter-spacing: 1.5px; text-align: center; margin-top: 4px; }
-    
-    /* Target Streamlit Form Container directly to act as the Login Card */
-    div[data-testid="stForm"] {
-        background-color: #FFFFFF !important;
-        border: 1px solid #E2E8F0 !important;
-        border-radius: 12px !important;
-        padding: 30px 28px 24px 28px !important;
-        box-shadow: 0px 8px 20px rgba(15, 61, 122, 0.08) !important;
-        max-width: 420px !important;
-        margin: 20px auto !important;
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] { 
+        background: linear-gradient(180deg, #0F2027 0%, #203A43 50%, #2C5364 100%) !important; 
+        border-right: 1px solid #1E293B !important; 
+        color: #FFFFFF !important;
     }
 
-    /* Subtitle Styling */
-    .login-subtitle {
+    [data-testid="stSidebar"] * {
+        color: #E2E8F0 !important;
+    }
+
+    .sidebar-logo-sub { 
+        color: #10B981 !important; 
+        font-weight: 800; 
+        font-size: 0.9rem; 
+        letter-spacing: 2px; 
         text-align: center; 
-        color: #556B82; 
-        font-size: 0.95rem; 
-        font-weight: 700;
-        letter-spacing: 0.5px;
-        margin-top: 4px; 
-        margin-bottom: 20px;
+        margin-top: 8px; 
         text-transform: uppercase;
     }
 
-    /* Input Labels */
-    .stTextInput > label {
-        color: #0F3D7A !important;
-        font-weight: 700 !important;
-        font-size: 0.92rem !important;
+    .sidebar-user-card {
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        padding: 14px;
+        margin-bottom: 20px;
     }
 
-    /* Input Field Boxes */
-    div[data-testid="stTextInput"] > div[data-baseweb="input"] {
-        background-color: #F8FAFC !important;
-        border: 1.5px solid #CBD5E1 !important;
-        border-radius: 8px !important;
-        overflow: hidden !important;
+    /* Tabs Styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: #E2E8F0;
+        padding: 6px;
+        border-radius: 10px;
     }
 
-    div[data-testid="stTextInput"] > div[data-baseweb="input"]:focus-within {
-        border-color: #0F3D7A !important;
+    .stTabs [data-baseweb="tab"] {
+        height: 45px;
+        border-radius: 8px;
+        font-weight: 600 !important;
+        font-size: 0.95rem !important;
+        color: #475569 !important;
+        background-color: transparent;
+        border: none !important;
     }
 
-    div[data-testid="stTextInput"] input {
-        color: #1E293B !important; 
-        height: 42px !important;
-    }
-
-    /* Submit Button Styling */
-    div[data-testid="stFormSubmitButton"] > button {
-        background-color: #00A859 !important; 
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        background-color: #0F3D7A !important;
         color: #FFFFFF !important;
-        border-radius: 8px !important; 
-        font-weight: 800 !important; 
-        font-size: 0.98rem !important;
-        height: 44px !important;
-        border: none !important; 
-        width: 100% !important;
-        margin-top: 10px !important;
-        box-shadow: 0 4px 10px rgba(0, 168, 89, 0.25) !important;
+        box-shadow: 0 4px 10px rgba(15, 61, 122, 0.2);
     }
-    
-    div[data-testid="stFormSubmitButton"] > button:hover {
-        background-color: #008F4C !important;
+
+    .stTabs [data-baseweb="tab-highlight"] {
+        display: none !important;
+    }
+
+    /* Target ONLY the Login Form specifically, preventing form shrinkage on main pages */
+    .login-box div[data-testid="stForm"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 14px !important;
+        padding: 32px !important;
+        box-shadow: 0px 10px 25px rgba(15, 61, 122, 0.1) !important;
+        max-width: 440px !important;
+        margin: 30px auto !important;
+    }
+
+    /* Standard Form Container Styling for Content Forms */
+    div[data-testid="stForm"] {
+        background-color: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    }
+
+    /* Login Subtitle */
+    .login-subtitle {
+        text-align: center; 
+        color: #10B981; 
+        font-size: 0.95rem; 
+        font-weight: 800;
+        letter-spacing: 1px;
+        margin-top: 4px; 
+        margin-bottom: 24px;
+        text-transform: uppercase;
+    }
+
+    /* Form Section Headers */
+    .section-header {
+        color: #0F3D7A;
+        font-weight: 700;
+        font-size: 1.15rem;
+        border-bottom: 2px solid #E2E8F0;
+        padding-bottom: 6px;
+        margin-top: 15px;
+        margin-bottom: 15px;
     }
 
     /* Equipment Box for Checklist */
     .equipment-box {
-        background-color: #FFFFFF; 
+        background-color: #F8FAFC; 
         border-left: 5px solid #0F3D7A;
         border-radius: 8px; 
-        padding: 12px 18px; 
+        padding: 16px 20px; 
         margin-bottom: 20px; 
-        box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+        border: 1px solid #E2E8F0;
+        border-left-width: 5px;
     }
+    
     .equipment-title { 
         color: #0F3D7A !important; 
         font-weight: 700; 
         margin: 0 0 10px 0; 
-        font-size: 1.25rem; 
+        font-size: 1.2rem; 
+    }
+
+    /* Buttons Styling */
+    div[data-testid="stFormSubmitButton"] > button {
+        background-color: #10B981 !important; 
+        color: #FFFFFF !important;
+        border-radius: 8px !important; 
+        font-weight: 700 !important; 
+        font-size: 1rem !important;
+        height: 46px !important;
+        border: none !important; 
+        width: 100% !important;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25) !important;
+        transition: all 0.2s ease;
+    }
+    
+    div[data-testid="stFormSubmitButton"] > button:hover {
+        background-color: #059669 !important;
+        transform: translateY(-1px);
+    }
+
+    /* Sidebar Logout Button */
+    [data-testid="stSidebar"] .stButton > button {
+        background-color: rgba(239, 68, 68, 0.15) !important;
+        color: #FCA5A5 !important;
+        border: 1px solid rgba(239, 68, 68, 0.3) !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        transition: all 0.2s ease;
+    }
+
+    [data-testid="stSidebar"] .stButton > button:hover {
+        background-color: #EF4444 !important;
+        color: #FFFFFF !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -317,14 +383,13 @@ def render_login_form():
     col1, col2, col3 = st.columns([1, 1.8, 1])
     
     with col2:
-        # Streamlit Form acts directly as the bordered card
+        st.markdown("<div class='login-box'>", unsafe_allow_html=True)
         with st.form("main_login_form", clear_on_submit=False):
             logo_path = get_logo_path()
             if logo_path:
-                l_col1, l_col2, l_col3 = st.columns([0.1, 3.8, 0.1])
+                l_col1, l_col2, l_col3 = st.columns([0.05, 3.9, 0.05])
                 with l_col2:
                     st.image(logo_path, use_container_width=True)
-                    
             else:
                 st.markdown("<h2 style='text-align:center; color:#0F3D7A; font-weight:800; margin-bottom:5px;'>SIDHARTH</h2><p style='text-align:center; color:#0F3D7A; font-size:0.85rem; font-weight:700; letter-spacing:1px; margin-top:-10px;'>SHUTTER & AUTOMATION</p>", unsafe_allow_html=True)
 
@@ -384,10 +449,12 @@ def render_login_form():
                         st.rerun()
                     else:
                         st.error("❌ Invalid Username or Password. Please try again.")
+        st.markdown("</div>", unsafe_allow_html=True)
 
 if not st.session_state.get("authenticated", False):
     render_login_form()
     st.stop()
+
 # -----------------------------------------------------------------------------
 # 6. SIDEBAR NAV & USER INFO
 # -----------------------------------------------------------------------------
@@ -395,11 +462,12 @@ if not st.session_state.get("authenticated", False):
 with st.sidebar:
     logo_path = get_logo_path()
     if logo_path:
-        sb_c1, sb_c2, sb_c3 = st.columns([1, 2, 1])
-        with sb_c2:
-            st.image(logo_path, width=140)
+        # Full width, crisp rendering for sidebar logo
+        st.image(logo_path, use_container_width=True)
     else:
-        st.markdown("<h3 style='color: #0F3D7A; text-align:center;'>⚙️ SIDHARTH</h3>", unsafe_allow_html=True)
+        st.markdown("<h2 style='color: #FFFFFF; text-align:center; font-weight:800; margin:0;'>SIDHARTH</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #10B981; text-align:center; font-size:0.75rem; font-weight:700; letter-spacing:1px;'>SHUTTER & AUTOMATION</p>", unsafe_allow_html=True)
+    
     st.markdown("<div class='sidebar-logo-sub'>AMC TRACKER PORTAL</div>", unsafe_allow_html=True)
     st.divider()
 
@@ -411,14 +479,17 @@ with st.sidebar:
         if isinstance(u, dict):
             logged_name = u.get("Full_Name", logged_name)
             logged_role = u.get("Role", logged_role)
-        elif hasattr(u, "get"):
-            logged_name = u.get("Full_Name", logged_name)
-            logged_role = u.get("Role", logged_role)
 
-    st.markdown(f"**Logged User:** {logged_name}")
-    st.markdown(f"**Role:** `{logged_role}`")
+    st.markdown(f"""
+    <div class='sidebar-user-card'>
+        <div style='font-size: 0.8rem; text-transform: uppercase; color: #94A3B8; font-weight: 700;'>Logged User</div>
+        <div style='font-size: 1.05rem; font-weight: 700; color: #FFFFFF; margin-bottom: 6px;'>{logged_name}</div>
+        <div style='font-size: 0.8rem; text-transform: uppercase; color: #94A3B8; font-weight: 700;'>Role</div>
+        <span style='background: #10B981; color: #FFFFFF; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;'>{logged_role}</span>
+    </div>
+    """, unsafe_allow_html=True)
     
-    if st.button("Logout", use_container_width=True):
+    if st.button("🚪 Logout", use_container_width=True):
         st.session_state.authenticated = False
         st.session_state.user = None
         st.session_state.user_id = None
@@ -434,18 +505,18 @@ if logged_role == "Technician":
     tech_id = str(st.session_state.get("user_id", ""))
     tech_name = str(st.session_state.get("user_name", ""))
 
-    st.markdown(f"<h1>🛠️ AMC Tracker Portal — <span style='color:#64748B;'>{tech_name}</span></h1>", unsafe_allow_html=True)
+    st.markdown(f"<h1 style='color:#0F3D7A; font-weight:800; margin-bottom: 20px;'>🛠️ AMC Field Portal — <span style='color:#10B981;'>{tech_name}</span></h1>", unsafe_allow_html=True)
 
     tech_tab1, tech_tab2, tech_tab3, tech_tab4 = st.tabs([
-        "📋 Assigned Work Orders", 
+        "📋 Assigned Tasks", 
         "📝 Submit Service Report",
         "📍 Update Live Status", 
-        "📈 My Reports & Progress History"
+        "📈 Progress & History"
     ])
 
     # TAB 1: Assigned Work Orders
     with tech_tab1:
-        st.subheader("📋 Your Assigned Field Tasks")
+        st.markdown("<div class='section-header'>📋 Your Assigned Field Tasks</div>", unsafe_allow_html=True)
         my_jobs = st.session_state.jobs_db[st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id]
         
         if my_jobs.empty:
@@ -467,7 +538,7 @@ if logged_role == "Technician":
 
     # TAB 2: Service Report Form
     with tech_tab2:
-        st.subheader("📝 Submit Field Service Visit Report")
+        st.markdown("<div class='section-header'>📝 Submit Field Service Visit Report</div>", unsafe_allow_html=True)
         
         pending_tech_jobs = st.session_state.jobs_db[
             (st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id) & 
@@ -643,7 +714,7 @@ if logged_role == "Technician":
 
     # TAB 3: Broadcast Location
     with tech_tab3:
-        st.subheader("Broadcast Live Location & Next Target")
+        st.markdown("<div class='section-header'>Broadcast Live Location & Next Target</div>", unsafe_allow_html=True)
         curr_rec = st.session_state.tech_status_db[st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id]
         
         c_city = str(curr_rec["Current_City"].values[0]) if not curr_rec.empty and "Current_City" in curr_rec.columns else ""
@@ -689,7 +760,7 @@ if logged_role == "Technician":
 
     # TAB 4: Personal History
     with tech_tab4:
-        st.subheader("📈 My Personal Performance Summary")
+        st.markdown("<div class='section-header'>📈 My Personal Performance Summary</div>", unsafe_allow_html=True)
         reports_df = st.session_state.service_reports_db
         
         if not reports_df.empty and "Tech_ID" in reports_df.columns:
@@ -722,7 +793,7 @@ if logged_role == "Technician":
 # -----------------------------------------------------------------------------
 
 elif logged_role in ["Manager", "Admin"]:
-    st.markdown("<h1 style='color: #0F3D7A;'>📡 AMC Tracker Portal — Command & Control Center</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='color: #0F3D7A; font-weight:800; margin-bottom: 20px;'>📡 AMC Tracker Portal — Command & Control Center</h1>", unsafe_allow_html=True)
 
     # AMC Alerts
     contracts_df = st.session_state.amc_contracts_db
@@ -741,16 +812,16 @@ elif logged_role in ["Manager", "Admin"]:
             st.divider()
 
     mgr_tab1, mgr_tab2, mgr_tab3, mgr_tab4, mgr_tab5 = st.tabs([
-        "📊 Progress Reports & Analytics",
+        "📊 Progress & Analytics",
         "🗺️ MAP / Live Radar", 
-        "📄 All Service Reports",
-        "📅 AMC Contract Manager",
-        "➕ Create Task / User"
+        "📄 Service Reports",
+        "📅 AMC Contracts",
+        "➕ Dispatch Task / User"
     ])
 
     # TAB 1: Filterable Progress Dashboard & Analytics
     with mgr_tab1:
-        st.subheader("📊 Technician Field Operations & Progress Dashboard")
+        st.markdown("<div class='section-header'>📊 Technician Field Operations & Progress Dashboard</div>", unsafe_allow_html=True)
         
         f_col1, f_col2 = st.columns(2)
         with f_col1:
@@ -812,7 +883,7 @@ elif logged_role in ["Manager", "Admin"]:
 
             with chart_col2:
                 st.markdown("#### 🚗 Total Travel Distance (KM)")
-                st.bar_chart(data=summary_grp, x="Tech_Name", y="Total_KM", color="#00A859")
+                st.bar_chart(data=summary_grp, x="Tech_Name", y="Total_KM", color="#10B981")
 
             st.divider()
 
@@ -852,22 +923,22 @@ elif logged_role in ["Manager", "Admin"]:
 
     # TAB 2: MAP / Live Radar
     with mgr_tab2:
-        st.subheader("Technician Fleet Live Radar")
+        st.markdown("<div class='section-header'>Technician Fleet Live Radar</div>", unsafe_allow_html=True)
         full_radar = pd.merge(st.session_state.tech_status_db, st.session_state.users_db[["User_ID", "Full_Name"]], left_on="Tech_ID", right_on="User_ID", how="left")
         st.dataframe(full_radar, use_container_width=True)
         
         st.divider()
-        st.subheader("All Active Work Orders")
+        st.markdown("<div class='section-header'>All Active Work Orders</div>", unsafe_allow_html=True)
         st.dataframe(st.session_state.jobs_db, use_container_width=True)
 
     # TAB 3: Service Reports Log
     with mgr_tab3:
-        st.subheader("📋 Field Service Visit Reports Log")
+        st.markdown("<div class='section-header'>📋 Field Service Visit Reports Log</div>", unsafe_allow_html=True)
         st.dataframe(st.session_state.service_reports_db, use_container_width=True)
 
     # TAB 4: Contract Manager
     with mgr_tab4:
-        st.subheader("🗓️ AMC Client Contracts & PO Number Management")
+        st.markdown("<div class='section-header'>🗓️ AMC Client Contracts & PO Number Management</div>", unsafe_allow_html=True)
         st.dataframe(st.session_state.amc_contracts_db, use_container_width=True)
         st.divider()
         st.markdown("### ✏️ Register / Update AMC Contract & PO Details")
@@ -915,7 +986,7 @@ elif logged_role in ["Manager", "Admin"]:
         col_mgr_a, col_mgr_b = st.columns(2)
         
         with col_mgr_a:
-            st.subheader("Dispatch New Task")
+            st.markdown("<div class='section-header'>Dispatch New Task</div>", unsafe_allow_html=True)
             with st.form("new_job_form"):
                 j_id = f"JOB-{len(st.session_state.jobs_db) + 101}"
                 client_name = st.text_input("Client Name")
@@ -956,7 +1027,7 @@ elif logged_role in ["Manager", "Admin"]:
                         st.rerun()
 
         with col_mgr_b:
-            st.subheader("Register System User")
+            st.markdown("<div class='section-header'>Register System User</div>", unsafe_allow_html=True)
             if logged_role != "Admin":
                 st.info("🔒 System User Registration is restricted. It can be created by Admin only.")
             else:
