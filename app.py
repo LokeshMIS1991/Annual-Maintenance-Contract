@@ -212,6 +212,7 @@ def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
 # 4. BRANDED UI STYLING (UPDATED TO MATCH IMAGE DESIGN)
 # -----------------------------------------------------------------------------
 
+st.markdown("""
 <style>
     /* Global Page Styling */
     .stApp {
@@ -223,11 +224,7 @@ def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
     [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #E2E8F0; }
     .sidebar-logo-sub { color: #00A859; font-weight: 800; font-size: 0.85rem; letter-spacing: 1.5px; text-align: center; margin-top: 4px; }
     
-    /* =============================================================================
-       LOGIN FORM STYLING
-       ============================================================================= */
-
-    /* 1. Main Login Card Container */
+    /* Login Form Styling */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #FFFFFF !important;
         border: 2px solid #0F3D7A !important;
@@ -238,7 +235,6 @@ def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
         margin: 20px auto 0 auto !important;
     }
 
-    /* 2. Reset Default Streamlit Form Border & Padding */
     div[data-testid="stForm"] {
         border: none !important;
         padding: 0 !important;
@@ -246,7 +242,6 @@ def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
         box-shadow: none !important;
     }
 
-    /* 3. Typography & Field Labels */
     .login-subtitle {
         text-align: center;
         color: #556B82;
@@ -264,16 +259,16 @@ def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
         margin-top: 12px;
     }
 
-    /* 4. Complete Blue Outline Around Input Boxes (Includes Password Icon Container) */
+    /* Complete Blue Outline Around Input Boxes */
     div[data-testid="stTextInput"] > div[data-baseweb="input"] {
         background-color: #F0F4F8 !important;
-        border: 1.5px solid #0F3D7A !important; /* Full border around whole container */
+        border: 1.5px solid #0F3D7A !important;
         border-radius: 8px !important;
         overflow: hidden !important;
     }
 
     div[data-testid="stTextInput"] input {
-        border: none !important; /* Remove inner border to avoid cutoffs */
+        border: none !important;
         background-color: transparent !important;
         color: #1E293B !important;
         height: 42px !important;
@@ -284,7 +279,7 @@ def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
         box-shadow: 0 0 0 2px rgba(15, 61, 122, 0.25) !important;
     }
 
-    /* 5. Center-Align Button Container & Button */
+    /* Centered Green Submit Button */
     div[data-testid="stFormSubmitButton"] {
         display: flex !important;
         justify-content: center !important;
@@ -306,7 +301,7 @@ def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
         border: none !important;
         outline: none !important;
         width: 100% !important;
-        max-width: 280px !important; /* Kept proportional while centered */
+        max-width: 280px !important;
         margin: 0 auto !important;
         display: block !important;
         box-shadow: 0 4px 10px rgba(0, 168, 89, 0.25) !important;
@@ -351,6 +346,7 @@ def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
         font-size: 1.25rem;
     }
 </style>
+""", unsafe_allow_html=True)
 
 # =============================================================================
 # LOGIN SCREEN IMPLEMENTATION
