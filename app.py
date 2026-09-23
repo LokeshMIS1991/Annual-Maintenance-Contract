@@ -212,7 +212,6 @@ def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
 # 4. BRANDED UI STYLING (UPDATED TO MATCH IMAGE DESIGN)
 # -----------------------------------------------------------------------------
 
-st.markdown("""
 <style>
     /* Global Page Styling */
     .stApp {
@@ -225,7 +224,7 @@ st.markdown("""
     .sidebar-logo-sub { color: #00A859; font-weight: 800; font-size: 0.85rem; letter-spacing: 1.5px; text-align: center; margin-top: 4px; }
     
     /* =============================================================================
-       LOGIN FORM STYLING (UPDATED)
+       LOGIN FORM STYLING
        ============================================================================= */
 
     /* 1. Main Login Card Container */
@@ -239,7 +238,7 @@ st.markdown("""
         margin: 20px auto 0 auto !important;
     }
 
-    /* 2. Reset Default Streamlit Form Border & Padding Inside Card */
+    /* 2. Reset Default Streamlit Form Border & Padding */
     div[data-testid="stForm"] {
         border: none !important;
         padding: 0 !important;
@@ -265,31 +264,39 @@ st.markdown("""
         margin-top: 12px;
     }
 
-    /* 4. Form Text Inputs with Blue Outline */
-    div[data-testid="stTextInput"] input {
+    /* 4. Complete Blue Outline Around Input Boxes (Includes Password Icon Container) */
+    div[data-testid="stTextInput"] > div[data-baseweb="input"] {
         background-color: #F0F4F8 !important;
-        border: 1.5px solid #0F3D7A !important; /* Blue Outline */
+        border: 1.5px solid #0F3D7A !important; /* Full border around whole container */
         border-radius: 8px !important;
+        overflow: hidden !important;
+    }
+
+    div[data-testid="stTextInput"] input {
+        border: none !important; /* Remove inner border to avoid cutoffs */
+        background-color: transparent !important;
         color: #1E293B !important;
         height: 42px !important;
     }
 
-    div[data-testid="stTextInput"] input:focus {
+    div[data-testid="stTextInput"] > div[data-baseweb="input"]:focus-within {
         border-color: #0F3D7A !important;
-        box-shadow: 0 0 0 2px rgba(15, 61, 122, 0.2) !important;
+        box-shadow: 0 0 0 2px rgba(15, 61, 122, 0.25) !important;
     }
 
-    /* 5. Force Green & Centered Login Button */
+    /* 5. Center-Align Button Container & Button */
     div[data-testid="stFormSubmitButton"] {
         display: flex !important;
         justify-content: center !important;
+        align-items: center !important;
         width: 100% !important;
+        margin-top: 15px !important;
     }
 
     div[data-testid="stFormSubmitButton"] > button,
     div[data-testid="stForm"] button[type="submit"],
     div[data-testid="stForm"] button[kind="primary"] {
-        background-color: #00A859 !important; /* Green color matching logo */
+        background-color: #00A859 !important;
         background: #00A859 !important;
         color: #FFFFFF !important;
         border-radius: 8px !important;
@@ -298,9 +305,10 @@ st.markdown("""
         padding: 12px 28px !important;
         border: none !important;
         outline: none !important;
-        width: auto !important;
-        min-width: 220px !important;
-        margin-top: 10px !important;
+        width: 100% !important;
+        max-width: 280px !important; /* Kept proportional while centered */
+        margin: 0 auto !important;
+        display: block !important;
         box-shadow: 0 4px 10px rgba(0, 168, 89, 0.25) !important;
         transition: all 0.2s ease-in-out !important;
     }
@@ -343,7 +351,6 @@ st.markdown("""
         font-size: 1.25rem;
     }
 </style>
-""", unsafe_allow_html=True)
 
 # =============================================================================
 # LOGIN SCREEN IMPLEMENTATION
