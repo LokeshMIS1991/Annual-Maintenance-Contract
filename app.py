@@ -220,11 +220,7 @@ st.markdown("""
     [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #E2E8F0; }
     .sidebar-logo-sub { color: #00A859; font-weight: 800; font-size: 0.85rem; letter-spacing: 1.5px; text-align: center; margin-top: 4px; }
     
-    /* =============================================================================
-       LOGIN FORM STYLING
-       ============================================================================= */
-
-    /* 1. Main Login Card Container */
+    /* Login Card Container */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #FFFFFF !important;
         border: 2px solid #0F3D7A !important;
@@ -235,7 +231,7 @@ st.markdown("""
         margin: 20px auto 0 auto !important;
     }
 
-    /* 2. Reset Default Streamlit Form Border & Padding */
+    /* Reset Default Streamlit Form Border & Padding */
     div[data-testid="stForm"] {
         border: none !important;
         padding: 0 !important;
@@ -243,7 +239,7 @@ st.markdown("""
         box-shadow: none !important;
     }
 
-    /* 3. Typography & Field Labels */
+    /* Typography & Field Labels */
     .login-subtitle {
         text-align: center;
         color: #556B82;
@@ -261,7 +257,7 @@ st.markdown("""
         margin-top: 12px;
     }
 
-    /* 4. Complete Blue Outline Around Input Boxes */
+    /* Input Outline Styling */
     div[data-testid="stTextInput"] > div[data-baseweb="input"] {
         background-color: #F0F4F8 !important;
         border: 1.5px solid #0F3D7A !important;
@@ -281,7 +277,7 @@ st.markdown("""
         box-shadow: 0 0 0 2px rgba(15, 61, 122, 0.25) !important;
     }
 
-    /* 5. FORCE CENTER ALIGNMENT FOR GREEN LOGIN BUTTON */
+    /* Green Login Button */
     div[data-testid="stFormSubmitButton"], 
     div[class*="stFormSubmitButton"] {
         display: flex !important;
@@ -318,19 +314,6 @@ st.markdown("""
         box-shadow: 0 6px 14px rgba(0, 168, 89, 0.35) !important;
         cursor: pointer !important;
     }
-
-    /* WhatsApp & Action Buttons */
-    .wa-btn {
-        display: inline-block;
-        background-color: #25D366;
-        color: white !important;
-        padding: 6px 14px;
-        border-radius: 6px;
-        text-decoration: none;
-        font-weight: 600;
-        font-size: 0.88rem;
-    }
-    .wa-btn:hover { background-color: #1DA851; }
 
     .equipment-box {
         background-color: #FFFFFF;
@@ -373,22 +356,32 @@ if st.session_state.user is None:
             with st.form("login_form", clear_on_submit=False):
                 # Username Field
                 st.markdown("<div class='login-field-label'>Username</div>", unsafe_allow_html=True)
-                user_id_input = st.text_input("Username", placeholder="User Name", label_visibility="collapsed").strip().upper()
+                user_id_input = st.text_input(
+                    "Username Input Field", 
+                    placeholder="User Name", 
+                    key="login_user_id", 
+                    label_visibility="collapsed"
+                ).strip().upper()
                 
                 # Password / PIN Field
                 st.markdown("<div class='login-field-label'>Password / PIN</div>", unsafe_allow_html=True)
                 
                 c_chk1, c_chk2 = st.columns(2)
                 with c_chk1:
-                    show_pwd = st.checkbox("Show Password")
+                    show_pwd = st.checkbox("Show Password", key="chk_show_pwd")
                 with c_chk2:
-                    st.checkbox("Remember Me", value=True)
+                    st.checkbox("Remember Me", value=True, key="chk_remember_me")
                     
                 pwd_type = "text" if show_pwd else "password"
-                password_input = st.text_input("Password / PIN", type=pwd_type, placeholder="Enter password", label_visibility="collapsed").strip()
+                password_input = st.text_input(
+                    "Password Input Field", 
+                    type=pwd_type, 
+                    placeholder="Enter password", 
+                    key="login_password", 
+                    label_visibility="collapsed"
+                ).strip()
 
                 st.write("")
-                # Centered submit button columns layout
                 b_col1, b_col2, b_col3 = st.columns([0.2, 0.6, 0.2])
                 with b_col2:
                     submit_login = st.form_submit_button("🔑 LOGIN TO DASHBOARD", type="primary", use_container_width=True)
