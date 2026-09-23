@@ -323,7 +323,8 @@ def render_login_form():
             if logo_path:
                 l_col1, l_col2, l_col3 = st.columns([0.1, 3.8, 0.1])
                 with l_col2:
-                    st.image(logo_path, use_column_width=True)
+                    st.image(logo_path, use_container_width=True)
+                    
             else:
                 st.markdown("<h2 style='text-align:center; color:#0F3D7A; font-weight:800; margin-bottom:5px;'>SIDHARTH</h2><p style='text-align:center; color:#0F3D7A; font-size:0.85rem; font-weight:700; letter-spacing:1px; margin-top:-10px;'>SHUTTER & AUTOMATION</p>", unsafe_allow_html=True)
 
