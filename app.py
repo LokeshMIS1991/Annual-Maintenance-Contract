@@ -8,7 +8,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 st.set_page_config(
-    page_title="AMC Annual Maintenance Tracker", 
+    page_title="SIDHARTH - Enterprise Operations & Field Portal", 
     page_icon="🛠️", 
     layout="wide"
 )
@@ -36,7 +36,7 @@ except Exception as e:
     st.stop()
 
 def load_sheet_data(worksheet_name):
-    # Strict list of 19 base metadata columns
+    # Strict list of base metadata columns
     service_report_cols = [
         "Report_ID", "Job_ID", "Tech_ID", "Tech_Name", "Client_Name", "Site_Location", 
         "AMC_Contract_No", "Category", "Equipment_Type", "Make_Model", "Door_Size", "Qty", 
@@ -44,7 +44,6 @@ def load_sheet_data(worksheet_name):
         "Remarks", "Submitted_At"
     ]
     
-    # Append strictly Q1_Choice, Q1_Remark through Q18_Choice, Q18_Remark (55 columns total)
     for i in range(1, 19):
         service_report_cols.extend([f"Q{i}_Choice", f"Q{i}_Remark"])
 
@@ -63,12 +62,10 @@ def load_sheet_data(worksheet_name):
         records = ws.get_all_records()
         df = pd.DataFrame(records)
         
-        # Guarantee all expected columns exist
         for col in cols:
             if col not in df.columns:
                 df[col] = ""
                 
-        # Return ONLY the defined columns to drop any rogue columns like P01_...
         return df[cols]
     except Exception:
         try:
@@ -180,6 +177,13 @@ def make_google_maps_link(address, city, pincode=""):
     query = urllib.parse.quote(f"{address}, {city} {pincode}".strip())
     return f"https://www.google.com/maps/search/?api=1&query={query}"
 
+def make_whatsapp_link(phone_num, message):
+    clean_phone = "".join(filter(str.isdigit, str(phone_num)))
+    if len(clean_phone) == 10:
+        clean_phone = "91" + clean_phone
+    encoded_msg = urllib.parse.quote(message)
+    return f"https://wa.me/{clean_phone}?text={encoded_msg}"
+
 def get_logo_path():
     for name in ["Company Logo.jpeg", "Company Logo.png", "Company Logo.jpg"]:
         if os.path.exists(name):
@@ -205,52 +209,97 @@ def show_task_summary_popup(tech_name, total_cnt, completed_cnt, pending_cnt):
         st.info("No work orders recorded for this technician.")
 
 # -----------------------------------------------------------------------------
-# 4. BRANDED UI STYLING
+# 4. BRANDED UI STYLING (UPDATED TO MATCH IMAGE DESIGN)
 # -----------------------------------------------------------------------------
 
 st.markdown("""
 <style>
-    .stTabs [data-baseweb="tab-highlight"] { background-color: #1565C0 !important; }
-    .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #1565C0 !important; font-weight: 700 !important; }
-    [data-testid="stSidebar"] { background-color: #F8FAFC !important; }
-    .sidebar-logo-sub { color: #10B981; font-weight: 800; font-size: 0.95rem; letter-spacing: 1.5px; text-align: center; margin-top: 6px; }
-    
-    .stButton > button, div[data-testid="stForm"] button { 
-        background-color: #1565C0 !important; 
-        color: #FFFFFF !important; 
-        border-radius: 8px !important; 
-        font-weight: 600 !important; 
-        width: 100% !important; 
+    /* Global Page Styling */
+    .stApp {
+        background-color: #F4F6F9 !important;
     }
-    .stButton > button:hover, div[data-testid="stForm"] button:hover { background-color: #0D47A1 !important; }
-    a { color: #1565C0 !important; }
-    
-    div[data-testid="stForm"] { 
-        background-color: #FFFFFF; 
-        border: 2px solid #1565C0; 
-        border-radius: 16px; 
-        padding: 24px; 
-    }
-    .login-container div[data-testid="stForm"] { padding: 20px 28px !important; max-width: 360px; margin: 0 auto; text-align: center; }
 
-    div[data-baseweb="select"] {
-        background-color: transparent !important;
-    }
-    div[data-baseweb="select"] > div {
-        background-color: #F8FAFC !important;
-        border-color: #CBD5E1 !important;
-        color: #0F172A !important;
+    .stTabs [data-baseweb="tab-highlight"] { background-color: #0F3D7A !important; }
+    .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #0F3D7A !important; font-weight: 700 !important; }
+    [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #E2E8F0; }
+    .sidebar-logo-sub { color: #00A859; font-weight: 800; font-size: 0.85rem; letter-spacing: 1.5px; text-align: center; margin-top: 4px; }
+    
+    /* Login Form Customization */
+    .login-box-container {
+        max-width: 440px;
+        margin: 20px auto 0 auto;
+        background-color: #FFFFFF;
+        border: 2px solid #0F3D7A;
+        border-radius: 20px;
+        padding: 30px 28px 24px 28px;
+        box-shadow: 0px 10px 25px rgba(15, 61, 122, 0.08);
     }
     
+    .login-subtitle {
+        text-align: center;
+        color: #556B82;
+        font-size: 0.95rem;
+        font-weight: 600;
+        margin-top: -10px;
+        margin-bottom: 25px;
+    }
+
+    .login-field-label {
+        color: #0F3D7A;
+        font-weight: 700;
+        font-size: 0.95rem;
+        margin-bottom: 4px;
+        margin-top: 12px;
+    }
+
+    /* Green Login Button Styling */
+    .stButton > button.login-btn {
+        background-color: #00A859 !important;
+        color: #FFFFFF !important;
+        border-radius: 8px !important;
+        font-weight: 800 !important;
+        font-size: 1rem !important;
+        padding: 12px 0px !important;
+        border: none !important;
+        width: 100% !important;
+        box-shadow: 0 4px 10px rgba(0, 168, 89, 0.25) !important;
+    }
+    .stButton > button.login-btn:hover {
+        background-color: #008D4B !important;
+        box-shadow: 0 6px 14px rgba(0, 168, 89, 0.35) !important;
+    }
+
+    /* Form Fields Styling */
+    div[data-testid="stTextInput"] input {
+        background-color: #F0F4F8 !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 8px !important;
+        color: #1E293B !important;
+    }
+    
+    /* WhatsApp / Action Buttons */
+    .wa-btn {
+        display: inline-block;
+        background-color: #25D366;
+        color: white !important;
+        padding: 6px 14px;
+        border-radius: 6px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.88rem;
+    }
+    .wa-btn:hover { background-color: #1DA851; }
+
     .equipment-box {
-        background-color: #F8FAFC;
-        border-left: 5px solid #0F172A;
+        background-color: #FFFFFF;
+        border-left: 5px solid #0F3D7A;
         border-radius: 8px;
         padding: 12px 18px;
         margin-bottom: 20px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.03);
     }
     .equipment-title {
-        color: #0F172A !important;
+        color: #0F3D7A !important;
         font-weight: 700;
         margin: 0 0 10px 0;
         font-size: 1.25rem;
@@ -259,36 +308,60 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 5. LOGIN SCREEN
+# 5. LOGIN SCREEN (REDESIGNED TO PHOTO SPECIFICATION)
 # -----------------------------------------------------------------------------
 
 if "user" not in st.session_state:
     st.session_state.user = None
 
 if st.session_state.user is None:
-    col_left, col_center, col_right = st.columns([1.2, 1.3, 1.2])
+    col_left, col_center, col_right = st.columns([1, 1.4, 1])
 
     with col_center:
-        st.markdown("<div class='login-container'>", unsafe_allow_html=True)
-        with st.form("login_form"):
-            logo_path = get_logo_path()
-            if logo_path:
-                st.image(logo_path, use_container_width=True)
+        st.markdown("<div class='login-box-container'>", unsafe_allow_html=True)
+        
+        logo_path = get_logo_path()
+        if logo_path:
+            st.image(logo_path, use_container_width=True)
+        else:
+            st.markdown("<h2 style='text-align: center; color: #0F3D7A; font-weight: 900; margin-bottom: 0;'>JidHARTH</h2>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; color: #0F3D7A; font-weight: 800; font-size: 0.8rem; letter-spacing: 2px; margin-top: -5px;'>SHUTTER & AUTOMATION</p>", unsafe_allow_html=True)
+        
+        st.markdown("<div class='login-subtitle'>Enterprise Operations & Field Portal</div>", unsafe_allow_html=True)
+        
+        st.markdown("<div class='login-field-label'>Username / Name</div>", unsafe_allow_html=True)
+        user_input = st.text_input("Username / Name", placeholder="e.g. Parvesh Kumar or Vishak", label_visibility="collapsed").strip()
+        
+        st.markdown("<div class='login-field-label'>Password / PIN</div>", unsafe_allow_html=True)
+        
+        c_chk1, c_chk2 = st.columns(2)
+        with c_chk1:
+            show_pwd = st.checkbox("Show Password")
+        with c_chk2:
+            st.checkbox("Remember Me", value=True)
+            
+        pwd_type = "text" if show_pwd else "password"
+        password_input = st.text_input("Password / PIN", type=pwd_type, placeholder="Enter password", label_visibility="collapsed").strip()
+
+        st.write("")
+        if st.button("🔑 LOGIN TO DASHBOARD", key="login_submit_btn", type="primary"):
+            if not user_input or not password_input:
+                st.error("⚠️ Please fill in both Username and Password.")
             else:
-                st.markdown("<h2 style='text-align: center; color: #0D47A1; margin:0;'>⚙️ SIDHARTH</h2>", unsafe_allow_html=True)
-            
-            st.markdown("<h3 style='text-align:center; color:#0D47A1;'>AMC Tracker</h3>", unsafe_allow_html=True)
-            user_id_input = st.text_input("User ID", placeholder="e.g. TECH01").strip().upper()
-            password_input = st.text_input("Password", type="password", placeholder="Enter password").strip()
-            
-            if st.form_submit_button("Sign In"):
                 user_df = st.session_state.users_db
-                match = user_df[(user_df["User_ID"].astype(str) == user_id_input) & (user_df["Password"].astype(str) == password_input)]
+                # Match against User_ID OR Full_Name
+                match = user_df[
+                    ((user_df["User_ID"].astype(str).str.upper() == user_input.upper()) | 
+                     (user_df["Full_Name"].astype(str).str.upper() == user_input.upper())) & 
+                    (user_df["Password"].astype(str) == password_input)
+                ]
+                
                 if not match.empty:
                     st.session_state.user = match.iloc[0].to_dict()
                     st.rerun()
                 else:
-                    st.error("❌ Invalid User ID or Password")
+                    st.error("❌ Invalid Credentials. Please check your username/password.")
+                    
         st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
@@ -301,8 +374,8 @@ with st.sidebar:
     if logo_path:
         st.image(logo_path, use_container_width=True)
     else:
-        st.markdown("<h3 style='color: #0D47A1; text-align:center;'>⚙️ SIDHARTH</h3>", unsafe_allow_html=True)
-    st.markdown("<div class='sidebar-logo-sub'>AMC TRACKER</div>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #0F3D7A; text-align:center;'>JidHARTH</h3>", unsafe_allow_html=True)
+    st.markdown("<div class='sidebar-logo-sub'>SHUTTER & AUTOMATION</div>", unsafe_allow_html=True)
     st.divider()
     st.markdown(f"**Logged User:** {st.session_state.user['Full_Name']}")
     st.markdown(f"**Role:** `{st.session_state.user['Role']}`")
@@ -355,8 +428,12 @@ if st.session_state.user["Role"] == "Technician":
                     st.markdown(f"**Client Contact:** [{job['Client_Phone']}](tel:{job['Client_Phone']})")
                     st.markdown(f"**Task Description:** {job['Issue_Description']}")
                     st.markdown(f"**Scheduled Time:** {job['Scheduled_Time']}")
+                    
                     maps_url = make_google_maps_link(job['Address'], job['City'], job.get('Pincode', ''))
-                    st.markdown(f"[📍 **Open Route in Google Maps**]({maps_url})")
+                    wa_msg = f"Hello {job['Client_Name']}, Sidharth Automation technician {tech_name} is scheduled for your AMC service on {job['Scheduled_Time']}."
+                    wa_url = make_whatsapp_link(job['Client_Phone'], wa_msg)
+                    
+                    st.markdown(f"[📍 **Open Route in Google Maps**]({maps_url}) &nbsp;|&nbsp; <a href='{wa_url}' target='_blank' class='wa-btn'>💬 WhatsApp Client</a>", unsafe_allow_html=True)
 
                 with col_b:
                     status_list = ["Assigned", "In Transit", "On Site", "Completed"]
@@ -371,7 +448,7 @@ if st.session_state.user["Role"] == "Technician":
                             st.toast(f"✅ Status updated for {job['Job_ID']}!")
                             st.rerun()
                     with btn_report:
-                        if st.button("📝 Submit Report", key=f"btn_rpt_{job['Job_ID']}"):
+                        if st.button("📝 Service Report", key=f"btn_rpt_{job['Job_ID']}"):
                             st.session_state.selected_job_for_report = job["Job_ID"]
                             st.toast(f"Selected {job['Job_ID']} for service report!")
                 st.divider()
@@ -386,10 +463,9 @@ if st.session_state.user["Role"] == "Technician":
         ]
         
         if pending_tech_jobs.empty:
-            st.info("🎉 No pending or assigned tasks found for you to submit a report for.")
+            st.info("🎉 No pending tasks found for you to submit a report for.")
         else:
             job_options = pending_tech_jobs["Job_ID"].tolist()
-            
             default_index = 0
             if st.session_state.selected_job_for_report in job_options:
                 default_index = job_options.index(st.session_state.selected_job_for_report)
@@ -430,7 +506,6 @@ if st.session_state.user["Role"] == "Technician":
                 with c_det2:
                     rpt_next_due = st.date_input("Next Service Due Date", value=date.today() + pd.Timedelta(days=90))
 
-                # Section 1: Equipment Details
                 st.markdown("<div class='equipment-box'><h3 class='equipment-title'>1. Equipment Details</h3>", unsafe_allow_html=True)
                 eq_col1, eq_col2, eq_col3, eq_col4, eq_col5 = st.columns([3, 2, 2, 1, 2])
                 with eq_col1:
@@ -445,9 +520,7 @@ if st.session_state.user["Role"] == "Technician":
                     eq_condition = st.selectbox("Condition", ["Good", "Requires Repair", "Critical", "Replaced"])
                 st.markdown("</div>", unsafe_allow_html=True)
 
-                # Section 2: Preventive Maintenance Checklist
                 st.markdown(f"### 2. Preventive Maintenance Checklist ({selected_category})")
-                
                 checklist_results = {}
                 checklist_items = EQUIPMENT_DATA[selected_category]["checklist"]
                 
@@ -473,14 +546,12 @@ if st.session_state.user["Role"] == "Technician":
                             label_visibility="collapsed"
                         )
                     
-                    # Save status and remark under Q1..Q18 numerical keys
                     checklist_results[f"Q{idx}"] = {
                         "choice": status, 
                         "remark": remark.strip() if remark.strip() else "N/A"
                     }
                     st.divider()
 
-                # Section 3: Overall Remarks
                 st.markdown("### 3. Remarks / Recommendations")
                 rpt_remarks = st.text_area("General Remarks & Summary*", placeholder="Overall observations, recommendations...")
 
@@ -496,7 +567,6 @@ if st.session_state.user["Role"] == "Technician":
                         except Exception:
                             submit_time_str = datetime.now().strftime("%Y-%m-%d %I:%M %p")
 
-                        # Core metadata record (NO legacy P01..P18 keys)
                         report_entry = {
                             "Report_ID": f"RPT-{len(st.session_state.service_reports_db) + 1001}",
                             "Job_ID": selected_job_id,
@@ -519,7 +589,6 @@ if st.session_state.user["Role"] == "Technician":
                             "Submitted_At": submit_time_str
                         }
 
-                        # Dynamically populate EXCLUSIVELY Q1_Choice, Q1_Remark through Q18_Choice, Q18_Remark
                         for idx in range(1, 19):
                             q_key = f"Q{idx}"
                             if q_key in checklist_results:
@@ -529,14 +598,12 @@ if st.session_state.user["Role"] == "Technician":
                                 report_entry[f"Q{idx}_Choice"] = "N/A"
                                 report_entry[f"Q{idx}_Remark"] = "N/A"
 
-                        # Ensure DataFrame conforms strictly to approved columns (19 base + 36 Q-cols)
                         valid_columns = load_sheet_data("ServiceReports").columns.tolist()
                         new_row_df = pd.DataFrame([report_entry])[valid_columns]
 
                         st.session_state.service_reports_db = pd.concat([st.session_state.service_reports_db[valid_columns], new_row_df], ignore_index=True)
                         save_sheet_data(st.session_state.service_reports_db, "ServiceReports")
                         
-                        # Set job status to Completed
                         st.session_state.jobs_db.loc[st.session_state.jobs_db["Job_ID"] == selected_job_id, "Status"] = "Completed"
                         save_sheet_data(st.session_state.jobs_db, "Jobs")
                         
@@ -605,7 +672,7 @@ if st.session_state.user["Role"] == "Technician":
 # -----------------------------------------------------------------------------
 
 elif st.session_state.user["Role"] in ["Manager", "Admin"]:
-    st.markdown("<h1 style='color: #0D47A1;'>📡 Dispatch & AMC Control Center</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='color: #0F3D7A;'>📡 Dispatch & AMC Control Center</h1>", unsafe_allow_html=True)
 
     mgr_tab1, mgr_tab2, mgr_tab3, mgr_tab4 = st.tabs([
         "MAP / Live Radar", 
@@ -651,8 +718,35 @@ elif st.session_state.user["Role"] in ["Manager", "Admin"]:
         st.dataframe(st.session_state.service_reports_db, use_container_width=True)
 
     with mgr_tab3:
-        st.subheader("🗓️ AMC Client Contracts Management")
-        st.dataframe(st.session_state.amc_contracts_db, use_container_width=True)
+        st.subheader("🗓️ AMC Client Contracts & Utilization Tracker")
+        
+        contracts_df = st.session_state.amc_contracts_db.copy()
+        reports_df = st.session_state.service_reports_db
+        
+        # Calculate used visits automatically from submitted reports
+        if not contracts_df.empty:
+            usage_counts = []
+            for _, c_row in contracts_df.iterrows():
+                c_no = str(c_row["AMC_Contract_No"])
+                if not reports_df.empty and "AMC_Contract_No" in reports_df.columns:
+                    used = len(reports_df[reports_df["AMC_Contract_No"].astype(str) == c_no])
+                else:
+                    used = 0
+                usage_counts.append(used)
+            
+            contracts_df["Visits_Used"] = usage_counts
+            st.dataframe(contracts_df, use_container_width=True)
+            
+            # Highlight contracts near or at limit
+            for _, c_row in contracts_df.iterrows():
+                try:
+                    limit = int(c_row.get("Allowed_Visits", 4))
+                    used = int(c_row.get("Visits_Used", 0))
+                    if used >= limit:
+                        st.warning(f"⚠️ Contract **{c_row['AMC_Contract_No']}** ({c_row['Client_Name']}) has reached its limit ({used}/{limit} visits completed)!")
+                except Exception:
+                    pass
+
         st.divider()
         st.markdown("### ✏️ Register / Update AMC Contract Limits")
         
@@ -670,8 +764,7 @@ elif st.session_state.user["Role"] in ["Manager", "Admin"]:
                 if not contract_no or not c_client_name:
                     st.error("⚠️ Contract Number and Client Name are required.")
                 else:
-                    contracts_df = st.session_state.amc_contracts_db
-                    if not contracts_df.empty and contract_no in contracts_df["AMC_Contract_No"].astype(str).values:
+                    if not st.session_state.amc_contracts_db.empty and contract_no in st.session_state.amc_contracts_db["AMC_Contract_No"].astype(str).values:
                         st.session_state.amc_contracts_db.loc[
                             st.session_state.amc_contracts_db["AMC_Contract_No"].astype(str) == contract_no,
                             ["Client_Name", "Start_Date", "End_Date", "Allowed_Visits"]
