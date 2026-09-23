@@ -337,19 +337,20 @@ def render_login_form():
             )
 
             chk_col1, chk_col2 = st.columns(2)
-            with chk_col1:
-                show_password = st.checkbox("Show Password", key="show_pwd_toggle")
-            with chk_col2:
-                st.checkbox("Remember Me", key="remember_me_toggle")
-
-            pwd_type = "text" if show_password else "password"
-            
-            password_input = st.text_input(
-                "Password / PIN", 
-                type=pwd_type, 
-                placeholder="Enter password", 
-                key="login_password"
-            )
+            # NEW (Fixed):
+            if show_password:
+                password_input = st.text_input(
+                    "Password / PIN", 
+                    placeholder="Enter password", 
+                    key="login_password_text"
+                )
+            else:
+                password_input = st.text_input(
+                    "Password / PIN", 
+                    type="password", 
+                    placeholder="Enter password", 
+                    key="login_password_mask"
+                )
 
             submit_button = st.form_submit_button("🔑 LOGIN TO DASHBOARD", use_container_width=True)
 
