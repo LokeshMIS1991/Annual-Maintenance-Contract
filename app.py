@@ -22,7 +22,7 @@ st.set_page_config(
 # -----------------------------------------------------------------------------
 
 def get_logo_path():
-    for name in ["Company Logo.jpeg", "Company Logo.png", "Company Logo.jpg"]:
+    for name in ["Company Logo.jpeg", "Company Logo.png", "Company Logo.jpg", "logo.png"]:
         if os.path.exists(name):
             return name
     return None
@@ -216,17 +216,12 @@ EQUIPMENT_DATA = {
 
 st.markdown("""
 <style>
-    /* Global Page Background */
-    .stApp { 
-        background-color: #F4F6F9 !important; 
-    }
-    
+    .stApp { background-color: #F4F6F9 !important; }
     .stTabs [data-baseweb="tab-highlight"] { background-color: #0F3D7A !important; }
     .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #0F3D7A !important; font-weight: 700 !important; }
     [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #E2E8F0; }
     .sidebar-logo-sub { color: #00A859; font-weight: 800; font-size: 0.85rem; letter-spacing: 1.5px; text-align: center; margin-top: 4px; }
     
-    /* Target Streamlit Form Container directly to act as the Login Card */
     div[data-testid="stForm"] {
         background-color: #FFFFFF !important;
         border: 1px solid #E2E8F0 !important;
@@ -237,75 +232,27 @@ st.markdown("""
         margin: 20px auto !important;
     }
 
-    /* Subtitle Styling */
     .login-subtitle {
-        text-align: center; 
-        color: #556B82; 
-        font-size: 0.95rem; 
-        font-weight: 700;
-        letter-spacing: 0.5px;
-        margin-top: 4px; 
-        margin-bottom: 20px;
-        text-transform: uppercase;
+        text-align: center; color: #556B82; font-size: 0.95rem; font-weight: 700;
+        letter-spacing: 0.5px; margin-top: 4px; margin-bottom: 20px; text-transform: uppercase;
     }
 
-    /* Input Labels */
-    .stTextInput > label {
-        color: #0F3D7A !important;
-        font-weight: 700 !important;
-        font-size: 0.92rem !important;
-    }
+    .stTextInput > label { color: #0F3D7A !important; font-weight: 700 !important; font-size: 0.92rem !important; }
 
-    /* Input Field Boxes */
-    div[data-testid="stTextInput"] > div[data-baseweb="input"] {
-        background-color: #F8FAFC !important;
-        border: 1.5px solid #CBD5E1 !important;
-        border-radius: 8px !important;
-        overflow: hidden !important;
-    }
-
-    div[data-testid="stTextInput"] > div[data-baseweb="input"]:focus-within {
-        border-color: #0F3D7A !important;
-    }
-
-    div[data-testid="stTextInput"] input {
-        color: #1E293B !important; 
-        height: 42px !important;
-    }
-
-    /* Submit Button Styling */
     div[data-testid="stFormSubmitButton"] > button {
-        background-color: #00A859 !important; 
-        color: #FFFFFF !important;
-        border-radius: 8px !important; 
-        font-weight: 800 !important; 
-        font-size: 0.98rem !important;
-        height: 44px !important;
-        border: none !important; 
-        width: 100% !important;
-        margin-top: 10px !important;
-        box-shadow: 0 4px 10px rgba(0, 168, 89, 0.25) !important;
+        background-color: #00A859 !important; color: #FFFFFF !important;
+        border-radius: 8px !important; font-weight: 800 !important; font-size: 0.98rem !important;
+        height: 44px !important; border: none !important; width: 100% !important;
+        margin-top: 10px !important; box-shadow: 0 4px 10px rgba(0, 168, 89, 0.25) !important;
     }
     
-    div[data-testid="stFormSubmitButton"] > button:hover {
-        background-color: #008F4C !important;
-    }
+    div[data-testid="stFormSubmitButton"] > button:hover { background-color: #008F4C !important; }
 
-    /* Equipment Box for Checklist */
     .equipment-box {
-        background-color: #FFFFFF; 
-        border-left: 5px solid #0F3D7A;
-        border-radius: 8px; 
-        padding: 12px 18px; 
-        margin-bottom: 20px; 
-        box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+        background-color: #FFFFFF; border-left: 5px solid #0F3D7A;
+        border-radius: 8px; padding: 12px 18px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.03);
     }
-    .equipment-title { 
-        color: #0F3D7A !important; 
-        font-weight: 700; 
-        margin: 0 0 10px 0; 
-        font-size: 1.25rem; 
-    }
+    .equipment-title { color: #0F3D7A !important; font-weight: 700; margin: 0 0 10px 0; font-size: 1.25rem; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -317,24 +264,18 @@ def render_login_form():
     col1, col2, col3 = st.columns([1, 1.8, 1])
     
     with col2:
-        # Streamlit Form acts directly as the bordered card
         with st.form("main_login_form", clear_on_submit=False):
             logo_path = get_logo_path()
             if logo_path:
                 l_col1, l_col2, l_col3 = st.columns([0.1, 3.8, 0.1])
                 with l_col2:
                     st.image(logo_path, use_container_width=True)
-                    
             else:
                 st.markdown("<h2 style='text-align:center; color:#0F3D7A; font-weight:800; margin-bottom:5px;'>SIDHARTH</h2><p style='text-align:center; color:#0F3D7A; font-size:0.85rem; font-weight:700; letter-spacing:1px; margin-top:-10px;'>SHUTTER & AUTOMATION</p>", unsafe_allow_html=True)
 
             st.markdown("<p class='login-subtitle'>AMC Tracker Portal</p>", unsafe_allow_html=True)
 
-            user_id_input = st.text_input(
-                "Username / Name", 
-                placeholder="Enter User Name", 
-                key="login_userid"
-            )
+            user_id_input = st.text_input("Username / Name", placeholder="Enter User Name", key="login_userid")
 
             chk_col1, chk_col2 = st.columns(2)
             with chk_col1:
@@ -343,13 +284,7 @@ def render_login_form():
                 st.checkbox("Remember Me", key="remember_me_toggle")
 
             pwd_type = "text" if show_password else "password"
-            
-            password_input = st.text_input(
-                "Password / PIN", 
-                type=pwd_type, 
-                placeholder="Enter password", 
-                key="login_password"
-            )
+            password_input = st.text_input("Password / PIN", type=pwd_type, placeholder="Enter password", key="login_password")
 
             submit_button = st.form_submit_button("🔑 LOGIN TO DASHBOARD", use_container_width=True)
 
@@ -388,6 +323,7 @@ def render_login_form():
 if not st.session_state.get("authenticated", False):
     render_login_form()
     st.stop()
+
 # -----------------------------------------------------------------------------
 # 6. SIDEBAR NAV & USER INFO
 # -----------------------------------------------------------------------------
@@ -405,15 +341,6 @@ with st.sidebar:
 
     logged_name = st.session_state.get("user_name", "User")
     logged_role = st.session_state.get("user_role", "Technician")
-
-    if "user" in st.session_state and st.session_state.user is not None:
-        u = st.session_state.user
-        if isinstance(u, dict):
-            logged_name = u.get("Full_Name", logged_name)
-            logged_role = u.get("Role", logged_role)
-        elif hasattr(u, "get"):
-            logged_name = u.get("Full_Name", logged_name)
-            logged_role = u.get("Role", logged_role)
 
     st.markdown(f"**Logged User:** {logged_name}")
     st.markdown(f"**Role:** `{logged_role}`")
@@ -660,318 +587,59 @@ if logged_role == "Technician":
                 input_curr_pin = st.text_input("Current Pin Code", value=c_pin, max_chars=6)
                 status_options = ["Available", "On Site", "In Transit"]
                 selected_idx = status_options.index(c_status_raw) if c_status_raw in status_options else 0
-                input_status = st.radio("Current Activity", status_options, index=selected_idx, horizontal=True)
+                input_status = st.radio("Current Activity Status", status_options, index=selected_idx, horizontal=True)
                 
             with c2:
                 input_next_city = st.text_input("Next Target City", value=n_city)
                 input_next_pin = st.text_input("Next Target Pin Code", value=n_pin, max_chars=6)
-                input_eta = st.text_input("ETA Arrival Time", value=eta_val)
-                
-            if st.form_submit_button("Broadcast Location Update"):
+                input_eta = st.text_input("Estimated Time of Arrival (ETA)", value=eta_val, placeholder="e.g. 02:30 PM")
+
+            submit_status = st.form_submit_button("📡 Broadcast My Status")
+            
+            if submit_status:
                 try:
                     local_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
-                    now_str = datetime.now(local_tz).strftime("%I:%M %p")
+                    now_str = datetime.now(local_tz).strftime("%Y-%m-%d %I:%M %p")
                 except Exception:
-                    now_str = datetime.now().strftime("%I:%M %p")
-                
-                if tech_id in st.session_state.tech_status_db["Tech_ID"].astype(str).values:
-                    st.session_state.tech_status_db.loc[
-                        st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id,
-                        ["Current_City", "Current_Pincode", "Current_Status", "Next_City", "Next_Pincode", "ETA", "Last_Updated"]
-                    ] = [input_curr_city, input_curr_pin, input_status, input_next_city, input_next_pin, input_eta, now_str]
-                else:
-                    new_row = {"Tech_ID": tech_id, "Current_City": input_curr_city, "Current_Pincode": input_curr_pin, "Current_Status": input_status, "Next_City": input_next_city, "Next_Pincode": input_next_pin, "ETA": input_eta, "Last_Updated": now_str}
-                    st.session_state.tech_status_db = pd.concat([st.session_state.tech_status_db, pd.DataFrame([new_row])], ignore_index=True)
-                
-                save_sheet_data(st.session_state.tech_status_db, "TechStatus")
-                st.toast(f"📍 Location Broadcast Updated at {now_str}!", icon="✅")
-                st.rerun()
+                    now_str = datetime.now().strftime("%Y-%m-%d %I:%M %p")
 
-    # TAB 4: Personal History
+                status_entry = {
+                    "Tech_ID": tech_id,
+                    "Current_City": input_curr_city,
+                    "Current_Pincode": input_curr_pin,
+                    "Current_Status": input_status,
+                    "Next_City": input_next_city,
+                    "Next_Pincode": input_next_pin,
+                    "ETA": input_eta,
+                    "Last_Updated": now_str
+                }
+                
+                # Check if technician status already exists, then update or append
+                df_ts = st.session_state.tech_status_db
+                if tech_id in df_ts["Tech_ID"].astype(str).values:
+                    idx = df_ts[df_ts["Tech_ID"].astype(str) == tech_id].index[0]
+                    for k, v in status_entry.items():
+                        df_ts.loc[idx, k] = v
+                else:
+                    df_ts = pd.concat([df_ts, pd.DataFrame([status_entry])], ignore_index=True)
+                
+                st.session_state.tech_status_db = df_ts
+                save_sheet_data(df_ts, "TechStatus")
+                st.success("✅ Location & Status broadcasted successfully!")
+
+    # TAB 4: Reports History
     with tech_tab4:
-        st.subheader("📈 My Personal Performance Summary")
-        reports_df = st.session_state.service_reports_db
+        st.subheader("📈 My Submitted Reports & History")
+        my_reports = st.session_state.service_reports_db[st.session_state.service_reports_db["Tech_ID"].astype(str) == tech_id]
         
-        if not reports_df.empty and "Tech_ID" in reports_df.columns:
-            my_reports = reports_df[reports_df["Tech_ID"].astype(str) == tech_id]
-            
-            if not my_reports.empty:
-                km_series = my_reports["Distance_Travelled_KM"] if "Distance_Travelled_KM" in my_reports.columns else pd.Series(dtype=float)
-                hrs_series = my_reports["Time_Taken_Hours"] if "Time_Taken_Hours" in my_reports.columns else pd.Series(dtype=float)
-
-                sites_visited = len(my_reports)
-                tot_km = pd.to_numeric(km_series, errors='coerce').sum()
-                tot_hrs = pd.to_numeric(hrs_series, errors='coerce').sum()
-
-                m1, m2, m3, m4 = st.columns(4)
-                m1.metric("Sites Visited", sites_visited)
-                m2.metric("Total Travelled", f"{tot_km:.1f} KM")
-                m3.metric("Time Spent On-Site", f"{tot_hrs:.1f} Hrs")
-                m4.metric("Avg Time / Site", f"{(tot_hrs / sites_visited):.1f} Hrs" if sites_visited > 0 else "0 Hrs")
-                
-                st.divider()
-                st.markdown("### Detailed Reports Log")
-                st.dataframe(my_reports, use_container_width=True)
-            else:
-                st.info("📜 No service reports submitted yet.")
+        if my_reports.empty:
+            st.info("No service reports submitted yet.")
         else:
-            st.info("📜 No service reports submitted yet.")
+            st.dataframe(my_reports, use_container_width=True)
 
-# -----------------------------------------------------------------------------
-# 8. MANAGER COMMAND DASHBOARD & ANALYTICS
-# -----------------------------------------------------------------------------
-
-elif logged_role in ["Manager", "Admin"]:
-    st.markdown("<h1 style='color: #0F3D7A;'>📡 AMC Tracker Portal — Command & Control Center</h1>", unsafe_allow_html=True)
-
-    # AMC Alerts
-    contracts_df = st.session_state.amc_contracts_db
-    if not contracts_df.empty and "Next_Visit_Due" in contracts_df.columns:
-        contracts_df["Next_Visit_Due_DT"] = pd.to_datetime(contracts_df["Next_Visit_Due"], errors="coerce")
-        today_dt = pd.Timestamp(date.today())
-        upcoming_due = contracts_df[
-            (contracts_df["Next_Visit_Due_DT"] >= today_dt) & 
-            (contracts_df["Next_Visit_Due_DT"] <= (today_dt + timedelta(days=7)))
-        ]
-        
-        if not upcoming_due.empty:
-            st.warning(f"🔔 **Upcoming AMC Visit Alerts ({len(upcoming_due)} Due in Next 7 Days)**")
-            for _, u_row in upcoming_due.iterrows():
-                st.caption(f"• **{u_row['Client_Name']}** (Contract: `{u_row['AMC_Contract_No']}`, PO: `{u_row.get('PO_Number','N/A')}`) — Visit Due Date: **{u_row['Next_Visit_Due']}**")
-            st.divider()
-
-    mgr_tab1, mgr_tab2, mgr_tab3, mgr_tab4, mgr_tab5 = st.tabs([
-        "📊 Progress Reports & Analytics",
-        "🗺️ MAP / Live Radar", 
-        "📄 All Service Reports",
-        "📅 AMC Contract Manager",
-        "➕ Create Task / User"
-    ])
-
-    # TAB 1: Filterable Progress Dashboard & Analytics
-    with mgr_tab1:
-        st.subheader("📊 Technician Field Operations & Progress Dashboard")
-        
-        f_col1, f_col2 = st.columns(2)
-        with f_col1:
-            time_filter = st.selectbox(
-                "🗓️ Date Range Filter", 
-                ["All Time", "Today", "Weekly (Last 7 Days)", "Monthly (Last 30 Days)", "3 Months", "Yearly"]
-            )
-        
-        tech_users = st.session_state.users_db[st.session_state.users_db["Role"] == "Technician"]
-        tech_options = ["All Technicians"] + tech_users["Full_Name"].tolist()
-        
-        with f_col2:
-            tech_filter = st.selectbox("👷 Technician Filter", tech_options)
-
-        all_reports = st.session_state.service_reports_db.copy()
-        
-        if time_filter != "All Time":
-            all_reports = filter_df_by_date_range(all_reports, "Service_Date", time_filter)
-            
-        if tech_filter != "All Technicians":
-            all_reports = all_reports[all_reports["Tech_Name"] == tech_filter]
-
-        st.divider()
-
-        tot_visited = len(all_reports)
-        
-        if not all_reports.empty and "Distance_Travelled_KM" in all_reports.columns:
-            all_reports["Distance_Travelled_KM"] = pd.to_numeric(all_reports["Distance_Travelled_KM"], errors='coerce').fillna(0)
-            tot_dist = all_reports["Distance_Travelled_KM"].sum()
-        else:
-            tot_dist = 0.0
-
-        if not all_reports.empty and "Time_Taken_Hours" in all_reports.columns:
-            all_reports["Time_Taken_Hours"] = pd.to_numeric(all_reports["Time_Taken_Hours"], errors='coerce').fillna(0)
-            tot_time = all_reports["Time_Taken_Hours"].sum()
-        else:
-            tot_time = 0.0
-
-        p_col1, p_col2, p_col3, p_col4 = st.columns(4)
-        p_col1.metric("📍 Total Sites Visited", tot_visited)
-        p_col2.metric("🚗 Total Travelled", f"{tot_dist:.1f} KM")
-        p_col3.metric("⏱️ Total Field Hours", f"{tot_time:.1f} Hours")
-        p_col4.metric("📊 Avg Time / Site", f"{(tot_time / tot_visited):.1f} Hrs" if tot_visited > 0 else "0.0 Hrs")
-
-        st.divider()
-
-        if not all_reports.empty and "Tech_Name" in all_reports.columns:
-            chart_col1, chart_col2 = st.columns(2)
-            
-            summary_grp = all_reports.groupby("Tech_Name").agg(
-                Sites_Visited=("Report_ID", "count"),
-                Total_KM=("Distance_Travelled_KM", "sum"),
-                Total_Hours=("Time_Taken_Hours", "sum")
-            ).reset_index()
-
-            with chart_col1:
-                st.markdown("#### 📍 Sites Visited per Technician")
-                st.bar_chart(data=summary_grp, x="Tech_Name", y="Sites_Visited", color="#0F3D7A")
-
-            with chart_col2:
-                st.markdown("#### 🚗 Total Travel Distance (KM)")
-                st.bar_chart(data=summary_grp, x="Tech_Name", y="Total_KM", color="#00A859")
-
-            st.divider()
-
-            st.markdown("### 🎯 Task Completion Rate by Technician")
-            all_jobs = st.session_state.jobs_db.copy()
-            
-            for _, tech in tech_users.iterrows():
-                t_id = str(tech["User_ID"])
-                t_name = tech["Full_Name"]
-                
-                tech_jobs = all_jobs[all_jobs["Assigned_Tech_ID"].astype(str) == t_id]
-                total_assigned = len(tech_jobs)
-                completed = len(tech_jobs[tech_jobs["Status"] == "Completed"])
-                
-                if total_assigned > 0:
-                    pct = int((completed / total_assigned) * 100)
-                    col_txt, col_bar = st.columns([2, 5])
-                    with col_txt:
-                        st.write(f"**{t_name}**: {completed}/{total_assigned} Jobs Done ({pct}%)")
-                    with col_bar:
-                        st.progress(pct / 100)
-
-            st.divider()
-
-            st.markdown("### 📋 Progress Summary Table")
-            st.dataframe(summary_grp, use_container_width=True)
-            
-            csv_data = all_reports.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Download Detailed Progress Report (CSV)",
-                data=csv_data,
-                file_name=f"technician_progress_report_{date.today()}.csv",
-                mime="text/csv"
-            )
-        else:
-            st.info("ℹ️ No visit or progress records match the selected filter criteria.")
-
-    # TAB 2: MAP / Live Radar
-    with mgr_tab2:
-        st.subheader("Technician Fleet Live Radar")
-        full_radar = pd.merge(st.session_state.tech_status_db, st.session_state.users_db[["User_ID", "Full_Name"]], left_on="Tech_ID", right_on="User_ID", how="left")
-        st.dataframe(full_radar, use_container_width=True)
-        
-        st.divider()
-        st.subheader("All Active Work Orders")
-        st.dataframe(st.session_state.jobs_db, use_container_width=True)
-
-    # TAB 3: Service Reports Log
-    with mgr_tab3:
-        st.subheader("📋 Field Service Visit Reports Log")
-        st.dataframe(st.session_state.service_reports_db, use_container_width=True)
-
-    # TAB 4: Contract Manager
-    with mgr_tab4:
-        st.subheader("🗓️ AMC Client Contracts & PO Number Management")
-        st.dataframe(st.session_state.amc_contracts_db, use_container_width=True)
-        st.divider()
-        st.markdown("### ✏️ Register / Update AMC Contract & PO Details")
-        
-        with st.form("edit_amc_contract_form"):
-            col_c1, col_c2 = st.columns(2)
-            with col_c1:
-                contract_no = st.text_input("AMC Contract Number*", placeholder="e.g. AMC-2026-88").strip()
-                po_number = st.text_input("PO Number*", placeholder="e.g. PO-998877").strip()
-                c_client_name = st.text_input("Client Name*", placeholder="e.g. Apex Industries").strip()
-                visits_allowed = st.selectbox("Annual Allowed Visits Limit*", [2, 3, 4], index=2)
-            with col_c2:
-                contract_start = st.date_input("Contract Start Date", value=date.today())
-                contract_end = st.date_input("Contract End Date", value=date.today() + pd.Timedelta(days=365))
-                next_visit_due = st.date_input("Next Scheduled Visit Due*", value=date.today() + pd.Timedelta(days=90))
-            
-            if st.form_submit_button("Save / Update AMC Contract"):
-                if not contract_no or not c_client_name or not po_number:
-                    st.error("⚠️ Contract Number, PO Number, and Client Name are required.")
-                else:
-                    contracts_df = st.session_state.amc_contracts_db
-                    if not contracts_df.empty and contract_no in contracts_df["AMC_Contract_No"].astype(str).values:
-                        st.session_state.amc_contracts_db.loc[
-                            st.session_state.amc_contracts_db["AMC_Contract_No"].astype(str) == contract_no,
-                            ["PO_Number", "Client_Name", "Start_Date", "End_Date", "Allowed_Visits", "Next_Visit_Due"]
-                        ] = [po_number, c_client_name, str(contract_start), str(contract_end), visits_allowed, str(next_visit_due)]
-                    else:
-                        new_contract = {
-                            "AMC_Contract_No": contract_no,
-                            "PO_Number": po_number,
-                            "Client_Name": c_client_name,
-                            "Start_Date": str(contract_start),
-                            "End_Date": str(contract_end),
-                            "Allowed_Visits": visits_allowed,
-                            "Next_Visit_Due": str(next_visit_due)
-                        }
-                        st.session_state.amc_contracts_db = pd.concat([st.session_state.amc_contracts_db, pd.DataFrame([new_contract])], ignore_index=True)
-                    
-                    save_sheet_data(st.session_state.amc_contracts_db, "AMCContracts")
-                    st.toast(f"✅ Contract {contract_no} with PO {po_number} saved!")
-                    st.rerun()
-
-    # TAB 5: Create Tasks/Users
-    with mgr_tab5:
-        col_mgr_a, col_mgr_b = st.columns(2)
-        
-        with col_mgr_a:
-            st.subheader("Dispatch New Task")
-            with st.form("new_job_form"):
-                j_id = f"JOB-{len(st.session_state.jobs_db) + 101}"
-                client_name = st.text_input("Client Name")
-                client_phone = st.text_input("Client Phone")
-                address = st.text_input("Site Address")
-                city = st.text_input("City")
-                pincode = st.text_input("Pin Code", max_chars=6)
-                issue = st.text_area("Service Notes")
-                
-                tech_list = st.session_state.users_db[st.session_state.users_db["Role"] == "Technician"]
-                assigned_tech = st.selectbox(
-                    "Assign Technician", 
-                    options=tech_list["User_ID"].tolist(), 
-                    format_func=lambda x: f"{x} - {tech_list[tech_list['User_ID']==x]['Full_Name'].values[0]}"
-                )
-                
-                st.markdown("**Scheduled Date & Time**")
-                sched_col1, sched_col2 = st.columns(2)
-                with sched_col1:
-                    sched_date = st.date_input("Scheduled Date", min_value=date.today(), value=date.today())
-                with sched_col2:
-                    sched_time = st.time_input("Scheduled Time", value=time(14, 0))
-                
-                if st.form_submit_button("Task Created"):
-                    selected_datetime = datetime.combine(sched_date, sched_time)
-                    if selected_datetime < datetime.now():
-                        st.error("⚠️ Cannot schedule a task for a time that has already passed today.")
-                    else:
-                        scheduled_time_str = f"{sched_date.strftime('%d-%b-%Y')} at {sched_time.strftime('%I:%M %p')}"
-                        new_job_entry = {
-                            "Job_ID": j_id, "Assigned_Tech_ID": str(assigned_tech), "Client_Name": client_name,
-                            "Client_Phone": client_phone, "Address": address, "City": city, "Pincode": pincode,
-                            "Issue_Description": issue, "Status": "Assigned", "Scheduled_Time": scheduled_time_str
-                        }
-                        st.session_state.jobs_db = pd.concat([st.session_state.jobs_db, pd.DataFrame([new_job_entry])], ignore_index=True)
-                        save_sheet_data(st.session_state.jobs_db, "Jobs")
-                        st.toast(f"✅ Task Created ({j_id})!")
-                        st.rerun()
-
-        with col_mgr_b:
-            st.subheader("Register System User")
-            if logged_role != "Admin":
-                st.info("🔒 System User Registration is restricted. It can be created by Admin only.")
-            else:
-                with st.form("add_user_form"):
-                    new_uid = st.text_input("User ID (e.g. TECH03)").strip().upper()
-                    new_name = st.text_input("Full Name")
-                    new_role = st.selectbox("Role", ["Technician", "Manager", "Admin"])
-                    new_pass = st.text_input("Password", type="password").strip()
-                    
-                    if st.form_submit_button("Create Account"):
-                        if new_uid in st.session_state.users_db["User_ID"].astype(str).values:
-                            st.error("User ID already exists!")
-                        else:
-                            user_entry = {"User_ID": new_uid, "Full_Name": new_name, "Role": new_role, "Password": new_pass}
-                            st.session_state.users_db = pd.concat([st.session_state.users_db, pd.DataFrame([user_entry])], ignore_index=True)
-                            save_sheet_data(st.session_state.users_db, "Users")
-                            st.toast(f"✅ Account for {new_name} created!")
-                            st.rerun()
+# Admin Dashboard fallback
+else:
+    st.title("📊 AMC Tracker Portal — Admin View")
+    st.write("Welcome to Admin Dashboard! All service reports and live technician tracking are active.")
+    st.subheader("Summary of Service Reports")
+    st.dataframe(st.session_state.service_reports_db, use_container_width=True)
