@@ -268,55 +268,58 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# -----------------------------------------------------------------------------
-# 5. LOGIN SCREEN
-# -----------------------------------------------------------------------------
+# --- LOGIN FORM SECTION ---
+def render_login_form():
+    st.markdown("### 🔐 User Login")
+    
+    # Toggle password visibility checkbox
+    show_password = st.checkbox("Show password", key="show_pwd_toggle")
+    pwd_type = "text" if show_password else "password"
+    
+    # Username input
+    user_id_input = st.text_input(
+        "User ID / Phone", 
+        placeholder="Enter User ID or Phone", 
+        key="login_userid",
+        label_visibility="collapsed"
+    )
+    if user_id_input:
+        user_id_input = user_id_input.strip()
 
-if "user" not in st.session_state:
-    st.session_state.user = None
+    # Password input (FIXED)
+    password_input = st.text_input(
+        "Password Input Field", 
+        type=pwd_type, 
+        placeholder="Enter password", 
+        key="login_password", 
+        label_visibility="collapsed"
+    )
+    if password_input:
+        password_input = password_input.strip()
 
-if st.session_state.user is None:
-    _, col_center, _ = st.columns([1, 1.4, 1])
-
-    with col_center:
-        with st.container(border=True):
-            logo_path = get_logo_path()
-            if logo_path:
-                st.image(logo_path, use_container_width=True)
+    # Login Action Button
+    if st.button("Sign In", type="primary", use_container_width=True):
+        if not user_id_input or not password_input:
+            st.warning("⚠️ Please enter both User ID and Password.")
+        else:
+            users_df = st.session_state.users_db
+            
+            # Match user credentials
+            matched_user = users_df[
+                (users_df["User_ID"].astype(str) == user_id_input) & 
+                (users_df["Password"].astype(str) == password_input)
+            ]
+            
+            if not matched_user.empty:
+                user_info = matched_user.iloc[0]
+                st.session_state["authenticated"] = True
+                st.session_state["user_id"] = str(user_info["User_ID"])
+                st.session_state["user_name"] = str(user_info["Full_Name"])
+                st.session_state["user_role"] = str(user_info["Role"])
+                st.success(f"Welcome back, {user_info['Full_Name']}!")
+                st.rerun()
             else:
-                st.markdown("<h2 style='text-align: center; color: #0F3D7A; font-weight: 900;'>SIDHARTH</h2>", unsafe_allow_html=True)
-                st.markdown("<p style='text-align: center; color: #0F3D7A; font-weight: 800; font-size: 0.8rem;'>SHUTTER & AUTOMATION</p>", unsafe_allow_html=True)
-            
-            st.markdown("<div class='login-subtitle'>Enterprise Operations & Field Portal</div>", unsafe_allow_html=True)
-            
-            with st.form("login_form", clear_on_submit=False):
-                st.markdown("<div class='login-field-label'>Username</div>", unsafe_allow_html=True)
-                user_id_input = st.text_input("Username Input Field", placeholder="User Name", key="login_user_id", label_visibility="collapsed").strip().upper()
-                
-                st.markdown("<div class='login-field-label'>Password / PIN</div>", unsafe_allow_html=True)
-                c_chk1, c_chk2 = st.columns(2)
-                with c_chk1:
-                    show_pwd = st.checkbox("Show Password", key="chk_show_pwd")
-                with c_chk2:
-                    st.checkbox("Remember Me", value=True, key="chk_remember_me")
-                    
-                pwd_type = "text" if show_pwd else "password"
-                password_input = st.text_input("Password Input Field", type=pwd_type, placeholder="Enter password", key="login_password", label_visibility="collapsed").strip()
-
-                st.write("")
-                b_col1, b_col2, b_col3 = st.columns([0.2, 0.6, 0.2])
-                with b_col2:
-                    submit_login = st.form_submit_button("🔑 LOGIN TO DASHBOARD", type="primary", use_container_width=True)
-                
-                if submit_login:
-                    user_df = st.session_state.users_db
-                    match = user_df[(user_df["User_ID"].astype(str) == user_id_input) & (user_df["Password"].astype(str) == password_input)]
-                    if not match.empty:
-                        st.session_state.user = match.iloc[0].to_dict()
-                        st.rerun()
-                    else:
-                        st.error("❌ Invalid Username or Password")
-    st.stop()
+                st.error("❌ Invalid User ID or Password. Please try again.")
 
 # -----------------------------------------------------------------------------
 # 6. SIDEBAR
@@ -353,46 +356,116 @@ if st.session_state.user["Role"] == "Technician":
         "📈 My Reports & Progress History"
     ])
 
-    # TAB 1: Assigned Jobs
-    with tech_tab1:
-        st.subheader("Assigned Maintenance Tasks")
-        all_tech_jobs = st.session_state.jobs_db[st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id]
-        tech_jobs = all_tech_jobs[all_tech_jobs["Status"] != "Completed"]
+    # TAB 1: Filterable Progress Dashboard & Analytics
+    with mgr_tab1:
+        st.subheader("📊 Technician Field Operations & Progress Dashboard")
         
-        if tech_jobs.empty:
-            st.info("🎉 No pending maintenance visits assigned to you.")
+        # 1. FILTERS SECTION
+        f_col1, f_col2, f_col3 = st.columns([2, 2, 1])
+        with f_col1:
+            time_filter = st.selectbox(
+                "🗓️ Date Range Filter", 
+                ["All Time", "Today", "Weekly (Last 7 Days)", "Monthly (Last 30 Days)", "3 Months", "Yearly"]
+            )
+        
+        tech_users = st.session_state.users_db[st.session_state.users_db["Role"] == "Technician"]
+        tech_options = ["All Technicians"] + tech_users["Full_Name"].tolist()
+        
+        with f_col2:
+            tech_filter = st.selectbox("👷 Technician Filter", tech_options)
+
+        all_reports = st.session_state.service_reports_db.copy()
+        
+        # Apply Time & Tech Filters
+        if time_filter != "All Time":
+            all_reports = filter_df_by_date_range(all_reports, "Service_Date", time_filter)
+            
+        if tech_filter != "All Technicians":
+            all_reports = all_reports[all_reports["Tech_Name"] == tech_filter]
+
+        st.divider()
+
+        # 2. TOP LEVEL SUMMARY METRICS (KPIs)
+        tot_visited = len(all_reports)
+        
+        if not all_reports.empty and "Distance_Travelled_KM" in all_reports.columns:
+            all_reports["Distance_Travelled_KM"] = pd.to_numeric(all_reports["Distance_Travelled_KM"], errors='coerce').fillna(0)
+            tot_dist = all_reports["Distance_Travelled_KM"].sum()
         else:
-            for idx, job in tech_jobs.iterrows():
-                pincode_str = f" - {job['Pincode']}" if "Pincode" in job and pd.notna(job["Pincode"]) else ""
-                st.markdown(f"#### 🔵 [{job['Job_ID']}] {job['Client_Name']} — {job['City']}{pincode_str} (`{job['Status']}`)")
-                col_a, col_b = st.columns([2, 1])
+            tot_dist = 0.0
+
+        if not all_reports.empty and "Time_Taken_Hours" in all_reports.columns:
+            all_reports["Time_Taken_Hours"] = pd.to_numeric(all_reports["Time_Taken_Hours"], errors='coerce').fillna(0)
+            tot_time = all_reports["Time_Taken_Hours"].sum()
+        else:
+            tot_time = 0.0
+
+        p_col1, p_col2, p_col3, p_col4 = st.columns(4)
+        p_col1.metric("📍 Total Sites Visited", tot_visited)
+        p_col2.metric("🚗 Total Travelled", f"{tot_dist:.1f} KM")
+        p_col3.metric("⏱️ Total Field Hours", f"{tot_time:.1f} Hours")
+        p_col4.metric("📊 Avg Time / Site", f"{(tot_time / tot_visited):.1f} Hrs" if tot_visited > 0 else "0.0 Hrs")
+
+        st.divider()
+
+        # 3. VISUAL ANALYTICS & CHARTS
+        if not all_reports.empty and "Tech_Name" in all_reports.columns:
+            chart_col1, chart_col2 = st.columns(2)
+            
+            # Aggregate per technician for charts
+            summary_grp = all_reports.groupby("Tech_Name").agg(
+                Sites_Visited=("Report_ID", "count"),
+                Total_KM=("Distance_Travelled_KM", "sum"),
+                Total_Hours=("Time_Taken_Hours", "sum")
+            ).reset_index()
+
+            with chart_col1:
+                st.markdown("#### 📍 Sites Visited per Technician")
+                st.bar_chart(data=summary_grp, x="Tech_Name", y="Sites_Visited", color="#0F3D7A")
+
+            with chart_col2:
+                st.markdown("#### 🚗 Total Travel Distance (KM)")
+                st.bar_chart(data=summary_grp, x="Tech_Name", y="Total_KM", color="#00A859")
+
+            st.divider()
+
+            # 4. WORK COMPLETION PROGRESS
+            st.markdown("### 🎯 Task Completion Rate by Technician")
+            all_jobs = st.session_state.jobs_db.copy()
+            
+            for _, tech in tech_users.iterrows():
+                t_id = str(tech["User_ID"])
+                t_name = tech["Full_Name"]
                 
-                with col_a:
-                    st.markdown(f"**Address:** {job['Address']}, {job['City']} {pincode_str}")
-                    st.markdown(f"**Client Contact:** [{job['Client_Phone']}](tel:{job['Client_Phone']})")
-                    st.markdown(f"**Task Description:** {job['Issue_Description']}")
-                    st.markdown(f"**Scheduled Time:** {job['Scheduled_Time']}")
-                    maps_url = make_google_maps_link(job['Address'], job['City'], job.get('Pincode', ''))
-                    st.markdown(f"[📍 **Open Route in Google Maps**]({maps_url})")
+                tech_jobs = all_jobs[all_jobs["Assigned_Tech_ID"].astype(str) == t_id]
+                total_assigned = len(tech_jobs)
+                completed = len(tech_jobs[tech_jobs["Status"] == "Completed"])
+                
+                if total_assigned > 0:
+                    pct = int((completed / total_assigned) * 100)
+                    col_txt, col_bar = st.columns([2, 5])
+                    with col_txt:
+                        st.write(f"**{t_name}**: {completed}/{total_assigned} Jobs Done ({pct}%)")
+                    with col_bar:
+                        st.progress(pct / 100)
 
-                with col_b:
-                    status_list = ["Assigned", "In Transit", "On Site", "Completed"]
-                    current_status = job["Status"] if job["Status"] in status_list else "Assigned"
-                    new_status = st.selectbox("Job Status", status_list, index=status_list.index(current_status), key=f"status_{job['Job_ID']}")
-                    
-                    btn_save, btn_report = st.columns(2)
-                    with btn_save:
-                        if st.button("Save Status", key=f"btn_{job['Job_ID']}"):
-                            st.session_state.jobs_db.loc[st.session_state.jobs_db["Job_ID"] == job["Job_ID"], "Status"] = new_status
-                            save_sheet_data(st.session_state.jobs_db, "Jobs")
-                            st.toast(f"✅ Status updated for {job['Job_ID']}!")
-                            st.rerun()
-                    with btn_report:
-                        if st.button("📝 Submit Report", key=f"btn_rpt_{job['Job_ID']}"):
-                            st.session_state.selected_job_for_report = job["Job_ID"]
-                            st.toast(f"Selected {job['Job_ID']} for service report!")
-                st.divider()
+            st.divider()
 
+            # 5. DATA TABLE & CSV DOWNLOAD BUTTON
+            st.markdown("### 📋 Progress Summary Table")
+            st.dataframe(summary_grp, use_container_width=True)
+            
+            csv_data = all_reports.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Download Detailed Progress Report (CSV)",
+                data=csv_data,
+                file_name=f"technician_progress_report_{date.today()}.csv",
+                mime="text/csv",
+                type="primary"
+            )
+        else:
+            st.info("ℹ️ No visit or progress records match the selected filter criteria.")
+            
     # TAB 2: Service Report Form (WITH PO NUMBER, TIME & DISTANCE TRACKING)
     with tech_tab2:
         st.subheader("📝 Submit Field Service Visit Report")
