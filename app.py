@@ -211,80 +211,100 @@ EQUIPMENT_DATA = {
 }
 
 # -----------------------------------------------------------------------------
-# 4. CUSTOM CSS STYLING
+# 4. BRANDED UI STYLING
 # -----------------------------------------------------------------------------
 
 st.markdown("""
 <style>
-    /* Global Page Background */
-    .stApp {
-        background-color: #F8FAFC !important;
-        color: #1E293B !important;
-    }
+    /* Global Page Styling */
+    .stApp { background-color: #F4F6F9 !important; }
+    .stTabs [data-baseweb="tab-highlight"] { background-color: #0F3D7A !important; }
+    .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #0F3D7A !important; font-weight: 700 !important; }
+    [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #E2E8F0; }
+    .sidebar-logo-sub { color: #00A859; font-weight: 800; font-size: 0.85rem; letter-spacing: 1.5px; text-align: center; margin-top: 4px; }
     
-    /* Clean Professional Login Card Container (No blue outlines) */
-    .login-card {
+    /* Compact Professional Login Card Container */
+    .login-card-container {
         background-color: #FFFFFF;
         border: 1px solid #E2E8F0;
         border-radius: 12px;
-        padding: 28px 30px 24px 30px;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.04);
-        max-width: 400px;
-        margin: 30px auto 0 auto;
+        padding: 26px 28px 22px 28px;
+        box-shadow: 0px 8px 20px rgba(15, 61, 122, 0.06);
+        max-width: 410px;
+        margin: 20px auto 0 auto;
     }
 
     /* Subtitle Styling */
     .login-subtitle {
-        text-align: center;
-        color: #475569;
-        font-size: 0.95rem;
+        text-align: center; 
+        color: #556B82; 
+        font-size: 0.95rem; 
         font-weight: 700;
         letter-spacing: 0.5px;
-        margin-top: 10px;
-        margin-bottom: 20px;
+        margin-top: 8px; 
+        margin-bottom: 22px;
         text-transform: uppercase;
     }
 
-    /* Green Login Button */
-    div.stButton > button[kind="primary"], div.stButton > button {
-        background-color: #00A859 !important;
-        color: #FFFFFF !important;
-        border: none !important;
-        border-radius: 8px !important;
+    /* Input Field Labels */
+    .stTextInput > label {
+        color: #0F3D7A !important;
         font-weight: 700 !important;
+        font-size: 0.92rem !important;
+    }
+
+    /* Custom Input Box Styling */
+    div[data-testid="stTextInput"] > div[data-baseweb="input"] {
+        background-color: #F8FAFC !important;
+        border: 1.5px solid #CBD5E1 !important;
+        border-radius: 8px !important;
+        overflow: hidden !important;
+        transition: all 0.2s ease-in-out;
+    }
+
+    div[data-testid="stTextInput"] > div[data-baseweb="input"]:focus-within {
+        border-color: #0F3D7A !important;
+        box-shadow: 0 0 0 1px #0F3D7A !important;
+    }
+
+    div[data-testid="stTextInput"] input {
+        color: #1E293B !important; 
+        height: 42px !important;
+    }
+
+    /* Primary Login Button */
+    div.stButton > button[kind="primary"], div.stButton > button {
+        background-color: #00A859 !important; 
+        color: #FFFFFF !important;
+        border-radius: 8px !important; 
+        font-weight: 800 !important; 
         font-size: 0.98rem !important;
         height: 44px !important;
-        letter-spacing: 0.5px;
-        box-shadow: 0 2px 8px rgba(0, 168, 89, 0.2);
+        border: none !important; 
+        margin: 10px auto 0 auto !important; 
+        display: block !important;
+        box-shadow: 0 4px 10px rgba(0, 168, 89, 0.25) !important;
         transition: all 0.2s ease-in-out;
     }
     div.stButton > button:hover {
         background-color: #008F4C !important;
-        color: #FFFFFF !important;
-        border: none !important;
-    }
-
-    /* Input Field Labels Styling */
-    .stTextInput > label {
-        color: #0F4C81 !important;
-        font-weight: 600 !important;
-        font-size: 0.92rem !important;
+        box-shadow: 0 6px 14px rgba(0, 168, 89, 0.35) !important;
     }
 
     /* Equipment Box for Checklist */
     .equipment-box {
-        background-color: #FFFFFF;
-        border-left: 5px solid #0F4C81;
-        border-radius: 8px;
-        padding: 12px 18px;
-        margin-bottom: 20px;
+        background-color: #FFFFFF; 
+        border-left: 5px solid #0F3D7A;
+        border-radius: 8px; 
+        padding: 12px 18px; 
+        margin-bottom: 20px; 
         box-shadow: 0 2px 5px rgba(0,0,0,0.03);
     }
-    .equipment-title {
-        color: #0F4C81 !important;
-        font-weight: 700;
-        margin: 0 0 10px 0;
-        font-size: 1.25rem;
+    .equipment-title { 
+        color: #0F3D7A !important; 
+        font-weight: 700; 
+        margin: 0 0 10px 0; 
+        font-size: 1.25rem; 
     }
 </style>
 """, unsafe_allow_html=True)
@@ -297,16 +317,15 @@ def render_login_form():
     col1, col2, col3 = st.columns([1, 1.8, 1])
     
     with col2:
-        st.markdown('<div class="login-card">', unsafe_allow_html=True)
+        st.markdown('<div class="login-card-container">', unsafe_allow_html=True)
         
         logo_path = get_logo_path()
         if logo_path:
-            # Centered, crisp logo size scaled to fit form nicely
             l_col1, l_col2, l_col3 = st.columns([0.2, 3.6, 0.2])
             with l_col2:
                 st.image(logo_path, width=220)
         else:
-            st.markdown("<h2 style='text-align:center; color:#0F4C81; font-weight:800; margin-bottom:5px;'>SIDHARTH</h2><p style='text-align:center; color:#0F4C81; font-size:0.85rem; font-weight:700; letter-spacing:1px; margin-top:-10px;'>SHUTTER & AUTOMATION</p>", unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align:center; color:#0F3D7A; font-weight:800; margin-bottom:5px;'>SIDHARTH</h2><p style='text-align:center; color:#0F3D7A; font-size:0.85rem; font-weight:700; letter-spacing:1px; margin-top:-10px;'>SHUTTER & AUTOMATION</p>", unsafe_allow_html=True)
 
         st.markdown("<p class='login-subtitle'>AMC Tracker Portal</p>", unsafe_allow_html=True)
 
@@ -331,7 +350,7 @@ def render_login_form():
             key="login_password"
         )
 
-        st.write("") # Spacer
+        st.write("")
 
         if st.button("🔑 LOGIN TO DASHBOARD", type="primary", use_container_width=True):
             u_val = user_id_input.strip() if user_id_input else ""
@@ -382,8 +401,8 @@ with st.sidebar:
         with sb_c2:
             st.image(logo_path, width=140)
     else:
-        st.markdown("<h3 style='color: #0F4C81; text-align:center;'>⚙️ SIDHARTH</h3>", unsafe_allow_html=True)
-    st.markdown("<div style='color: #00A859; font-weight: 800; font-size: 0.85rem; letter-spacing: 1.5px; text-align: center; margin-top: 4px;'>AMC TRACKER PORTAL</div>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #0F3D7A; text-align:center;'>⚙️ SIDHARTH</h3>", unsafe_allow_html=True)
+    st.markdown("<div class='sidebar-logo-sub'>AMC TRACKER PORTAL</div>", unsafe_allow_html=True)
     st.divider()
 
     logged_name = st.session_state.get("user_name", "User")
@@ -705,7 +724,7 @@ if logged_role == "Technician":
 # -----------------------------------------------------------------------------
 
 elif logged_role in ["Manager", "Admin"]:
-    st.markdown("<h1 style='color: #0F4C81;'>📡 AMC Tracker Portal — Command & Control Center</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='color: #0F3D7A;'>📡 AMC Tracker Portal — Command & Control Center</h1>", unsafe_allow_html=True)
 
     # AMC Alerts
     contracts_df = st.session_state.amc_contracts_db
@@ -791,7 +810,7 @@ elif logged_role in ["Manager", "Admin"]:
 
             with chart_col1:
                 st.markdown("#### 📍 Sites Visited per Technician")
-                st.bar_chart(data=summary_grp, x="Tech_Name", y="Sites_Visited", color="#0F4C81")
+                st.bar_chart(data=summary_grp, x="Tech_Name", y="Sites_Visited", color="#0F3D7A")
 
             with chart_col2:
                 st.markdown("#### 🚗 Total Travel Distance (KM)")
