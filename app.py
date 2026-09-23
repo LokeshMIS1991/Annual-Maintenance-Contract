@@ -332,7 +332,7 @@ def render_login_form():
 
             user_id_input = st.text_input(
                 "Username / Name", 
-                placeholder="e.g. Parvesh Kumar or Vishak", 
+                placeholder="Enter User Name", 
                 key="login_userid"
             )
 
