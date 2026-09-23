@@ -11,7 +11,7 @@ from google.oauth2.service_account import Credentials
 # 0. PAGE CONFIGURATION
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="AMC Annual Maintenance Tracker", 
+    page_title="AMC Tracker Portal", 
     page_icon="🛠️", 
     layout="wide",
     initial_sidebar_state="expanded"
@@ -239,11 +239,11 @@ st.markdown("""
         color: #64748B;
         font-size: 1.05rem;
         font-weight: 600;
-        margin-top: -10px;
+        margin-top: -5px;
         margin-bottom: 25px;
     }
 
-    /* Green Login Button (Exact match for image 2) */
+    /* Green Login Button */
     div.stButton > button[kind="primary"], div.stButton > button {
         background-color: #00A859 !important;
         color: #FFFFFF !important;
@@ -299,7 +299,10 @@ def render_login_form():
         
         logo_path = get_logo_path()
         if logo_path:
-            st.image(logo_path, use_container_width=True)
+            # Centered, compact logo size
+            l_col1, l_col2, l_col3 = st.columns([1, 2, 1])
+            with l_col2:
+                st.image(logo_path, width=180)
         else:
             st.markdown("<h2 style='text-align:center; color:#0F4C81; font-weight:800; margin-bottom:5px;'>SIDHARTH</h2><p style='text-align:center; color:#0F4C81; font-size:0.85rem; font-weight:700; letter-spacing:1px; margin-top:-10px;'>SHUTTER & AUTOMATION</p>", unsafe_allow_html=True)
 
@@ -373,10 +376,12 @@ if not st.session_state.get("authenticated", False):
 with st.sidebar:
     logo_path = get_logo_path()
     if logo_path:
-        st.image(logo_path, use_container_width=True)
+        sb_c1, sb_c2, sb_c3 = st.columns([1, 2, 1])
+        with sb_c2:
+            st.image(logo_path, width=150)
     else:
         st.markdown("<h3 style='color: #0F4C81; text-align:center;'>⚙️ SIDHARTH</h3>", unsafe_allow_html=True)
-    st.markdown("<div style='color: #00A859; font-weight: 800; font-size: 0.85rem; letter-spacing: 1.5px; text-align: center; margin-top: 4px;'>AMC TRACKER</div>", unsafe_allow_html=True)
+    st.markdown("<div style='color: #00A859; font-weight: 800; font-size: 0.85rem; letter-spacing: 1.5px; text-align: center; margin-top: 4px;'>AMC TRACKER PORTAL</div>", unsafe_allow_html=True)
     st.divider()
 
     logged_name = st.session_state.get("user_name", "User")
@@ -410,7 +415,7 @@ if logged_role == "Technician":
     tech_id = str(st.session_state.get("user_id", ""))
     tech_name = str(st.session_state.get("user_name", ""))
 
-    st.markdown(f"<h1>🛠️ Technician Dashboard — <span style='color:#64748B;'>{tech_name}</span></h1>", unsafe_allow_html=True)
+    st.markdown(f"<h1>🛠️ AMC Tracker Portal — <span style='color:#64748B;'>{tech_name}</span></h1>", unsafe_allow_html=True)
 
     tech_tab1, tech_tab2, tech_tab3, tech_tab4 = st.tabs([
         "📋 Assigned Work Orders", 
@@ -698,7 +703,7 @@ if logged_role == "Technician":
 # -----------------------------------------------------------------------------
 
 elif logged_role in ["Manager", "Admin"]:
-    st.markdown("<h1 style='color: #0F4C81;'>📡 Dispatch, Progress Analytics & AMC Control Center</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='color: #0F4C81;'>📡 AMC Tracker Portal — Command & Control Center</h1>", unsafe_allow_html=True)
 
     # AMC Alerts
     contracts_df = st.session_state.amc_contracts_db
