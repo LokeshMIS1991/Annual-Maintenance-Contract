@@ -580,7 +580,7 @@ def render_technician_dashboard():
     # TAB 1: Assigned Work Orders
     with tech_tab1:
         st.markdown("<div class='section-header'>📋 Your Assigned Field Tasks</div>", unsafe_allow_html=True)
-        my_jobs = st.session_state.jobs_db[st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id]
+        my_jobs = st.session_state.jobs_db[st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id].copy()
         
         if my_jobs.empty:
             st.info("🎉 No active or pending work orders assigned to you.")
@@ -931,7 +931,7 @@ def render_admin_dashboard():
     st.markdown("<h1 style='color: #0F3D7A; font-weight:800; margin-bottom: 20px;'>📡 AMC Tracker Portal — Command & Control Center</h1>", unsafe_allow_html=True)
 
     # DYNAMIC 15-DAY AMC ALERTS
-    contracts_df = st.session_state.amc_contracts_db
+    contracts_df = st.session_state.amc_contracts_db.copy()
     if not contracts_df.empty and "Next_Visit_Due" in contracts_df.columns:
         contracts_df["Next_Visit_Due_DT"] = pd.to_datetime(contracts_df["Next_Visit_Due"], errors="coerce")
         today_dt = pd.Timestamp(date.today())
