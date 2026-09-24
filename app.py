@@ -952,36 +952,34 @@ def render_admin_dashboard():
 
                 with u_col2:
                     new_mobile = st.text_input("Mobile Number*", max_chars=15, placeholder="e.g. +91 9876543210").strip()
-                    new_aadhaar = st.text_input("Aadhaar Number* (12 Digits)", max_chars=12, placeholder="e.g. 123456789012").strip()
+                    new_id_number = st.text_input("Government ID / Registration Number*", max_chars=20, placeholder="e.g. ID-123456789").strip()
                     new_pass = st.text_input("Password / PIN*", type="password").strip()
 
                 st.divider()
                 submit_create_user = st.form_submit_button("Register New User")
 
                 if submit_create_user:
-                    if not new_uid or not new_name or not new_pass or not new_aadhaar or not new_mobile:
+                    if not new_uid or not new_name or not new_pass or not new_id_number or not new_mobile:
                         st.error("⚠️ All fields marked with * are compulsory.")
-                    elif len(new_aadhaar) != 12 or not new_aadhaar.isdigit():
-                        st.error("⚠️ Please enter a valid 12-digit numeric Aadhaar Number.")
                     else:
                         existing_users = st.session_state.users_db
 
                         uid_exists = not existing_users.empty and new_uid in existing_users["User_ID"].astype(str).str.strip().values
-                        aadhaar_exists = False
+                        id_exists = False
                         if not existing_users.empty and "Aadhaar_Number" in existing_users.columns:
-                            aadhaar_exists = new_aadhaar in existing_users["Aadhaar_Number"].astype(str).str.strip().values
+                            id_exists = new_id_number in existing_users["Aadhaar_Number"].astype(str).str.strip().values
 
                         if uid_exists:
                             st.error(f"❌ User ID '{new_uid}' is already registered in the system.")
-                        elif aadhaar_exists:
-                            st.error("❌ A user with this Aadhaar Number is already registered.")
+                        elif id_exists:
+                            st.error("❌ A user with this ID Number is already registered.")
                         else:
                             user_entry = {
                                 "User_ID": new_uid,
                                 "Full_Name": new_name,
                                 "Role": new_role,
                                 "Password": new_pass,
-                                "Aadhaar_Number": new_aadhaar,
+                                "Aadhaar_Number": new_id_number,
                                 "Mobile_Number": new_mobile
                             }
                             st.session_state.users_db = pd.concat([st.session_state.users_db, pd.DataFrame([user_entry])], ignore_index=True)
@@ -1020,20 +1018,20 @@ def render_admin_dashboard():
                         edit_role = st.selectbox("Role", roles_options, index=role_idx)
 
                         edit_mobile = st.text_input("Mobile Number", value=str(selected_user_row.get("Mobile_Number", "")))
-                        edit_aadhaar = st.text_input("Aadhaar Number", value=str(selected_user_row.get("Aadhaar_Number", "")), max_chars=12)
+                        edit_id_number = st.text_input("ID Number", value=str(selected_user_row.get("Aadhaar_Number", "")), max_chars=20)
                         edit_pass = st.text_input("Password / PIN", value=str(selected_user_row.get("Password", "")), type="password")
 
                         btn_update = st.form_submit_button("💾 Save Changes")
 
                         if btn_update:
-                            if not edit_name or not edit_mobile or not edit_aadhaar or not edit_pass:
+                            if not edit_name or not edit_mobile or not edit_id_number or not edit_pass:
                                 st.error("⚠️ All fields are mandatory for updating.")
                             else:
                                 idx = st.session_state.users_db[st.session_state.users_db["User_ID"].astype(str) == selected_user_id].index[0]
                                 st.session_state.users_db.at[idx, "Full_Name"] = edit_name
                                 st.session_state.users_db.at[idx, "Role"] = edit_role
                                 st.session_state.users_db.at[idx, "Mobile_Number"] = edit_mobile
-                                st.session_state.users_db.at[idx, "Aadhaar_Number"] = edit_aadhaar
+                                st.session_state.users_db.at[idx, "Aadhaar_Number"] = edit_id_number
                                 st.session_state.users_db.at[idx, "Password"] = edit_pass
 
                                 save_sheet_data(st.session_state.users_db, "Users")
