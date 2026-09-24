@@ -11,6 +11,7 @@ from geopy.distance import geodesic
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 import io
+import uuid
 
 # Import the centralized equipment database from products.py
 from products import EQUIPMENT_DATA
@@ -134,11 +135,11 @@ def load_sheet_data(worksheet_name):
         service_report_cols.extend([f"Q{i}_Choice", f"Q{i}_Remark"])
 
     default_columns = {
-        "Users": ["User_ID", "Full_Name", "Role", "Password"],
+        "Users": ["User_ID", "Full_Name", "Role", "Password", "Aadhaar_Number"],
         "Jobs": ["Job_ID", "Assigned_Tech_ID", "Client_Name", "Client_Phone", "Address", "City", "Pincode", "Issue_Description", "Status", "Scheduled_Time"],
         "TechStatus": ["Tech_ID", "Current_City", "Current_Pincode", "Current_Status", "Next_City", "Next_Pincode", "ETA", "Last_Updated"],
         "ServiceReports": service_report_cols,
-        "AMCContracts": ["AMC_Contract_No", "PO_Number", "Client_Name", "Start_Date", "End_Date", "Allowed_Visits", "Next_Visit_Due"]
+        "AMCContracts": ["AMC_Contract_No", "PO_Number", "Client_Name", "Client_Phone", "Site_Address", "City", "Pincode", "Start_Date", "End_Date", "Allowed_Visits", "Next_Visit_Due"]
     }
     
     cols = default_columns.get(worksheet_name, [])
@@ -844,7 +845,7 @@ if logged_role == "Technician":
             st.info("📜 No service reports submitted yet.")
 
 # -----------------------------------------------------------------------------
-# 7. MANAGER COMMAND DASHBOARD & ANALYTICS
+# 7. MANAGER & ADMIN COMMAND DASHBOARD
 # -----------------------------------------------------------------------------
 
 elif logged_role in ["Manager", "Admin"]:
@@ -872,394 +873,434 @@ elif logged_role in ["Manager", "Admin"]:
                 )
             st.divider()
 
-    mgr_tab1, mgr_tab2, mgr_tab3, mgr_tab4, mgr_tab5, mgr_tab6 = st.tabs([
-        "📊 Overview Analytics",
-        "👤 Technician Deep Dive",
-        "MAP / Live Radar", 
-        "📄 Service Reports",
-        "📅 AMC Contracts",
-        "➕ Dispatch Task / User"
+    # PRIMARY CONSOLIDATED NAVIGATION TABS
+    mgr_primary_tab1, mgr_primary_tab2 = st.tabs([
+        "⚙️ Operations & Management",
+        "📊 Fleet Analytics & Audit Reports"
     ])
 
-    # TAB 1: Filterable Progress Dashboard & Fleet Analytics
-    with mgr_tab1:
-        st.markdown("<div class='section-header'>📊 Fleet Performance & Travel Expense Analytics</div>", unsafe_allow_html=True)
-        
-        f_col1, f_col2 = st.columns(2)
-        with f_col1:
-            time_filter = st.selectbox(
-                "🗓️ Date Range Filter", 
-                ["All Time", "Today", "Weekly (Last 7 Days)", "Monthly (Last 30 Days)", "3 Months", "Yearly"],
-                key="mgr_time_filter_tab1"
-            )
-        
-        tech_users = st.session_state.users_db[st.session_state.users_db["Role"] == "Technician"]
-        tech_options = ["All Technicians"] + tech_users["Full_Name"].tolist()
-        
-        with f_col2:
-            tech_filter = st.selectbox("👷 Technician Filter", tech_options, key="mgr_tech_filter_tab1")
+    # =========================================================================
+    # PRIMARY TAB 1: OPERATIONS & MANAGEMENT (Consolidated Sub-Tabs)
+    # =========================================================================
+    with mgr_primary_tab1:
+        ops_sub_tab1, ops_sub_tab2, ops_sub_tab3, ops_sub_tab4 = st.tabs([
+            "👤 Create User / Technician",
+            "➕ Dispatch Task",
+            "📅 AMC Contracts",
+            "🗺️ MAP / Live Radar"
+        ])
 
-        all_reports = st.session_state.service_reports_db.copy()
-        
-        if time_filter != "All Time":
-            all_reports = filter_df_by_date_range(all_reports, "Service_Date", time_filter)
-            
-        if tech_filter != "All Technicians":
-            all_reports = all_reports[all_reports["Tech_Name"] == tech_filter]
+        # SUB-TAB 1: CREATE USER / TECHNICIAN
+        with ops_sub_tab1:
+            st.markdown("<div class='section-header'>👤 Register System User / Technician</div>", unsafe_allow_html=True)
+            st.caption("Managers and Admins can create new technician and staff accounts here. Aadhaar registration is compulsory to prevent duplicate entries.")
 
-        st.divider()
-
-        tot_visited = len(all_reports)
-        
-        if not all_reports.empty:
-            # FIX: Prevent AttributeError by safe series assignment
-            all_reports["Distance_Travelled_KM"] = pd.to_numeric(all_reports["Distance_Travelled_KM"] if "Distance_Travelled_KM" in all_reports.columns else 0, errors='coerce').fillna(0)
-            all_reports["Time_Taken_Hours"] = pd.to_numeric(all_reports["Time_Taken_Hours"] if "Time_Taken_Hours" in all_reports.columns else 0, errors='coerce').fillna(0)
-            all_reports["Travel_Expense_INR"] = pd.to_numeric(all_reports["Travel_Expense_INR"] if "Travel_Expense_INR" in all_reports.columns else 0, errors='coerce').fillna(0)
-            
-            tot_dist = all_reports["Distance_Travelled_KM"].sum()
-            tot_time = all_reports["Time_Taken_Hours"].sum()
-            tot_expenses = all_reports["Travel_Expense_INR"].sum()
-        else:
-            tot_dist, tot_time, tot_expenses = 0.0, 0.0, 0.0
-
-        p_col1, p_col2, p_col3, p_col4, p_col5 = st.columns(5)
-        p_col1.metric("📍 Total Visits", tot_visited)
-        p_col2.metric("🚗 Distance Travelled", f"{tot_dist:.1f} KM")
-        p_col3.metric("⏱️ Field Hours", f"{tot_time:.1f} Hrs")
-        p_col4.metric("💰 Travel Payout", f"₹ {tot_expenses:,.2f}")
-        p_col5.metric("📊 Avg Time / Site", f"{(tot_time / tot_visited):.1f} Hrs" if tot_visited > 0 else "0.0 Hrs")
-
-        st.divider()
-
-        if not all_reports.empty and "Tech_Name" in all_reports.columns:
-            chart_col1, chart_col2, chart_col3 = st.columns(3)
-            
-            summary_grp = all_reports.groupby("Tech_Name").agg(
-                Visits=("Report_ID", "count"),
-                Distance_KM=("Distance_Travelled_KM", "sum"),
-                Hours_Spent=("Time_Taken_Hours", "sum"),
-                Expenses_Paid_INR=("Travel_Expense_INR", "sum")
-            ).reset_index()
-
-            with chart_col1:
-                st.markdown("#### 📍 Visits per Technician")
-                st.bar_chart(data=summary_grp, x="Tech_Name", y="Visits", color="#0F3D7A")
-
-            with chart_col2:
-                st.markdown("#### 🚗 Total Distance (KM)")
-                st.bar_chart(data=summary_grp, x="Tech_Name", y="Distance_KM", color="#10B981")
-
-            with chart_col3:
-                st.markdown("#### 💰 Travel Payouts (₹)")
-                st.bar_chart(data=summary_grp, x="Tech_Name", y="Expenses_Paid_INR", color="#D97706")
-
-            st.divider()
-
-            st.markdown("### 🎯 Work Order Completion Rate")
-            all_jobs = st.session_state.jobs_db.copy()
-            
-            for _, tech in tech_users.iterrows():
-                t_id = str(tech["User_ID"])
-                t_name = tech["Full_Name"]
+            with st.form("create_user_consolidated_form", clear_on_submit=True):
+                u_col1, u_col2 = st.columns(2)
+                with u_col1:
+                    new_uid = st.text_input("User ID / Tech ID* (e.g. TECH05)").strip().upper()
+                    new_name = st.text_input("Full Name*").strip()
+                    new_role = st.selectbox("Assign Role*", ["Technician", "Manager", "Admin"])
                 
-                tech_jobs = all_jobs[all_jobs["Assigned_Tech_ID"].astype(str) == t_id]
-                total_assigned = len(tech_jobs)
-                completed = len(tech_jobs[tech_jobs["Status"] == "Completed"])
-                
-                if total_assigned > 0:
-                    pct = int((completed / total_assigned) * 100)
-                    col_txt, col_bar = st.columns([2.5, 4.5])
-                    with col_txt:
-                        st.write(f"**{t_name}**: {completed}/{total_assigned} Finished ({pct}%)")
-                    with col_bar:
-                        st.progress(pct / 100)
-
-            st.divider()
-
-            st.markdown("### 📋 Comparative Fleet Summary Table")
-            st.dataframe(summary_grp, use_container_width=True)
-            
-            csv_data = all_reports.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Download Detailed Fleet Performance Report (CSV)",
-                data=csv_data,
-                file_name=f"fleet_performance_report_{date.today()}.csv",
-                mime="text/csv"
-            )
-        else:
-            st.info("ℹ️ No visit or progress records match the selected filter criteria.")
-
-    # TAB 2: DEDICATED INDIVIDUAL TECHNICIAN TRACKER
-    with mgr_tab2:
-        st.markdown("<div class='section-header'>👤 Technician Individual Performance & Expense Audit Center</div>", unsafe_allow_html=True)
-        
-        tech_users = st.session_state.users_db[st.session_state.users_db["Role"] == "Technician"]
-        
-        if tech_users.empty:
-            st.warning("⚠️ No technicians registered in the system.")
-        else:
-            filter_c1, filter_c2 = st.columns([2, 2])
-            with filter_c1:
-                selected_tech_name = st.selectbox(
-                    "🔍 Select Technician to Inspect*", 
-                    tech_users["Full_Name"].tolist(),
-                    index=0,
-                    key="tech_deep_dive_selectbox"
-                )
-            with filter_c2:
-                tech_time_range = st.selectbox(
-                    "🗓️ Time Period Filter", 
-                    ["All Time", "Today", "Weekly (Last 7 Days)", "Monthly (Last 30 Days)", "3 Months", "Yearly"],
-                    key="tech_time_range_selectbox"
-                )
-
-            selected_tech_user = tech_users[tech_users["Full_Name"] == selected_tech_name].iloc[0]
-            selected_tech_id = str(selected_tech_user["User_ID"])
-
-            # Filter reports for this technician
-            tech_reports = st.session_state.service_reports_db.copy()
-            if not tech_reports.empty and "Tech_ID" in tech_reports.columns:
-                tech_reports = tech_reports[tech_reports["Tech_ID"].astype(str) == selected_tech_id]
-                if tech_time_range != "All Time":
-                    tech_reports = filter_df_by_date_range(tech_reports, "Service_Date", tech_time_range)
-            else:
-                tech_reports = pd.DataFrame()
-
-            # Live Status details
-            tech_status_row = st.session_state.tech_status_db[st.session_state.tech_status_db["Tech_ID"].astype(str) == selected_tech_id]
-            curr_city = tech_status_row["Current_City"].values[0] if not tech_status_row.empty and "Current_City" in tech_status_row.columns else "Unknown"
-            curr_status = tech_status_row["Current_Status"].values[0] if not tech_status_row.empty and "Current_Status" in tech_status_row.columns else "Offline"
-            next_targets = tech_status_row["Next_City"].values[0] if not tech_status_row.empty and "Next_City" in tech_status_row.columns else "None"
-            last_updated = tech_status_row["Last_Updated"].values[0] if not tech_status_row.empty and "Last_Updated" in tech_status_row.columns else "N/A"
-
-            # Header Banner
-            st.markdown(f"""
-            <div class='tech-card-header'>
-                <h2 style='margin:0; font-weight:800;'>👷 {selected_tech_name} <span style='font-size:1rem; opacity:0.8;'>({selected_tech_id})</span></h2>
-                <p style='margin:4px 0 0 0; font-size:0.95rem; opacity:0.9;'>
-                    📍 <b>Current City:</b> {curr_city} | 🔴 <b>Status:</b> {curr_status} | 🎯 <b>Targets:</b> {next_targets} | 🕒 <b>Updated:</b> {last_updated}
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-
-            if tech_reports.empty:
-                st.info(f"ℹ️ No service records or travel logs found for **{selected_tech_name}** in the selected time period ({tech_time_range}).")
-            else:
-                # Calculations with safe fallbacks
-                tech_reports["Distance_Travelled_KM"] = pd.to_numeric(tech_reports["Distance_Travelled_KM"] if "Distance_Travelled_KM" in tech_reports.columns else 0, errors='coerce').fillna(0)
-                tech_reports["Time_Taken_Hours"] = pd.to_numeric(tech_reports["Time_Taken_Hours"] if "Time_Taken_Hours" in tech_reports.columns else 0, errors='coerce').fillna(0)
-                tech_reports["Travel_Expense_INR"] = pd.to_numeric(tech_reports["Travel_Expense_INR"] if "Travel_Expense_INR" in tech_reports.columns else 0, errors='coerce').fillna(0)
-
-                t_visits = len(tech_reports)
-                t_distance = tech_reports["Distance_Travelled_KM"].sum()
-                t_hours = tech_reports["Time_Taken_Hours"].sum()
-                t_payout = tech_reports["Travel_Expense_INR"].sum()
-                t_avg_time = (t_hours / t_visits) if t_visits > 0 else 0
-                t_cost_per_km = (t_payout / t_distance) if t_distance > 0 else 0
-
-                st.markdown("### 📈 Performance & Reimbursement KPI Summary")
-                k1, k2, k3, k4, k5, k6 = st.columns(6)
-                k1.metric("📍 Visited Sites", t_visits)
-                k2.metric("🚗 Total Travelled", f"{t_distance:.1f} KM")
-                k3.metric("⏱️ On-Site Hours", f"{t_hours:.1f} Hrs")
-                k4.metric("💰 Total Paid (₹)", f"₹ {t_payout:,.2f}")
-                k5.metric("⏳ Avg Time / Site", f"{t_avg_time:.1f} Hrs")
-                k6.metric("⛽ Avg Cost / KM", f"₹ {t_cost_per_km:.1f}/KM")
+                with u_col2:
+                    new_aadhaar = st.text_input("Aadhaar Number* (12 Digits)", max_chars=12, placeholder="e.g. 123456789012").strip()
+                    new_pass = st.text_input("Password / PIN*", type="password").strip()
 
                 st.divider()
+                submit_create_user = st.form_submit_button("Register New User")
 
-                # Visual Analytics Charts
-                st.markdown(f"### 📊 Graphical Performance Trends — {selected_tech_name}")
-                chart_a1, chart_a2 = st.columns(2)
-
-                with chart_a1:
-                    st.markdown("#### 🚗 Travel Distance (KM) per Visit")
-                    chart_dist_df = tech_reports[["Client_Name", "Distance_Travelled_KM"]].copy().set_index("Client_Name")
-                    st.bar_chart(chart_dist_df, color="#10B981")
-
-                with chart_a2:
-                    st.markdown("#### 💰 Travel Expense (₹) per Visit")
-                    chart_exp_df = tech_reports[["Client_Name", "Travel_Expense_INR"]].copy().set_index("Client_Name")
-                    st.bar_chart(chart_exp_df, color="#D97706")
-
-                st.divider()
-
-                # Granular Visit Breakdowns
-                st.markdown(f"### 📑 Granular Field Visit & Travel Breakdown for {selected_tech_name}")
-                
-                display_cols = [
-                    "Report_ID", "Service_Date", "Client_Name", "PO_Number", "Site_Location", 
-                    "Equipment_Type", "Distance_Travelled_KM", "Time_Taken_Hours", "Travel_Expense_INR", 
-                    "Work_Done_Details", "Site_Photo"
-                ]
-                existing_disp_cols = [c for c in display_cols if c in tech_reports.columns]
-                
-                st.dataframe(tech_reports[existing_disp_cols], use_container_width=True)
-
-                st.divider()
-
-                # Individual Site Visit Expansion Cards
-                st.markdown("### 🖼️ Detailed Site Visit Logs & Work Evidence")
-                for _, r_row in tech_reports.iterrows():
-                    with st.expander(f"📍 Visit Report: {r_row['Report_ID']} — {r_row['Client_Name']} ({r_row['Service_Date']})"):
-                        v_col1, v_col2 = st.columns(2)
-                        with v_col1:
-                            st.write(f"🏢 **Client Name:** {r_row['Client_Name']}")
-                            st.write(f"📄 **PO Number:** {r_row.get('PO_Number', 'N/A')}")
-                            st.write(f"📍 **Location:** {r_row.get('Site_Location', 'N/A')}")
-                            st.write(f"🛠️ **Equipment:** {r_row.get('Category', '')} ({r_row.get('Equipment_Type', '')})")
-                            st.write(f"📏 **Door Size & Qty:** {r_row.get('Door_Size', 'N/A')} | Qty: {r_row.get('Qty', '1')}")
-                            st.write(f"🔄 **Visit Sequence:** {r_row.get('Visit_Number', 'N/A')}")
-
-                        with v_col2:
-                            st.write(f"🚗 **Distance Travelled:** {r_row.get('Distance_Travelled_KM', 0)} KM")
-                            st.write(f"⏱️ **Time Spent:** {r_row.get('Time_Taken_Hours', 0)} Hours")
-                            st.write(f"💰 **Travel Expense Paid:** ₹ {r_row.get('Travel_Expense_INR', 0)}")
-                            st.write(f"📅 **Next Service Due:** {r_row.get('Next_Service_Due_Date', 'N/A')}")
-                            st.write(f"🕒 **Submitted At:** {r_row.get('Submitted_At', 'N/A')}")
-
-                        st.write("---")
-                        st.write(f"🔧 **Work Done / Action Taken:** {r_row.get('Work_Done_Details', 'N/A')}")
-                        st.write(f"⚠️ **Problems Faced:** {r_row.get('Problems_Faced', 'None')}")
-                        st.write(f"💬 **General Remarks:** {r_row.get('Remarks', 'N/A')}")
-
-                        if str(r_row.get("Site_Photo", "")).startswith("http"):
-                            st.markdown(f"📷 [**View Site Photo Evidence (Google Drive)**]({r_row['Site_Photo']})")
-
-                st.divider()
-
-                # Download individual technician report
-                tech_csv = tech_reports.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label=f"📥 Download Performance & Expense Statement for {selected_tech_name} (CSV)",
-                    data=tech_csv,
-                    file_name=f"{selected_tech_name.replace(' ', '_')}_performance_statement.csv",
-                    mime="text/csv"
-                )
-
-    # TAB 3: MAP / Live Radar
-    with mgr_tab3:
-        st.markdown("<div class='section-header'>Technician Fleet Live Radar</div>", unsafe_allow_html=True)
-        full_radar = pd.merge(st.session_state.tech_status_db, st.session_state.users_db[["User_ID", "Full_Name"]], left_on="Tech_ID", right_on="User_ID", how="left")
-        st.dataframe(full_radar, use_container_width=True)
-        
-        st.divider()
-        st.markdown("<div class='section-header'>All Active Work Orders</div>", unsafe_allow_html=True)
-        st.dataframe(st.session_state.jobs_db, use_container_width=True)
-
-    # TAB 4: Service Reports Log
-    with mgr_tab4:
-        st.markdown("<div class='section-header'>📋 Field Service Visit Reports Log</div>", unsafe_allow_html=True)
-        st.dataframe(st.session_state.service_reports_db, use_container_width=True)
-
-    # TAB 5: Contract Manager
-    with mgr_tab5:
-        st.markdown("<div class='section-header'>🗓️ AMC Client Contracts & PO Number Management</div>", unsafe_allow_html=True)
-        st.dataframe(st.session_state.amc_contracts_db, use_container_width=True)
-        st.divider()
-        st.markdown("### ✏️ Register / Update AMC Contract & PO Details")
-        
-        with st.form("edit_amc_contract_form"):
-            col_c1, col_c2 = st.columns(2)
-            with col_c1:
-                contract_no = st.text_input("AMC Contract Number*", placeholder="e.g. AMC-2026-88").strip()
-                po_number = st.text_input("PO Number*", placeholder="e.g. PO-998877").strip()
-                c_client_name = st.text_input("Client Name*", placeholder="e.g. Apex Industries").strip()
-                visits_allowed = st.selectbox("Annual Allowed Visits Limit*", [2, 3, 4], index=2)
-            with col_c2:
-                contract_start = st.date_input("Contract Start Date", value=date.today())
-                contract_end = st.date_input("Contract End Date", value=date.today() + pd.Timedelta(days=365))
-                next_visit_due = st.date_input("Next Scheduled Visit Due*", value=date.today() + pd.Timedelta(days=90))
-            
-            if st.form_submit_button("Save / Update AMC Contract"):
-                if not contract_no or not c_client_name or not po_number:
-                    st.error("⚠️ Contract Number, PO Number, and Client Name are required.")
-                else:
-                    contracts_df = st.session_state.amc_contracts_db
-                    if not contracts_df.empty and contract_no in contracts_df["AMC_Contract_No"].astype(str).values:
-                        st.session_state.amc_contracts_db.loc[
-                            st.session_state.amc_contracts_db["AMC_Contract_No"].astype(str) == contract_no,
-                            ["PO_Number", "Client_Name", "Start_Date", "End_Date", "Allowed_Visits", "Next_Visit_Due"]
-                        ] = [po_number, c_client_name, str(contract_start), str(contract_end), visits_allowed, str(next_visit_due)]
+                if submit_create_user:
+                    # Validations
+                    if not new_uid or not new_name or not new_pass or not new_aadhaar:
+                        st.error("⚠️ All fields marked with * including Aadhaar Number are compulsory.")
+                    elif len(new_aadhaar) != 12 or not new_aadhaar.isdigit():
+                        st.error("⚠️ Please enter a valid 12-digit numeric Aadhaar Number.")
                     else:
-                        new_contract = {
-                            "AMC_Contract_No": contract_no,
-                            "PO_Number": po_number,
-                            "Client_Name": c_client_name,
-                            "Start_Date": str(contract_start),
-                            "End_Date": str(contract_end),
-                            "Allowed_Visits": visits_allowed,
-                            "Next_Visit_Due": str(next_visit_due)
-                        }
-                        st.session_state.amc_contracts_db = pd.concat([st.session_state.amc_contracts_db, pd.DataFrame([new_contract])], ignore_index=True)
-                    
-                    save_sheet_data(st.session_state.amc_contracts_db, "AMCContracts")
-                    st.toast(f"✅ Contract {contract_no} with PO {po_number} saved!")
-                    st.rerun()
+                        existing_users = st.session_state.users_db
+                        
+                        # Duplicate Checks for User ID and Aadhaar
+                        uid_exists = not existing_users.empty and new_uid in existing_users["User_ID"].astype(str).str.strip().values
+                        aadhaar_exists = False
+                        if not existing_users.empty and "Aadhaar_Number" in existing_users.columns:
+                            aadhaar_exists = new_aadhaar in existing_users["Aadhaar_Number"].astype(str).str.strip().values
 
-    # TAB 6: Create Tasks/Users
-    with mgr_tab6:
-        col_mgr_a, col_mgr_b = st.columns(2)
-        
-        with col_mgr_a:
-            st.markdown("<div class='section-header'>Dispatch New Task</div>", unsafe_allow_html=True)
-            with st.form("new_job_form"):
-                j_id = f"JOB-{len(st.session_state.jobs_db) + 101}"
-                client_name = st.text_input("Client Name")
-                client_phone = st.text_input("Client Phone")
-                address = st.text_input("Site Address")
-                city = st.text_input("City")
-                pincode = st.text_input("Pin Code", max_chars=6)
-                issue = st.text_area("Service Notes")
+                        if uid_exists:
+                            st.error(f"❌ User ID '{new_uid}' is already registered in the system. Duplicates are restricted.")
+                        elif aadhaar_exists:
+                            st.error("❌ A technician with this Aadhaar Number is already registered. Duplicate technician accounts are restricted.")
+                        else:
+                            user_entry = {
+                                "User_ID": new_uid, 
+                                "Full_Name": new_name, 
+                                "Role": new_role, 
+                                "Password": new_pass,
+                                "Aadhaar_Number": new_aadhaar
+                            }
+                            st.session_state.users_db = pd.concat([st.session_state.users_db, pd.DataFrame([user_entry])], ignore_index=True)
+                            save_sheet_data(st.session_state.users_db, "Users")
+                            st.toast(f"✅ User {new_name} ({new_uid}) registered successfully!", icon="👤")
+                            st.rerun()
+
+            st.divider()
+            st.markdown("### 📋 Existing System Users List")
+            st.dataframe(st.session_state.users_db[["User_ID", "Full_Name", "Role", "Aadhaar_Number"]], use_container_width=True)
+
+        # SUB-TAB 2: DISPATCH TASK
+        with ops_sub_tab2:
+            st.markdown("<div class='section-header'>➕ Dispatch New Field Service Task</div>", unsafe_allow_html=True)
+            
+            with st.form("dispatch_task_consolidated_form", clear_on_submit=True):
+                d_col1, d_col2 = st.columns(2)
                 
-                tech_list = st.session_state.users_db[st.session_state.users_db["Role"] == "Technician"]
-                assigned_tech = st.selectbox(
-                    "Assign Technician", 
-                    options=tech_list["User_ID"].tolist(), 
-                    format_func=lambda x: f"{x} - {tech_list[tech_list['User_ID']==x]['Full_Name'].values[0]}"
-                )
-                
-                st.markdown("**Scheduled Date & Time**")
+                with d_col1:
+                    j_id = f"JOB-{len(st.session_state.jobs_db) + 101}"
+                    st.text_input("Generated Task ID", value=j_id, disabled=True)
+                    client_name = st.text_input("Client / Company Name*").strip()
+                    client_phone = st.text_input("Client Contact Phone*").strip()
+                    issue = st.text_area("Service Issue / Work Requirement Details*")
+
+                with d_col2:
+                    address = st.text_input("Site Complete Address*").strip()
+                    city = st.text_input("City*").strip()
+                    pincode = st.text_input("Pin Code", max_chars=6).strip()
+                    
+                    tech_list = st.session_state.users_db[st.session_state.users_db["Role"] == "Technician"]
+                    if tech_list.empty:
+                        st.warning("⚠️ No technicians available. Please create a technician account first.")
+                        assigned_tech = None
+                    else:
+                        assigned_tech = st.selectbox(
+                            "Assign Technician*", 
+                            options=tech_list["User_ID"].tolist(), 
+                            format_func=lambda x: f"{x} - {tech_list[tech_list['User_ID']==x]['Full_Name'].values[0]}"
+                        )
+
+                st.markdown("**Scheduled Visit Date & Time**")
                 sched_col1, sched_col2 = st.columns(2)
                 with sched_col1:
                     sched_date = st.date_input("Scheduled Date", min_value=date.today(), value=date.today())
                 with sched_col2:
                     sched_time = st.time_input("Scheduled Time", value=time(14, 0))
-                
-                if st.form_submit_button("Task Created"):
-                    selected_datetime = datetime.combine(sched_date, sched_time)
-                    if selected_datetime < datetime.now():
-                        st.error("⚠️ Cannot schedule a task for a time that has already passed today.")
+
+                submit_dispatch = st.form_submit_button("🚀 Dispatch Task To Technician")
+
+                if submit_dispatch:
+                    if not client_name or not address or not city or not assigned_tech:
+                        st.error("⚠️ Please fill in all required task details.")
                     else:
-                        scheduled_time_str = f"{sched_date.strftime('%d-%b-%Y')} at {sched_time.strftime('%I:%M %p')}"
-                        new_job_entry = {
-                            "Job_ID": j_id, "Assigned_Tech_ID": str(assigned_tech), "Client_Name": client_name,
-                            "Client_Phone": client_phone, "Address": address, "City": city, "Pincode": pincode,
-                            "Issue_Description": issue, "Status": "Assigned", "Scheduled_Time": scheduled_time_str
-                        }
-                        st.session_state.jobs_db = pd.concat([st.session_state.jobs_db, pd.DataFrame([new_job_entry])], ignore_index=True)
-                        save_sheet_data(st.session_state.jobs_db, "Jobs")
-                        st.toast(f"✅ Task Created ({j_id})!")
+                        selected_datetime = datetime.combine(sched_date, sched_time)
+                        if selected_datetime < datetime.now():
+                            st.error("⚠️ Cannot schedule a task for a time that has already passed today.")
+                        else:
+                            scheduled_time_str = f"{sched_date.strftime('%d-%b-%Y')} at {sched_time.strftime('%I:%M %p')}"
+                            new_job_entry = {
+                                "Job_ID": j_id, 
+                                "Assigned_Tech_ID": str(assigned_tech), 
+                                "Client_Name": client_name,
+                                "Client_Phone": client_phone, 
+                                "Address": address, 
+                                "City": city, 
+                                "Pincode": pincode,
+                                "Issue_Description": issue, 
+                                "Status": "Assigned", 
+                                "Scheduled_Time": scheduled_time_str
+                            }
+                            st.session_state.jobs_db = pd.concat([st.session_state.jobs_db, pd.DataFrame([new_job_entry])], ignore_index=True)
+                            save_sheet_data(st.session_state.jobs_db, "Jobs")
+                            st.toast(f"✅ Work Order ({j_id}) dispatched successfully!", icon="🚀")
+                            st.rerun()
+
+        # SUB-TAB 3: AMC CONTRACTS
+        with ops_sub_tab3:
+            st.markdown("<div class='section-header'>🗓️ AMC Client Contracts Management & Dynamic Auto-ID</div>", unsafe_allow_html=True)
+            
+            st.markdown("### ✏️ Register / Update AMC Contract & PO Details")
+            
+            with st.form("edit_amc_contract_enhanced_form"):
+                col_c1, col_c2 = st.columns(2)
+                
+                # Dynamic Auto-Generated Contract ID Suggestion
+                auto_gen_contract_id = f"AMC-{date.today().year}-{len(st.session_state.amc_contracts_db) + 101}"
+                
+                with col_c1:
+                    contract_no = st.text_input("AMC Contract Number* (Auto-Generated / Editable)", value=auto_gen_contract_id).strip()
+                    po_number = st.text_input("PO Number*", placeholder="e.g. PO-998877").strip()
+                    c_client_name = st.text_input("Client / Business Name*", placeholder="e.g. Apex Industries").strip()
+                    c_phone = st.text_input("Client Phone Number*", placeholder="e.g. +91 9876543210").strip()
+                    visits_allowed = st.selectbox("Annual Allowed Visits Limit*", [2, 3, 4, 6, 12], index=2)
+                
+                with col_c2:
+                    c_address = st.text_input("Complete Site / Factory Address*", placeholder="e.g. Plot 42, GIDC Estate").strip()
+                    c_city = st.text_input("City*", placeholder="e.g. Vadodara").strip()
+                    c_pincode = st.text_input("Pin Code", max_chars=6, placeholder="e.g. 390010").strip()
+                    contract_start = st.date_input("Contract Start Date", value=date.today())
+                    contract_end = st.date_input("Contract End Date", value=date.today() + pd.Timedelta(days=365))
+                    next_visit_due = st.date_input("Next Scheduled Visit Due*", value=date.today() + pd.Timedelta(days=90))
+                
+                submit_amc = st.form_submit_button("💾 Save / Update AMC Contract Details")
+
+                if submit_amc:
+                    if not contract_no or not c_client_name or not po_number or not c_address or not c_city:
+                        st.error("⚠️ Contract Number, PO Number, Client Name, Address, and City are mandatory.")
+                    else:
+                        contracts_df = st.session_state.amc_contracts_db
+                        if not contracts_df.empty and contract_no in contracts_df["AMC_Contract_No"].astype(str).values:
+                            st.session_state.amc_contracts_db.loc[
+                                st.session_state.amc_contracts_db["AMC_Contract_No"].astype(str) == contract_no,
+                                ["PO_Number", "Client_Name", "Client_Phone", "Site_Address", "City", "Pincode", "Start_Date", "End_Date", "Allowed_Visits", "Next_Visit_Due"]
+                            ] = [po_number, c_client_name, c_phone, c_address, c_city, c_pincode, str(contract_start), str(contract_end), visits_allowed, str(next_visit_due)]
+                        else:
+                            new_contract = {
+                                "AMC_Contract_No": contract_no,
+                                "PO_Number": po_number,
+                                "Client_Name": c_client_name,
+                                "Client_Phone": c_phone,
+                                "Site_Address": c_address,
+                                "City": c_city,
+                                "Pincode": c_pincode,
+                                "Start_Date": str(contract_start),
+                                "End_Date": str(contract_end),
+                                "Allowed_Visits": visits_allowed,
+                                "Next_Visit_Due": str(next_visit_due)
+                            }
+                            st.session_state.amc_contracts_db = pd.concat([st.session_state.amc_contracts_db, pd.DataFrame([new_contract])], ignore_index=True)
+                        
+                        save_sheet_data(st.session_state.amc_contracts_db, "AMCContracts")
+                        st.toast(f"✅ Contract {contract_no} with PO {po_number} successfully registered!")
                         st.rerun()
 
-        with col_mgr_b:
-            st.markdown("<div class='section-header'>Register System User</div>", unsafe_allow_html=True)
-            if logged_role != "Admin":
-                st.info("🔒 System User Registration is restricted. It can be created by Admin only.")
+            st.divider()
+            st.markdown("### 📋 Active AMC Client Contracts Master Log")
+            st.dataframe(st.session_state.amc_contracts_db, use_container_width=True)
+
+        # SUB-TAB 4: MAP / LIVE RADAR
+        with ops_sub_tab4:
+            st.markdown("<div class='section-header'>🗺️ Technician Fleet Live Radar & Locations</div>", unsafe_allow_html=True)
+            full_radar = pd.merge(st.session_state.tech_status_db, st.session_state.users_db[["User_ID", "Full_Name"]], left_on="Tech_ID", right_on="User_ID", how="left")
+            st.dataframe(full_radar, use_container_width=True)
+            
+            st.divider()
+            st.markdown("<div class='section-header'>📋 All Dispatched Active Work Orders</div>", unsafe_allow_html=True)
+            st.dataframe(st.session_state.jobs_db, use_container_width=True)
+
+    # =========================================================================
+    # PRIMARY TAB 2: FLEET ANALYTICS & AUDIT REPORTS (Consolidated Sub-Tabs)
+    # =========================================================================
+    with mgr_primary_tab2:
+        reports_sub_tab1, reports_sub_tab2, reports_sub_tab3 = st.tabs([
+            "📊 Overview Analytics",
+            "👤 Technician Deep Dive",
+            "📄 Service Reports"
+        ])
+
+        # SUB-TAB 1: OVERVIEW ANALYTICS
+        with reports_sub_tab1:
+            st.markdown("<div class='section-header'>📊 Fleet Performance, Workload & Travel Expense Analytics</div>", unsafe_allow_html=True)
+            
+            f_col1, f_col2 = st.columns(2)
+            with f_col1:
+                time_filter = st.selectbox(
+                    "🗓️ Date Range Filter", 
+                    ["All Time", "Today", "Weekly (Last 7 Days)", "Monthly (Last 30 Days)", "3 Months", "Yearly"],
+                    key="mgr_time_filter_tab1_new"
+                )
+            
+            tech_users = st.session_state.users_db[st.session_state.users_db["Role"] == "Technician"]
+            tech_options = ["All Technicians"] + tech_users["Full_Name"].tolist()
+            
+            with f_col2:
+                tech_filter = st.selectbox("👷 Technician Filter", tech_options, key="mgr_tech_filter_tab1_new")
+
+            all_reports = st.session_state.service_reports_db.copy()
+            
+            if time_filter != "All Time":
+                all_reports = filter_df_by_date_range(all_reports, "Service_Date", time_filter)
+                
+            if tech_filter != "All Technicians":
+                all_reports = all_reports[all_reports["Tech_Name"] == tech_filter]
+
+            st.divider()
+
+            tot_visited = len(all_reports)
+            
+            if not all_reports.empty:
+                all_reports["Distance_Travelled_KM"] = pd.to_numeric(all_reports["Distance_Travelled_KM"] if "Distance_Travelled_KM" in all_reports.columns else 0, errors='coerce').fillna(0)
+                all_reports["Time_Taken_Hours"] = pd.to_numeric(all_reports["Time_Taken_Hours"] if "Time_Taken_Hours" in all_reports.columns else 0, errors='coerce').fillna(0)
+                all_reports["Travel_Expense_INR"] = pd.to_numeric(all_reports["Travel_Expense_INR"] if "Travel_Expense_INR" in all_reports.columns else 0, errors='coerce').fillna(0)
+                
+                tot_dist = all_reports["Distance_Travelled_KM"].sum()
+                tot_time = all_reports["Time_Taken_Hours"].sum()
+                tot_expenses = all_reports["Travel_Expense_INR"].sum()
             else:
-                with st.form("add_user_form"):
-                    new_uid = st.text_input("User ID (e.g. TECH03)").strip().upper()
-                    new_name = st.text_input("Full Name")
-                    new_role = st.selectbox("Role", ["Technician", "Manager", "Admin"])
-                    new_pass = st.text_input("Password", type="password").strip()
+                tot_dist, tot_time, tot_expenses = 0.0, 0.0, 0.0
+
+            p_col1, p_col2, p_col3, p_col4, p_col5 = st.columns(5)
+            p_col1.metric("📍 Total Visits", tot_visited)
+            p_col2.metric("🚗 Distance Travelled", f"{tot_dist:.1f} KM")
+            p_col3.metric("⏱️ Field Hours", f"{tot_time:.1f} Hrs")
+            p_col4.metric("💰 Travel Payout", f"₹ {tot_expenses:,.2f}")
+            p_col5.metric("📊 Avg Time / Site", f"{(tot_time / tot_visited):.1f} Hrs" if tot_visited > 0 else "0.0 Hrs")
+
+            st.divider()
+
+            if not all_reports.empty and "Tech_Name" in all_reports.columns:
+                chart_col1, chart_col2, chart_col3 = st.columns(3)
+                
+                summary_grp = all_reports.groupby("Tech_Name").agg(
+                    Visits=("Report_ID", "count"),
+                    Distance_KM=("Distance_Travelled_KM", "sum"),
+                    Hours_Spent=("Time_Taken_Hours", "sum"),
+                    Expenses_Paid_INR=("Travel_Expense_INR", "sum")
+                ).reset_index()
+
+                with chart_col1:
+                    st.markdown("#### 📍 Visits per Technician")
+                    st.bar_chart(data=summary_grp, x="Tech_Name", y="Visits", color="#0F3D7A")
+
+                with chart_col2:
+                    st.markdown("#### 🚗 Total Distance (KM)")
+                    st.bar_chart(data=summary_grp, x="Tech_Name", y="Distance_KM", color="#10B981")
+
+                with chart_col3:
+                    st.markdown("#### 💰 Travel Payouts (₹)")
+                    st.bar_chart(data=summary_grp, x="Tech_Name", y="Expenses_Paid_INR", color="#D97706")
+
+                st.divider()
+
+                st.markdown("### 🎯 Work Order Completion Rate")
+                all_jobs = st.session_state.jobs_db.copy()
+                
+                for _, tech in tech_users.iterrows():
+                    t_id = str(tech["User_ID"])
+                    t_name = tech["Full_Name"]
                     
-                    if st.form_submit_button("Create Account"):
-                        if new_uid in st.session_state.users_db["User_ID"].astype(str).values:
-                            st.error("User ID already exists!")
-                        else:
-                            user_entry = {"User_ID": new_uid, "Full_Name": new_name, "Role": new_role, "Password": new_pass}
-                            st.session_state.users_db = pd.concat([st.session_state.users_db, pd.DataFrame([user_entry])], ignore_index=True)
-                            save_sheet_data(st.session_state.users_db, "Users")
-                            st.toast(f"✅ Account for {new_name} created!")
-                            st.rerun()
+                    tech_jobs = all_jobs[all_jobs["Assigned_Tech_ID"].astype(str) == t_id]
+                    total_assigned = len(tech_jobs)
+                    completed = len(tech_jobs[tech_jobs["Status"] == "Completed"])
+                    
+                    if total_assigned > 0:
+                        pct = int((completed / total_assigned) * 100)
+                        col_txt, col_bar = st.columns([2.5, 4.5])
+                        with col_txt:
+                            st.write(f"**{t_name}**: {completed}/{total_assigned} Finished ({pct}%)")
+                        with col_bar:
+                            st.progress(pct / 100)
+
+                st.divider()
+
+                st.markdown("### 📋 Comparative Fleet Summary Table")
+                st.dataframe(summary_grp, use_container_width=True)
+                
+                csv_data = all_reports.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Download Detailed Fleet Performance Report (CSV)",
+                    data=csv_data,
+                    file_name=f"fleet_performance_report_{date.today()}.csv",
+                    mime="text/csv"
+                )
+            else:
+                st.info("ℹ️ No visit or progress records match the selected filter criteria.")
+
+        # SUB-TAB 2: TECHNICIAN DEEP DIVE
+        with reports_sub_tab2:
+            st.markdown("<div class='section-header'>👤 Technician Individual Performance & Expense Audit Center</div>", unsafe_allow_html=True)
+            
+            tech_users = st.session_state.users_db[st.session_state.users_db["Role"] == "Technician"]
+            
+            if tech_users.empty:
+                st.warning("⚠️ No technicians registered in the system.")
+            else:
+                filter_c1, filter_c2 = st.columns([2, 2])
+                with filter_c1:
+                    selected_tech_name = st.selectbox(
+                        "🔍 Select Technician to Inspect*", 
+                        tech_users["Full_Name"].tolist(),
+                        index=0,
+                        key="tech_deep_dive_selectbox_new"
+                    )
+                with filter_c2:
+                    tech_time_range = st.selectbox(
+                        "🗓️ Time Period Filter", 
+                        ["All Time", "Today", "Weekly (Last 7 Days)", "Monthly (Last 30 Days)", "3 Months", "Yearly"],
+                        key="tech_time_range_selectbox_new"
+                    )
+
+                selected_tech_user = tech_users[tech_users["Full_Name"] == selected_tech_name].iloc[0]
+                selected_tech_id = str(selected_tech_user["User_ID"])
+
+                tech_reports = st.session_state.service_reports_db.copy()
+                if not tech_reports.empty and "Tech_ID" in tech_reports.columns:
+                    tech_reports = tech_reports[tech_reports["Tech_ID"].astype(str) == selected_tech_id]
+                    if tech_time_range != "All Time":
+                        tech_reports = filter_df_by_date_range(tech_reports, "Service_Date", tech_time_range)
+                else:
+                    tech_reports = pd.DataFrame()
+
+                tech_status_row = st.session_state.tech_status_db[st.session_state.tech_status_db["Tech_ID"].astype(str) == selected_tech_id]
+                curr_city = tech_status_row["Current_City"].values[0] if not tech_status_row.empty and "Current_City" in tech_status_row.columns else "Unknown"
+                curr_status = tech_status_row["Current_Status"].values[0] if not tech_status_row.empty and "Current_Status" in tech_status_row.columns else "Offline"
+                next_targets = tech_status_row["Next_City"].values[0] if not tech_status_row.empty and "Next_City" in tech_status_row.columns else "None"
+                last_updated = tech_status_row["Last_Updated"].values[0] if not tech_status_row.empty and "Last_Updated" in tech_status_row.columns else "N/A"
+
+                st.markdown(f"""
+                <div class='tech-card-header'>
+                    <h2 style='margin:0; font-weight:800;'>👷 {selected_tech_name} <span style='font-size:1rem; opacity:0.8;'>({selected_tech_id})</span></h2>
+                    <p style='margin:4px 0 0 0; font-size:0.95rem; opacity:0.9;'>
+                        📍 <b>Current City:</b> {curr_city} | 🔴 <b>Status:</b> {curr_status} | 🎯 <b>Targets:</b> {next_targets} | 🕒 <b>Updated:</b> {last_updated}
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+                if tech_reports.empty:
+                    st.info(f"ℹ️ No service records or travel logs found for **{selected_tech_name}** in the selected time period ({tech_time_range}).")
+                else:
+                    tech_reports["Distance_Travelled_KM"] = pd.to_numeric(tech_reports["Distance_Travelled_KM"] if "Distance_Travelled_KM" in tech_reports.columns else 0, errors='coerce').fillna(0)
+                    tech_reports["Time_Taken_Hours"] = pd.to_numeric(tech_reports["Time_Taken_Hours"] if "Time_Taken_Hours" in tech_reports.columns else 0, errors='coerce').fillna(0)
+                    tech_reports["Travel_Expense_INR"] = pd.to_numeric(tech_reports["Travel_Expense_INR"] if "Travel_Expense_INR" in tech_reports.columns else 0, errors='coerce').fillna(0)
+
+                    t_visits = len(tech_reports)
+                    t_distance = tech_reports["Distance_Travelled_KM"].sum()
+                    t_hours = tech_reports["Time_Taken_Hours"].sum()
+                    t_payout = tech_reports["Travel_Expense_INR"].sum()
+                    t_avg_time = (t_hours / t_visits) if t_visits > 0 else 0
+                    t_cost_per_km = (t_payout / t_distance) if t_distance > 0 else 0
+
+                    st.markdown("### 📈 Performance & Reimbursement KPI Summary")
+                    k1, k2, k3, k4, k5, k6 = st.columns(6)
+                    k1.metric("📍 Visited Sites", t_visits)
+                    k2.metric("🚗 Total Travelled", f"{t_distance:.1f} KM")
+                    k3.metric("⏱️ On-Site Hours", f"{t_hours:.1f} Hrs")
+                    k4.metric("💰 Total Paid (₹)", f"₹ {t_payout:,.2f}")
+                    k5.metric("⏳ Avg Time / Site", f"{t_avg_time:.1f} Hrs")
+                    k6.metric("⛽ Avg Cost / KM", f"₹ {t_cost_per_km:.1f}/KM")
+
+                    st.divider()
+
+                    st.markdown(f"### 📊 Graphical Performance Trends — {selected_tech_name}")
+                    chart_a1, chart_a2 = st.columns(2)
+
+                    with chart_a1:
+                        st.markdown("#### 🚗 Travel Distance (KM) per Visit")
+                        chart_dist_df = tech_reports[["Client_Name", "Distance_Travelled_KM"]].copy().set_index("Client_Name")
+                        st.bar_chart(chart_dist_df, color="#10B981")
+
+                    with chart_a2:
+                        st.markdown("#### 💰 Travel Expense (₹) per Visit")
+                        chart_exp_df = tech_reports[["Client_Name", "Travel_Expense_INR"]].copy().set_index("Client_Name")
+                        st.bar_chart(chart_exp_df, color="#D97706")
+
+                    st.divider()
+
+                    st.markdown(f"### 📑 Granular Field Visit & Travel Breakdown for {selected_tech_name}")
+                    display_cols = [
+                        "Report_ID", "Service_Date", "Client_Name", "PO_Number", "Site_Location", 
+                        "Equipment_Type", "Distance_Travelled_KM", "Time_Taken_Hours", "Travel_Expense_INR", 
+                        "Work_Done_Details", "Site_Photo"
+                    ]
+                    existing_disp_cols = [c for c in display_cols if c in tech_reports.columns]
+                    st.dataframe(tech_reports[existing_disp_cols], use_container_width=True)
+
+        # SUB-TAB 3: SERVICE REPORTS LOG
+        with reports_sub_tab3:
+            st.markdown("<div class='section-header'>📋 All Field Service Visit Reports Log</div>", unsafe_allow_html=True)
+            st.dataframe(st.session_state.service_reports_db, use_container_width=True)
