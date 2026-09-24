@@ -403,7 +403,6 @@ def render_login_form():
 
             submit_button = st.form_submit_button("🔑 LOGIN TO DASHBOARD", use_container_width=True)
 
-        # Handle form submission after closing the st.form context block
         if submit_button:
             u_val = user_id_input.strip() if user_id_input else ""
             p_val = password_input.strip() if password_input else ""
@@ -413,7 +412,6 @@ def render_login_form():
             else:
                 users_df = st.session_state.users_db
         
-                # Clean string inputs for matching
                 users_df["User_ID_Clean"] = users_df["User_ID"].astype(str).str.strip().str.lower()
                 users_df["Name_Clean"] = users_df["Full_Name"].astype(str).str.strip().str.lower()
                 users_df["Password_Clean"] = users_df["Password"].astype(str).str.strip()
@@ -436,52 +434,42 @@ def render_login_form():
         
         st.markdown("</div>", unsafe_allow_html=True)
 
-# -----------------------------------------------------------------------------
-# 5. SIDEBAR NAV & USER INFO
-# -----------------------------------------------------------------------------
+def render_sidebar():
+    with st.sidebar:
+        logo_path = get_logo_path()
+        if logo_path:
+            st.image(logo_path, use_container_width=True)
+        else:
+            st.markdown("<h2 style='color: #FFFFFF; text-align:center; font-weight:800; margin:0;'>SIDHARTH</h2>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #10B981; text-align:center; font-size:0.75rem; font-weight:700; letter-spacing:1px;'>SHUTTER & AUTOMATION</p>", unsafe_allow_html=True)
+        
+        st.markdown("<div class='sidebar-logo-sub'>AMC TRACKER PORTAL</div>", unsafe_allow_html=True)
+        st.divider()
 
-with st.sidebar:
-    logo_path = get_logo_path()
-    if logo_path:
-        st.image(logo_path, use_container_width=True)
-    else:
-        st.markdown("<h2 style='color: #FFFFFF; text-align:center; font-weight:800; margin:0;'>SIDHARTH</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='color: #10B981; text-align:center; font-size:0.75rem; font-weight:700; letter-spacing:1px;'>SHUTTER & AUTOMATION</p>", unsafe_allow_html=True)
-    
-    st.markdown("<div class='sidebar-logo-sub'>AMC TRACKER PORTAL</div>", unsafe_allow_html=True)
-    st.divider()
+        logged_name = st.session_state.get("user_name", "User")
+        logged_role = st.session_state.get("user_role", "Technician")
 
-    logged_name = st.session_state.get("user_name", "User")
-    logged_role = st.session_state.get("user_role", "Technician")
-
-    if "user" in st.session_state and st.session_state.user is not None:
-        u = st.session_state.user
-        if isinstance(u, dict):
-            logged_name = u.get("Full_Name", logged_name)
-            logged_role = u.get("Role", logged_role)
-
-    st.markdown(f"""
-    <div class='sidebar-user-card'>
-        <div style='font-size: 0.8rem; text-transform: uppercase; color: #94A3B8; font-weight: 700;'>Logged User</div>
-        <div style='font-size: 1.05rem; font-weight: 700; color: #FFFFFF; margin-bottom: 6px;'>{logged_name}</div>
-        <div style='font-size: 0.8rem; text-transform: uppercase; color: #94A3B8; font-weight: 700;'>Role</div>
-        <span style='background: #10B981; color: #FFFFFF; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;'>{logged_role}</span>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    if st.button("🚪 Logout", use_container_width=True):
-        st.session_state.authenticated = False
-        st.session_state.user = None
-        st.session_state.user_id = None
-        st.session_state.user_name = None
-        st.session_state.user_role = None
-        st.rerun()
+        st.markdown(f"""
+        <div class='sidebar-user-card'>
+            <div style='font-size: 0.8rem; text-transform: uppercase; color: #94A3B8; font-weight: 700;'>Logged User</div>
+            <div style='font-size: 1.05rem; font-weight: 700; color: #FFFFFF; margin-bottom: 6px;'>{logged_name}</div>
+            <div style='font-size: 0.8rem; text-transform: uppercase; color: #94A3B8; font-weight: 700;'>Role</div>
+            <span style='background: #10B981; color: #FFFFFF; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;'>{logged_role}</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("🚪 Logout", use_container_width=True):
+            st.session_state.authenticated = False
+            st.session_state.user_id = None
+            st.session_state.user_name = None
+            st.session_state.user_role = None
+            st.rerun()
 
 # -----------------------------------------------------------------------------
-# 6. TECHNICIAN DASHBOARD
+# 5. TECHNICIAN DASHBOARD
 # -----------------------------------------------------------------------------
 
-if logged_role == "Technician":
+def render_technician_dashboard():
     tech_id = str(st.session_state.get("user_id", ""))
     tech_name = str(st.session_state.get("user_name", ""))
 
@@ -841,10 +829,10 @@ if logged_role == "Technician":
             st.info("📜 No service reports submitted yet.")
 
 # -----------------------------------------------------------------------------
-# 7. MANAGER & ADMIN COMMAND DASHBOARD
+# 6. MANAGER & ADMIN COMMAND DASHBOARD
 # -----------------------------------------------------------------------------
 
-elif logged_role in ["Manager", "Admin"]:
+def render_admin_dashboard():
     st.markdown("<h1 style='color: #0F3D7A; font-weight:800; margin-bottom: 20px;'>📡 AMC Tracker Portal — Command & Control Center</h1>", unsafe_allow_html=True)
 
     # DYNAMIC 15-DAY AMC ALERTS
@@ -906,7 +894,6 @@ elif logged_role in ["Manager", "Admin"]:
                 submit_create_user = st.form_submit_button("Register New User")
 
                 if submit_create_user:
-                    # Validations
                     if not new_uid or not new_name or not new_pass or not new_aadhaar:
                         st.error("⚠️ All fields marked with * including Aadhaar Number are compulsory.")
                     elif len(new_aadhaar) != 12 or not new_aadhaar.isdigit():
@@ -914,7 +901,6 @@ elif logged_role in ["Manager", "Admin"]:
                     else:
                         existing_users = st.session_state.users_db
                         
-                        # Duplicate Checks for User ID and Aadhaar
                         uid_exists = not existing_users.empty and new_uid in existing_users["User_ID"].astype(str).str.strip().values
                         aadhaar_exists = False
                         if not existing_users.empty and "Aadhaar_Number" in existing_users.columns:
@@ -1015,7 +1001,6 @@ elif logged_role in ["Manager", "Admin"]:
             with st.form("edit_amc_contract_enhanced_form"):
                 col_c1, col_c2 = st.columns(2)
                 
-                # Dynamic Auto-Generated Contract ID Suggestion
                 auto_gen_contract_id = f"AMC-{date.today().year}-{len(st.session_state.amc_contracts_db) + 101}"
                 
                 with col_c1:
@@ -1305,26 +1290,16 @@ elif logged_role in ["Manager", "Admin"]:
 # MAIN APP ROUTING
 # -----------------------------------------------------------------------------
 
-# 1. First, check if user is authenticated
 if not st.session_state.get("authenticated", False):
     render_login_form()
-
-# 2. If authenticated, route based on role
 else:
-    # Render sidebar controls / logout button
     render_sidebar()
-
     logged_role = st.session_state.get("user_role", None)
 
     if logged_role == "Technician":
         render_technician_dashboard()
-
     elif logged_role in ["Manager", "Admin"]:
         render_admin_dashboard()
-
-    # ----------------------------------------------------
-    # ADD THE CODE HERE (At the end of the role checks)
-    # ----------------------------------------------------
     else:
         st.warning("⚠️ Unrecognized or missing user role. Please log out and try again.")
         if st.button("Reset Session & Return to Login"):
