@@ -11,7 +11,7 @@ from geopy.distance import geodesic
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 import io
-import uuid
+import re
 
 # Import the centralized equipment database from products.py
 from products import EQUIPMENT_DATA
@@ -99,6 +99,21 @@ def get_nearby_cities(city_name, max_results=15):
 
     except Exception:
         return ["Vadodara", "Surat", "Ahmedabad", "Delhi", "Noida", "Gurugram", "Faridabad"]
+
+def generate_next_tech_id(users_df):
+    """Dynamically generates the next Tech ID (e.g., TECH01, TECH02) based on existing users."""
+    if users_df.empty or "User_ID" not in users_df.columns:
+        return "TECH01"
+    
+    max_num = 0
+    for uid in users_df["User_ID"].dropna().astype(str):
+        match = re.search(r'TECH(\d+)', uid.upper())
+        if match:
+            num = int(match.group(1))
+            if num > max_num:
+                max_num = num
+                
+    return f"TECH{max_num + 1:02d}"
 
 # -----------------------------------------------------------------------------
 # 2. GOOGLE SHEETS & DRIVE CONNECTION
@@ -874,15 +889,17 @@ def render_admin_dashboard():
             "🗺️ MAP / Live Radar"
         ])
 
-        # SUB-TAB 1: CREATE USER / TECHNICIAN
+        # SUB-TAB 1: CREATE USER / TECHNICIAN (Dynamic User ID Generation)
         with ops_sub_tab1:
             st.markdown("<div class='section-header'>👤 Register System User / Technician</div>", unsafe_allow_html=True)
-            st.caption("Managers and Admins can create new technician and staff accounts here. Aadhaar registration is compulsory to prevent duplicate entries.")
+            st.caption("Managers and Admins can create new technician and staff accounts here. User IDs are dynamically generated.")
+
+            dynamic_next_id = generate_next_tech_id(st.session_state.users_db)
 
             with st.form("create_user_consolidated_form", clear_on_submit=True):
                 u_col1, u_col2 = st.columns(2)
                 with u_col1:
-                    new_uid = st.text_input("User ID / Tech ID* (e.g. TECH05)").strip().upper()
+                    new_uid = st.text_input("User ID / Tech ID* (Auto-Generated / Dynamic)", value=dynamic_next_id).strip().upper()
                     new_name = st.text_input("Full Name*").strip()
                     new_role = st.selectbox("Assign Role*", ["Technician", "Manager", "Admin"])
                 
