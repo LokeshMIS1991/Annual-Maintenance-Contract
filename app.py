@@ -100,20 +100,29 @@ def get_nearby_cities(city_name, max_results=15):
     except Exception:
         return ["Vadodara", "Surat", "Ahmedabad", "Delhi", "Noida", "Gurugram", "Faridabad"]
 
-def generate_next_tech_id(users_df):
-    """Dynamically generates the next Tech ID (e.g., TECH01, TECH02) based on existing users."""
+def generate_next_user_id(users_df, role="Technician"):
+    """Dynamically generates next ID based on Role (e.g. TECH01, MGR01, ADM01)."""
+    prefix_map = {
+        "Technician": "TECH",
+        "Manager": "MGR",
+        "Admin": "ADM"
+    }
+    prefix = prefix_map.get(role, "TECH")
+
     if users_df.empty or "User_ID" not in users_df.columns:
-        return "TECH01"
-    
+        return f"{prefix}01"
+
     max_num = 0
+    pattern = re.compile(f"{prefix}(\\d+)", re.IGNORECASE)
+
     for uid in users_df["User_ID"].dropna().astype(str):
-        match = re.search(r'TECH(\d+)', uid.upper())
+        match = pattern.search(uid.upper())
         if match:
             num = int(match.group(1))
             if num > max_num:
                 max_num = num
-                
-    return f"TECH{max_num + 1:02d}"
+
+    return f"{prefix}{max_num + 1:02d}"
 
 # -----------------------------------------------------------------------------
 # 2. GOOGLE SHEETS & DRIVE CONNECTION
@@ -890,57 +899,61 @@ def render_admin_dashboard():
         ])
 
         # SUB-TAB 1: CREATE & MANAGE USER / TECHNICIAN (With Update & Delete Options + Mobile Number)
-        with ops_sub_tab1:
-            st.markdown("<div class='section-header'>👤 Register New System User</div>", unsafe_allow_html=True)
-            st.caption("Managers and Admins can create new technician and staff accounts here. User IDs are dynamically generated.")
+        # SUB-TAB 1: CREATE & MANAGE USER / TECHNICIAN
+with ops_sub_tab1:
+    st.markdown("<div class='section-header'>👤 Register New System User</div>", unsafe_allow_html=True)
+    st.caption("Managers and Admins can create new user accounts here. Prefixes adapt automatically (TECH, MGR, ADM).")
 
-            dynamic_next_id = generate_next_tech_id(st.session_state.users_db)
+    # Select Role first (outside the form) to update the ID dynamically
+    new_role = st.selectbox("Assign Role*", ["Technician", "Manager", "Admin"], key="user_role_select")
 
-            with st.form("create_user_consolidated_form", clear_on_submit=True):
-                u_col1, u_col2 = st.columns(2)
-                with u_col1:
-                    new_uid = st.text_input("User ID / Tech ID* (Auto-Generated / Dynamic)", value=dynamic_next_id).strip().upper()
-                    new_name = st.text_input("Full Name*").strip()
-                    new_role = st.selectbox("Assign Role*", ["Technician", "Manager", "Admin"])
-                
-                with u_col2:
-                    new_mobile = st.text_input("Mobile Number*", max_chars=15, placeholder="e.g. +91 9876543210").strip()
-                    new_aadhaar = st.text_input("Aadhaar Number* (12 Digits)", max_chars=12, placeholder="e.g. 123456789012").strip()
-                    new_pass = st.text_input("Password / PIN*", type="password").strip()
+    # Calculate dynamic ID based on selected role
+    dynamic_next_id = generate_next_user_id(st.session_state.users_db, role=new_role)
 
-                st.divider()
-                submit_create_user = st.form_submit_button("Register New User")
+    with st.form("create_user_consolidated_form", clear_on_submit=True):
+        u_col1, u_col2 = st.columns(2)
+        with u_col1:
+            new_uid = st.text_input("User ID* (Auto-Generated / Editable)", value=dynamic_next_id).strip().upper()
+            new_name = st.text_input("Full Name*").strip()
 
-                if submit_create_user:
-                    if not new_uid or not new_name or not new_pass or not new_aadhaar or not new_mobile:
-                        st.error("⚠️ All fields marked with * including Mobile Number and Aadhaar Number are compulsory.")
-                    elif len(new_aadhaar) != 12 or not new_aadhaar.isdigit():
-                        st.error("⚠️ Please enter a valid 12-digit numeric Aadhaar Number.")
-                    else:
-                        existing_users = st.session_state.users_db
-                        
-                        uid_exists = not existing_users.empty and new_uid in existing_users["User_ID"].astype(str).str.strip().values
-                        aadhaar_exists = False
-                        if not existing_users.empty and "Aadhaar_Number" in existing_users.columns:
-                            aadhaar_exists = new_aadhaar in existing_users["Aadhaar_Number"].astype(str).str.strip().values
+        with u_col2:
+            new_mobile = st.text_input("Mobile Number*", max_chars=15, placeholder="e.g. +91 9876543210").strip()
+            new_aadhaar = st.text_input("Aadhaar Number* (12 Digits)", max_chars=12, placeholder="e.g. 123456789012").strip()
+            new_pass = st.text_input("Password / PIN*", type="password").strip()
 
-                        if uid_exists:
-                            st.error(f"❌ User ID '{new_uid}' is already registered in the system. Duplicates are restricted.")
-                        elif aadhaar_exists:
-                            st.error("❌ A technician with this Aadhaar Number is already registered. Duplicate technician accounts are restricted.")
-                        else:
-                            user_entry = {
-                                "User_ID": new_uid, 
-                                "Full_Name": new_name, 
-                                "Role": new_role, 
-                                "Password": new_pass,
-                                "Aadhaar_Number": new_aadhaar,
-                                "Mobile_Number": new_mobile
-                            }
-                            st.session_state.users_db = pd.concat([st.session_state.users_db, pd.DataFrame([user_entry])], ignore_index=True)
-                            save_sheet_data(st.session_state.users_db, "Users")
-                            st.toast(f"✅ User {new_name} ({new_uid}) registered successfully!", icon="👤")
-                            st.rerun()
+        st.divider()
+        submit_create_user = st.form_submit_button("Register New User")
+
+        if submit_create_user:
+            if not new_uid or not new_name or not new_pass or not new_aadhaar or not new_mobile:
+                st.error("⚠️ All fields marked with * are compulsory.")
+            elif len(new_aadhaar) != 12 or not new_aadhaar.isdigit():
+                st.error("⚠️ Please enter a valid 12-digit numeric Aadhaar Number.")
+            else:
+                existing_users = st.session_state.users_db
+
+                uid_exists = not existing_users.empty and new_uid in existing_users["User_ID"].astype(str).str.strip().values
+                aadhaar_exists = False
+                if not existing_users.empty and "Aadhaar_Number" in existing_users.columns:
+                    aadhaar_exists = new_aadhaar in existing_users["Aadhaar_Number"].astype(str).str.strip().values
+
+                if uid_exists:
+                    st.error(f"❌ User ID '{new_uid}' is already registered in the system.")
+                elif aadhaar_exists:
+                    st.error("❌ A user with this Aadhaar Number is already registered.")
+                else:
+                    user_entry = {
+                        "User_ID": new_uid,
+                        "Full_Name": new_name,
+                        "Role": new_role,
+                        "Password": new_pass,
+                        "Aadhaar_Number": new_aadhaar,
+                        "Mobile_Number": new_mobile
+                    }
+                    st.session_state.users_db = pd.concat([st.session_state.users_db, pd.DataFrame([user_entry])], ignore_index=True)
+                    save_sheet_data(st.session_state.users_db, "Users")
+                    st.toast(f"✅ User {new_name} ({new_uid}) registered successfully as {new_role}!", icon="👤")
+                    st.rerun()
 
             st.divider()
 
