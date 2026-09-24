@@ -12,6 +12,9 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 import io
 
+# Import the centralized equipment database from products.py
+from products import EQUIPMENT_DATA
+
 # -----------------------------------------------------------------------------
 # 0. PAGE CONFIGURATION
 # -----------------------------------------------------------------------------
@@ -97,7 +100,7 @@ def get_nearby_cities(city_name, max_results=15):
         return ["Vadodara", "Surat", "Ahmedabad", "Delhi", "Noida", "Gurugram", "Faridabad"]
 
 # -----------------------------------------------------------------------------
-# 2. GOOGLE SHEETS CONNECTION
+# 2. GOOGLE SHEETS & DRIVE CONNECTION
 # -----------------------------------------------------------------------------
 
 @st.cache_resource
@@ -190,12 +193,8 @@ if "selected_job_for_report" not in st.session_state:
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
-# -----------------------------------------------------------------------------
-#  Google Drive
-# -----------------------------------------------------------------------------
-
-DRIVE_FOLDER_ID = "https://drive.google.com/drive/folders/1dnzcSiMuLMUKVcd4pAe95T_6aOjwmBFA"  # Paste your copied folder ID
-# Fetches the folder ID safely from secrets
+# Google Drive Integration
+DRIVE_FOLDER_ID = "https://drive.google.com/drive/folders/1dnzcSiMuLMUKVcd4pAe95T_6aOjwmBFA"
 
 @st.cache_resource
 def get_drive_service():
@@ -216,7 +215,6 @@ def upload_photo_to_drive(file_obj, filename):
             'parents': [DRIVE_FOLDER_ID]
         }
         
-        # Read uploaded image bytes directly
         media = MediaIoBaseUpload(
             io.BytesIO(file_obj.getvalue()), 
             mimetype=file_obj.type,
@@ -229,79 +227,13 @@ def upload_photo_to_drive(file_obj, filename):
             fields='id, webViewLink'
         ).execute()
         
-        # Returns the viewable web link to the image on Google Drive
         return uploaded_file.get('webViewLink')
     except Exception as e:
         st.error(f"❌ Failed to upload image to Google Drive: {e}")
         return None
-        
-# -----------------------------------------------------------------------------
-# 3. CHECKLIST DATA CONFIGURATION
-# -----------------------------------------------------------------------------
-
-EQUIPMENT_DATA = {
-    "Rolling Shutter": {
-        "types": [
-            "Motorized Rolling Shutter (Central / Side Motor)",
-            "Manual Pull-Push / Gear Operated Shutter",
-            "Insulated / Double-Walled Slats Shutter",
-            "Perforated / Grill Type Rolling Shutter",
-            "Fire Rated Rolling Shutter"
-        ],
-        "checklist": [
-            "Shutter Curtain Slats, End Locks & Bottom Profile Alignment",
-            "Side Guide Channels (Tracks), Rubber Seals & Weather Strips Check",
-            "Main Shaft Pipe, Counterbalance Springs & Drum Bearings",
-            "Drive Motor (Central/Side Tubular), Gear Box & Mechanical Brake",
-            "Mechanical Electromechanical Limit Switches (Top & Bottom Cut-off)",
-            "Manual Override System (Hand Chain / Hand Crank Release)",
-            "Control Panel, Push Button Box, Wiring Connections & Relays",
-            "RF Remote Control Receiver, Handheld Transmitters & Key Switches",
-            "Safety Anti-Fall Brake / Parachute Safety Device Inspection",
-            "Safety Obstacle Infrared Sensors / Safety Edge Operation Check",
-            "Drive Sprockets, Drive Chains & Alignment Tension Adjustments",
-            "Fire Shutter Fusible Link & Auto-Closing Signal Drop Test (If App.)",
-            "Central Shaft Mechanical Spring Tension Adjustments",
-            "Hood Cover (Canopy Box) Structure & Brackets Rigidity",
-            "Greasing & Lubrication of Guide Tracks, Bearings & Chains",
-            "Smooth Up/Down Motion Check & Absence of Abnormal Noise",
-            "Mechanical Center Lock & Side Shoot Bolt Lock Verification",
-            "Complete Automatic & Manual Operation Cycle Test"
-        ]
-    },
-    "High Speed Door": {
-        "types": [
-            "High Speed Roll-Up Door (PVC Fabric)",
-            "Self-Repairing High Speed Door",
-            "Cold Room / Freezer High Speed Door",
-            "Cleanroom High Speed Door",
-            "High Speed Spiral / Aluminium Door"
-        ],
-        "checklist": [
-            "Door Curtain / Fabric Panel Condition & Vision Window Clarity",
-            "Side Guide Channels, Wind Stiffener Bars & Seals Integrity",
-            "Self-Repairing Zipper / Track Re-insertion Mechanism",
-            "High-Speed Drive Motor, Gearbox & Brake Assembly",
-            "VFD (Variable Frequency Drive) Speed Settings (Soft Start / Stop)",
-            "Digital Absolute Encoder / Limit Switch Settings",
-            "Multi-Beam Safety Light Curtain Barrier Operation",
-            "Bottom Edge Wireless/Wired Safety Sensor & Contact Edge",
-            "Radar Motion Sensors / Microwave Motion Activation",
-            "Induction Loop Sensors & Pull-Cord Switch Functions",
-            "Air Lock Interlocking System (Cleanroom / Cold Room Door)",
-            "Control Panel Connections, PLC / Microcontroller Display & Fuses",
-            "Counterbalance Springs / Tensioning Belts / Shaft Bearings",
-            "Emergency Manual Crank / Hand Lever Release Operation",
-            "UPS / Battery Backup Automatic Opening System",
-            "Greasing & Lubrication of Bearings, Guides & Drive Chains",
-            "Full Cycle High-Speed Opening & Closing Operation Check",
-            "Safety Reversing Test on Obstacle Detection"
-        ]
-    }
-}
 
 # -----------------------------------------------------------------------------
-# 4. BRANDED UI STYLING
+# 3. BRANDED UI STYLING
 # -----------------------------------------------------------------------------
 
 st.markdown("""
@@ -432,7 +364,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 5. AUTHENTICATION & LOGIN FORM
+# 4. AUTHENTICATION & LOGIN FORM
 # -----------------------------------------------------------------------------
 
 def render_login_form():
@@ -502,7 +434,7 @@ if not st.session_state.get("authenticated", False):
     st.stop()
 
 # -----------------------------------------------------------------------------
-# 6. SIDEBAR NAV & USER INFO
+# 5. SIDEBAR NAV & USER INFO
 # -----------------------------------------------------------------------------
 
 with st.sidebar:
@@ -543,7 +475,7 @@ with st.sidebar:
         st.rerun()
 
 # -----------------------------------------------------------------------------
-# 7. TECHNICIAN DASHBOARD
+# 6. TECHNICIAN DASHBOARD
 # -----------------------------------------------------------------------------
 
 if logged_role == "Technician":
@@ -657,7 +589,8 @@ if logged_role == "Technician":
                 rpt_po_number = st.text_input("PO Number (Auto Linked or Manual)", value=auto_po)
             
             with c_header2:
-                selected_category = st.selectbox("Equipment Category*", ["Rolling Shutter", "High Speed Door"])
+                # Dynamic Equipment Category Selection loaded from products.py database
+                selected_category = st.selectbox("Equipment Category*", list(EQUIPMENT_DATA.keys()))
                 rpt_visit_num_str = st.selectbox("AMC Visit Sequence*", ["Visit 1 of 4", "Visit 2 of 4", "Visit 3 of 4", "Visit 4 of 4"])
 
             st.divider()
@@ -730,15 +663,19 @@ if logged_role == "Technician":
                     if not rpt_site_location or not rpt_remarks or not rpt_work_done:
                         st.error("⚠️ Please fill in all required fields marked with *")
                     else:
-                        # 1. Handle Photo Upload to Google Drive
                         photo_url_or_name = "No Photo Uploaded"
                         if site_photo_file is not None:
                             formatted_filename = f"{selected_job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{site_photo_file.name}"
                             drive_link = upload_photo_to_drive(site_photo_file, formatted_filename)
                             if drive_link:
                                 photo_url_or_name = drive_link
-                
-                        # 2. Store the Drive Link in Google Sheets
+                        
+                        try:
+                            local_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
+                            submit_time_str = datetime.now(local_tz).strftime("%Y-%m-%d %I:%M %p")
+                        except Exception:
+                            submit_time_str = datetime.now().strftime("%Y-%m-%d %I:%M %p")
+
                         report_entry = {
                             "Report_ID": f"RPT-{len(st.session_state.service_reports_db) + 1001}",
                             "Job_ID": selected_job_id,
@@ -761,7 +698,7 @@ if logged_role == "Technician":
                             "Distance_Travelled_KM": float(rpt_distance),
                             "Time_Taken_Hours": float(rpt_time_taken),
                             "Work_Done_Details": rpt_work_done,
-                            "Site_Photo": photo_url_or_name,  # Saves the clickable Google Drive Link!
+                            "Site_Photo": photo_url_or_name,
                             "Problems_Faced": problems_faced_input.strip() if problems_faced_input.strip() else "None",
                             "Remarks": rpt_remarks,
                             "Submitted_At": submit_time_str
@@ -898,7 +835,7 @@ if logged_role == "Technician":
             st.info("📜 No service reports submitted yet.")
 
 # -----------------------------------------------------------------------------
-# 8. MANAGER COMMAND DASHBOARD & ANALYTICS
+# 7. MANAGER COMMAND DASHBOARD & ANALYTICS
 # -----------------------------------------------------------------------------
 
 elif logged_role in ["Manager", "Admin"]:
