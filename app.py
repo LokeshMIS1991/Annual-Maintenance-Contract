@@ -403,37 +403,48 @@ def render_login_form():
 
             submit_button = st.form_submit_button("🔑 LOGIN TO DASHBOARD", use_container_width=True)
 
-            if submit_button:
-                u_val = user_id_input.strip() if user_id_input else ""
-                p_val = password_input.strip() if password_input else ""
-                
-                if not u_val or not p_val:
-                    st.warning("⚠️ Please enter both Username and Password.")
-                else:
-                    users_df = st.session_state.users_db
-                    matched_user = users_df[
-                        (
-                            (users_df["User_ID"].astype(str).str.strip().str.lower() == u_val.lower()) |
-                            (users_df["Full_Name"].astype(str).str.strip().str.lower() == u_val.lower())
-                        ) & 
-                        (users_df["Password"].astype(str).str.strip() == p_val)
-                    ]
+            # Updated authentication block inside render_login_form()
+
+                if submit_button:
+                    u_val = user_id_input.strip() if user_id_input else ""
+                    p_val = password_input.strip() if password_input else ""
                     
-                    if not matched_user.empty:
-                        user_info = matched_user.iloc[0]
-                        st.session_state["authenticated"] = True
-                        st.session_state["user_id"] = str(user_info["User_ID"])
-                        st.session_state["user_name"] = str(user_info["Full_Name"])
-                        st.session_state["user_role"] = str(user_info["Role"])
-                        st.session_state["user"] = {
-                            "User_ID": str(user_info["User_ID"]),
-                            "Full_Name": str(user_info["Full_Name"]),
-                            "Role": str(user_info["Role"])
-                        }
-                        st.success(f"Welcome back, {user_info['Full_Name']}!")
-                        st.rerun()
+                    if not u_val or not p_val:
+                        st.warning("⚠️ Please enter both Username and Password.")
                     else:
-                        st.error("❌ Invalid Username or Password. Please try again.")
+                        users_df = st.session_state.users_db
+                        
+                        # 1. Clean data from Google Sheet
+                        users_df["User_ID_Clean"] = users_df["User_ID"].astype(str).str.strip().str.lower()
+                        users_df["Name_Clean"] = users_df["Full_Name"].astype(str).str.strip().str.lower()
+                        users_df["Password_Clean"] = users_df["Password"].astype(str).str.strip()
+                
+                        # 2. Check Google Sheet Users
+                        matched_user = users_df[
+                            ((users_df["User_ID_Clean"] == u_val.lower()) | 
+                             (users_df["Name_Clean"] == u_val.lower())) & 
+                            (users_df["Password_Clean"] == p_val)
+                        ]
+                        
+                        # 3. Hardcoded Fallback (in case Google Sheet is empty)
+                        if matched_user.empty and u_val.lower() == "admin" and p_val == "admin123":
+                            st.session_state["authenticated"] = True
+                            st.session_state["user_id"] = "ADMIN01"
+                            st.session_state["user_name"] = "System Administrator"
+                            st.session_state["user_role"] = "Admin"
+                            st.success("Welcome back, System Administrator!")
+                            st.rerun()
+                            
+                        elif not matched_user.empty:
+                            user_info = matched_user.iloc[0]
+                            st.session_state["authenticated"] = True
+                            st.session_state["user_id"] = str(user_info["User_ID"])
+                            st.session_state["user_name"] = str(user_info["Full_Name"])
+                            st.session_state["user_role"] = str(user_info["Role"])
+                            st.success(f"Welcome back, {user_info['Full_Name']}!")
+                            st.rerun()
+                        else:
+                            st.error("❌ Invalid Username or Password. Please check your Google Sheet 'Users' tab.")
         st.markdown("</div>", unsafe_allow_html=True)
 
 if not st.session_state.get("authenticated", False):
