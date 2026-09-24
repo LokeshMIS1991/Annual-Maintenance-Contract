@@ -403,50 +403,38 @@ def render_login_form():
 
             submit_button = st.form_submit_button("🔑 LOGIN TO DASHBOARD", use_container_width=True)
 
-            # Updated authentication block inside render_login_form()
-
-                with st.form(key="login_form"):
-                    user_id_input = st.text_input("Username / Name")
-                    password_input = st.text_input("Password / PIN", type="password")
-                    
-                    # 1. Submit button inside the form
-                    submit_button = st.form_submit_button("LOGIN TO DASHBOARD")
-                
-                # 2. Check submission aligned WITH or INSIDE the form block correctly
-                if submit_button:
-                    u_val = user_id_input.strip() if user_id_input else ""
-                    p_val = password_input.strip() if password_input else ""
-                
-                    if not u_val or not p_val:
-                        st.warning("⚠️ Please enter both Username and Password.")
-                    else:
-                        users_df = st.session_state.users_db
-                
-                        # Clean string inputs for matching
-                        users_df["User_ID_Clean"] = users_df["User_ID"].astype(str).str.strip().str.lower()
-                        users_df["Name_Clean"] = users_df["Full_Name"].astype(str).str.strip().str.lower()
-                        users_df["Password_Clean"] = users_df["Password"].astype(str).str.strip()
-                
-                        matched_user = users_df[
-                            ((users_df["User_ID_Clean"] == u_val.lower()) | 
-                             (users_df["Name_Clean"] == u_val.lower())) & 
-                            (users_df["Password_Clean"] == p_val)
-                        ]
-                
-                        if not matched_user.empty:
-                            user_info = matched_user.iloc[0]
-                            st.session_state["authenticated"] = True
-                            st.session_state["user_id"] = str(user_info["User_ID"])
-                            st.session_state["user_name"] = str(user_info["Full_Name"])
-                            st.session_state["user_role"] = str(user_info["Role"])
-                            st.rerun()
-                        else:
-                            st.error("❌ Invalid Username or Password. Please try again.")
-                            st.markdown("</div>", unsafe_allow_html=True)
-
-if not st.session_state.get("authenticated", False):
-    render_login_form()
-    st.stop()
+        # Handle form submission after closing the st.form context block
+        if submit_button:
+            u_val = user_id_input.strip() if user_id_input else ""
+            p_val = password_input.strip() if password_input else ""
+        
+            if not u_val or not p_val:
+                st.warning("⚠️ Please enter both Username and Password.")
+            else:
+                users_df = st.session_state.users_db
+        
+                # Clean string inputs for matching
+                users_df["User_ID_Clean"] = users_df["User_ID"].astype(str).str.strip().str.lower()
+                users_df["Name_Clean"] = users_df["Full_Name"].astype(str).str.strip().str.lower()
+                users_df["Password_Clean"] = users_df["Password"].astype(str).str.strip()
+        
+                matched_user = users_df[
+                    ((users_df["User_ID_Clean"] == u_val.lower()) | 
+                     (users_df["Name_Clean"] == u_val.lower())) & 
+                    (users_df["Password_Clean"] == p_val)
+                ]
+        
+                if not matched_user.empty:
+                    user_info = matched_user.iloc[0]
+                    st.session_state["authenticated"] = True
+                    st.session_state["user_id"] = str(user_info["User_ID"])
+                    st.session_state["user_name"] = str(user_info["Full_Name"])
+                    st.session_state["user_role"] = str(user_info["Role"])
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid Username or Password. Please try again.")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
 # 5. SIDEBAR NAV & USER INFO
