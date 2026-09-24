@@ -426,10 +426,10 @@ def render_login_form():
         
                 if not matched_user.empty:
                     user_info = matched_user.iloc[0]
-                    st.session_state["authenticated"] = True
                     st.session_state["user_id"] = str(user_info["User_ID"])
                     st.session_state["user_name"] = str(user_info["Full_Name"])
-                    st.session_state["user_role"] = str(user_info["Role"])
+                    st.session_state["user_role"] = str(user_info["Role"]).strip()
+                    st.session_state["authenticated"] = True
                     st.rerun()
                 else:
                     st.error("❌ Invalid Username or Password. Please try again.")
@@ -1300,3 +1300,33 @@ elif logged_role in ["Manager", "Admin"]:
         with reports_sub_tab3:
             st.markdown("<div class='section-header'>📋 All Field Service Visit Reports Log</div>", unsafe_allow_html=True)
             st.dataframe(st.session_state.service_reports_db, use_container_width=True)
+
+# -----------------------------------------------------------------------------
+# MAIN APP ROUTING
+# -----------------------------------------------------------------------------
+
+# 1. First, check if user is authenticated
+if not st.session_state.get("authenticated", False):
+    render_login_form()
+
+# 2. If authenticated, route based on role
+else:
+    # Render sidebar controls / logout button
+    render_sidebar()
+
+    logged_role = st.session_state.get("user_role", None)
+
+    if logged_role == "Technician":
+        render_technician_dashboard()
+
+    elif logged_role in ["Manager", "Admin"]:
+        render_admin_dashboard()
+
+    # ----------------------------------------------------
+    # ADD THE CODE HERE (At the end of the role checks)
+    # ----------------------------------------------------
+    else:
+        st.warning("⚠️ Unrecognized or missing user role. Please log out and try again.")
+        if st.button("Reset Session & Return to Login"):
+            st.session_state.clear()
+            st.rerun()
