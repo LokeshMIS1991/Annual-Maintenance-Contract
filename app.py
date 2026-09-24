@@ -842,17 +842,17 @@ def render_technician_dashboard():
                 cols_to_update
             ] = [input_curr_city, str(input_curr_pin), str(input_status), str(next_cities_str), str(now_str)]
             
-            else:
-                new_row = {
-                    "Tech_ID": tech_id, 
-                    "Current_City": input_curr_city, 
-                    "Current_Pincode": input_curr_pin, 
-                    "Current_Status": input_status, 
-                    "Next_City": next_cities_str, 
-                    "Last_Updated": now_str
-                }
-                st.session_state.tech_status_db = pd.concat([st.session_state.tech_status_db, pd.DataFrame([new_row])], ignore_index=True)
-            
+                else:
+                    new_row = {
+                        "Tech_ID": tech_id, 
+                        "Current_City": input_curr_city, 
+                        "Current_Pincode": input_curr_pin, 
+                        "Current_Status": input_status, 
+                        "Next_City": next_cities_str, 
+                        "Last_Updated": now_str
+                    }
+                    st.session_state.tech_status_db = pd.concat([st.session_state.tech_status_db, pd.DataFrame([new_row])], ignore_index=True)
+                
             save_sheet_data(st.session_state.tech_status_db, "TechStatus")
             st.toast(f"📍 Target cities updated to: {next_cities_str or 'None'}", icon="✅")
             st.rerun()
