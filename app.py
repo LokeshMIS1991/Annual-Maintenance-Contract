@@ -514,7 +514,7 @@ if logged_role == "Technician":
         "📈 Progress & History"
     ])
 
-    # TAB 1: Assigned Work Orders
+   # TAB 1: Assigned Work Orders (Visual Task Cards Interface)
     with tech_tab1:
         st.markdown("<div class='section-header'>📋 Your Assigned Field Tasks</div>", unsafe_allow_html=True)
         my_jobs = st.session_state.jobs_db[st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id]
@@ -522,19 +522,56 @@ if logged_role == "Technician":
         if my_jobs.empty:
             st.info("🎉 No active or pending work orders assigned to you.")
         else:
+            # Sort jobs to put Pending/Assigned jobs first, and Completed at the bottom
+            my_jobs['Status_Order'] = my_jobs['Status'].apply(lambda x: 1 if x != "Completed" else 2)
+            my_jobs = my_jobs.sort_values(by="Status_Order").drop(columns=['Status_Order'])
+
             for _, job in my_jobs.iterrows():
-                with st.expander(f"📍 {job['Job_ID']} — {job['Client_Name']} ({job['Status']})"):
-                    st.write(f"**Address:** {job['Address']}, {job['City']} - {job['Pincode']}")
-                    st.write(f"**Issue Description:** {job['Issue_Description']}")
-                    st.write(f"**Scheduled Time:** {job.get('Scheduled_Time', 'N/A')}")
-                    
-                    maps_url = make_google_maps_link(job['Address'], job['City'], job['Pincode'])
-                    st.markdown(f"[🗺️ Open Directions in Google Maps]({maps_url})", unsafe_allow_html=True)
-                    
-                    if job['Status'] != "Completed":
-                        if st.button(f"Start Service Report for {job['Job_ID']}", key=f"start_{job['Job_ID']}"):
-                            st.session_state.selected_job_for_report = job['Job_ID']
-                            st.toast(f"Selected {job['Job_ID']}. Switch to 'Submit Service Report' tab.", icon="📝")
+                is_completed = job['Status'] == "Completed"
+                
+                # Dynamic visual status badges
+                if is_completed:
+                    badge_html = "<span style='background:#E2E8F0; color:#475569; padding:4px 10px; border-radius:12px; font-weight:700; font-size:0.8rem;'>✅ Completed</span>"
+                elif job['Status'] == "In Progress":
+                    badge_html = "<span style='background:#FEF3C7; color:#D97706; padding:4px 10px; border-radius:12px; font-weight:700; font-size:0.8rem;'>⏳ In Progress</span>"
+                else:
+                    badge_html = "<span style='background:#DBEAFE; color:#2563EB; padding:4px 10px; border-radius:12px; font-weight:700; font-size:0.8rem;'>📌 New / Assigned</span>"
+
+                # High-visibility card structure
+                with st.container(border=True):
+                    # Header row: Job ID, Client Name, and Status Badge
+                    head_col1, head_col2 = st.columns([3, 1])
+                    with head_col1:
+                        st.markdown(f"<h3 style='margin:0; color:#0F3D7A; font-weight:700;'>{job['Job_ID']} — {job['Client_Name']}</h3>", unsafe_allow_html=True)
+                    with head_col2:
+                        st.markdown(f"<div style='text-align:right;'>{badge_html}</div>", unsafe_allow_html=True)
+
+                    st.markdown("<div style='margin-bottom:10px;'></div>", unsafe_allow_html=True)
+
+                    # Info grid row
+                    info_col1, info_col2 = st.columns(2)
+                    with info_col1:
+                        st.write(f"📍 **Address:** {job['Address']}, {job['City']} - {job['Pincode']}")
+                        st.write(f"📞 **Phone:** {job.get('Client_Phone', 'N/A')}")
+                    with info_col2:
+                        st.write(f"🔧 **Issue:** {job['Issue_Description']}")
+                        st.write(f"⏰ **Scheduled:** {job.get('Scheduled_Time', 'N/A')}")
+
+                    st.divider()
+
+                    # Action row: Directions link and direct Action Button
+                    act_col1, act_col2 = st.columns([1.5, 1])
+                    with act_col1:
+                        maps_url = make_google_maps_link(job['Address'], job['City'], job['Pincode'])
+                        st.markdown(f"🗺️ [**Open Directions in Google Maps**]({maps_url})")
+
+                    with act_col2:
+                        if not is_completed:
+                            if st.button("📝 Start Service Report", key=f"start_{job['Job_ID']}", use_container_width=True):
+                                st.session_state.selected_job_for_report = job['Job_ID']
+                                st.toast(f"Selected {job['Job_ID']}. Switch to 'Submit Service Report' tab.", icon="📝")
+                        else:
+                            st.button("✅ Task Finished", key=f"done_{job['Job_ID']}", disabled=True, use_container_width=True)
 
     # TAB 2: Service Report Form
     with tech_tab2:
