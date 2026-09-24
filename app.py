@@ -918,10 +918,10 @@ def get_nearby_cities(city_name, max_results=15):
 # -----------------------------------------------------------------------------
 # 8. MANAGER COMMAND DASHBOARD & ANALYTICS
 # -----------------------------------------------------------------------------
-
+# Replace non-breaking spaces with standard spaces:
 elif logged_role in ["Manager", "Admin"]:
-    st.markdown("<h1 style='color: #0F3D7A; font-weight:800; margin-bottom: 20px;'>📡 AMC Tracker Portal — Command & Control Center</h1>", unsafe_allow_html=True)
 
+    st.markdown("<h1 style='color: #0F3D7A; font-weight:800; margin-bottom: 20px;'>📡 AMC Tracker Portal — Command & Control Center</h1>", unsafe_allow_html=True)
     # AMC Alerts
     contracts_df = st.session_state.amc_contracts_db
     if not contracts_df.empty and "Next_Visit_Due" in contracts_df.columns:
