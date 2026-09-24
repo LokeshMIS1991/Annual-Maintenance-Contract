@@ -762,13 +762,17 @@ if logged_role == "Technician":
         
         # Parse existing next target cities (stored as comma-separated string)
         raw_next_cities = str(curr_rec["Next_City"].values[0]) if not curr_rec.empty and "Next_City" in curr_rec.columns else ""
-        default_next_cities = [city.strip() for city in raw_next_cities.split(",") if city.strip()]
+        all_saved_cities = [city.strip() for city in raw_next_cities.split(",") if city.strip()]
 
-        # Common city options list (Technicians can also type & add custom cities)
-        city_options = list(set([
+        # Predefined major cities list
+        standard_city_options = [
             "Vadodara", "Surat", "Ahmedabad", "Rajkot", "Bhavnagar", 
             "Jamnagar", "Anand", "Bharuch", "Vapi", "Gandhinagar"
-        ] + default_next_cities))
+        ]
+
+        # Separate saved cities between standard options and custom "Other" cities
+        default_multiselect = [c for c in all_saved_cities if c in standard_city_options]
+        default_other_text = ", ".join([c for c in all_saved_cities if c not in standard_city_options])
 
         with st.form(f"broadcast_location_form_{tech_id}"):
             c1, c2 = st.columns(2)
@@ -784,12 +788,21 @@ if logged_role == "Technician":
 
             with c2:
                 st.markdown("**🎯 Next Preferred / Target Destinations**")
-                # Multiselect allowing selection or custom entry of multiple target cities
-                input_next_cities = st.multiselect(
-                    "Next Target Cities (Select multiple or type new ones)",
-                    options=city_options,
-                    default=default_next_cities,
-                    help="Select all cities you can visit next so managers can assign nearby tasks."
+                
+                # Multiselect for quick selection of primary cities
+                selected_multiselect_cities = st.multiselect(
+                    "Next Target Cities (Select multiple)",
+                    options=standard_city_options,
+                    default=default_multiselect,
+                    help="Select primary cities you are heading to next."
+                )
+
+                # Dedicated "Other" input field for custom/additional towns or GIDC areas
+                other_cities_input = st.text_input(
+                    "Other / Additional Target Cities or Industrial Zones",
+                    value=default_other_text,
+                    placeholder="e.g. Ankleshwar GIDC, Navsari, Halol (comma-separated)",
+                    help="Add any other nearby locations not present in the selection above."
                 )
 
             st.divider()
@@ -801,8 +814,15 @@ if logged_role == "Technician":
                 except Exception:
                     now_str = datetime.now().strftime("%I:%M %p")
                 
-                # Format multiselect list into comma-separated string for Sheet storage
-                next_cities_str = ", ".join(input_next_cities)
+                # Merge both multiselect items and "Other" custom text input into a unified clean list
+                final_cities_list = list(selected_multiselect_cities)
+                if other_cities_input.strip():
+                    other_parsed = [c.strip() for c in other_cities_input.split(",") if c.strip()]
+                    for c in other_parsed:
+                        if c not in final_cities_list:
+                            final_cities_list.append(c)
+
+                next_cities_str = ", ".join(final_cities_list)
                 
                 if tech_id in st.session_state.tech_status_db["Tech_ID"].astype(str).values:
                     st.session_state.tech_status_db.loc[
