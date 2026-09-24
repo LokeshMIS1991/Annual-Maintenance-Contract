@@ -8,7 +8,6 @@ import gspread
 from google.oauth2.service_account import Credentials
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
-import zoneinfo
 
 # -----------------------------------------------------------------------------
 # 0. PAGE CONFIGURATION
@@ -465,7 +464,6 @@ if not st.session_state.get("authenticated", False):
 with st.sidebar:
     logo_path = get_logo_path()
     if logo_path:
-        # Full width, crisp rendering for sidebar logo
         st.image(logo_path, use_container_width=True)
     else:
         st.markdown("<h2 style='color: #FFFFFF; text-align:center; font-weight:800; margin:0;'>SIDHARTH</h2>", unsafe_allow_html=True)
@@ -517,7 +515,7 @@ if logged_role == "Technician":
         "📈 Progress & History"
     ])
 
-   # TAB 1: Assigned Work Orders (Visual Task Cards Interface)
+    # TAB 1: Assigned Work Orders
     with tech_tab1:
         st.markdown("<div class='section-header'>📋 Your Assigned Field Tasks</div>", unsafe_allow_html=True)
         my_jobs = st.session_state.jobs_db[st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id]
@@ -525,14 +523,12 @@ if logged_role == "Technician":
         if my_jobs.empty:
             st.info("🎉 No active or pending work orders assigned to you.")
         else:
-            # Sort jobs to put Pending/Assigned jobs first, and Completed at the bottom
             my_jobs['Status_Order'] = my_jobs['Status'].apply(lambda x: 1 if x != "Completed" else 2)
             my_jobs = my_jobs.sort_values(by="Status_Order").drop(columns=['Status_Order'])
 
             for _, job in my_jobs.iterrows():
                 is_completed = job['Status'] == "Completed"
                 
-                # Dynamic visual status badges
                 if is_completed:
                     badge_html = "<span style='background:#E2E8F0; color:#475569; padding:4px 10px; border-radius:12px; font-weight:700; font-size:0.8rem;'>✅ Completed</span>"
                 elif job['Status'] == "In Progress":
@@ -540,9 +536,7 @@ if logged_role == "Technician":
                 else:
                     badge_html = "<span style='background:#DBEAFE; color:#2563EB; padding:4px 10px; border-radius:12px; font-weight:700; font-size:0.8rem;'>📌 New / Assigned</span>"
 
-                # High-visibility card structure
                 with st.container(border=True):
-                    # Header row: Job ID, Client Name, and Status Badge
                     head_col1, head_col2 = st.columns([3, 1])
                     with head_col1:
                         st.markdown(f"<h3 style='margin:0; color:#0F3D7A; font-weight:700;'>{job['Job_ID']} — {job['Client_Name']}</h3>", unsafe_allow_html=True)
@@ -551,7 +545,6 @@ if logged_role == "Technician":
 
                     st.markdown("<div style='margin-bottom:10px;'></div>", unsafe_allow_html=True)
 
-                    # Info grid row
                     info_col1, info_col2 = st.columns(2)
                     with info_col1:
                         st.write(f"📍 **Address:** {job['Address']}, {job['City']} - {job['Pincode']}")
@@ -562,7 +555,6 @@ if logged_role == "Technician":
 
                     st.divider()
 
-                    # Action row: Directions link and direct Action Button
                     act_col1, act_col2 = st.columns([1.5, 1])
                     with act_col1:
                         maps_url = make_google_maps_link(job['Address'], job['City'], job['Pincode'])
@@ -753,13 +745,8 @@ if logged_role == "Technician":
                         st.rerun()
 
 
-# Helper function to get nearby cities dynamically
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_nearby_cities(city_name, max_results=15):
-    """
-    Fetches coordinates of the typed city and calculates nearby major cities.
-    Falls back to a curated list of major Indian hubs if geocoding fails.
-    """
     if not city_name or len(city_name.strip()) < 3:
         return ["Vadodara", "Surat", "Ahmedabad", "Rajkot", "Bhavnagar", "Anand", "Bharuch", "Vapi"]
 
@@ -772,7 +759,6 @@ def get_nearby_cities(city_name, max_results=15):
 
         curr_coords = (location.latitude, location.longitude)
 
-        # Reference database of major Indian cities across regions
         all_cities_db = {
             "Delhi": (28.6139, 77.2090), "Noida": (28.5355, 77.3910), "Gurugram": (28.4595, 77.0266),
             "Faridabad": (28.4089, 77.3178), "Ghaziabad": (28.6692, 77.4538), "Greater Noida": (28.4744, 77.5040),
@@ -787,11 +773,9 @@ def get_nearby_cities(city_name, max_results=15):
             "Pune": (18.5204, 73.8567), "Nashik": (19.9975, 73.7898), "Aurangabad": (19.8762, 75.3433)
         }
 
-        # Calculate distance to all known hubs and sort by closest
         distances = []
         for city, coords in all_cities_db.items():
             dist_km = geodesic(curr_coords, coords).km
-            # Exclude the exact same city typed
             if city.lower() != city_name.strip().lower():
                 distances.append((city, dist_km))
 
@@ -800,22 +784,19 @@ def get_nearby_cities(city_name, max_results=15):
         return nearby_cities
 
     except Exception:
-        # Safe fallback list
         return ["Vadodara", "Surat", "Ahmedabad", "Delhi", "Noida", "Gurugram", "Faridabad"]
 
 
-# --- TAB 3: BROADCAST LIVE LOCATION & NEXT TARGET CITIES ---
+    # TAB 3: BROADCAST LIVE LOCATION & NEXT TARGET CITIES
     with tech_tab3:
         st.markdown("<div class='section-header'>Broadcast Live Location & Next Target Cities</div>", unsafe_allow_html=True)
         
-        # Load existing record
         curr_rec = st.session_state.tech_status_db[st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id]
         
         c_city_val = str(curr_rec["Current_City"].values[0]) if not curr_rec.empty and "Current_City" in curr_rec.columns else "Delhi"
         c_pin_val = str(curr_rec["Current_Pincode"].values[0]) if not curr_rec.empty and "Current_Pincode" in curr_rec.columns else "110001"
         c_status_raw = str(curr_rec["Current_Status"].values[0]).strip().title() if not curr_rec.empty and "Current_Status" in curr_rec.columns else "Available"
     
-        # Direct inputs outside form to allow live dynamic rerun on city change
         c1, c2 = st.columns(2)
         
         with c1:
@@ -827,7 +808,6 @@ def get_nearby_cities(city_name, max_results=15):
             selected_idx = status_options.index(c_status_raw) if c_status_raw in status_options else 0
             input_status = st.radio("Current Activity Status", status_options, index=selected_idx, horizontal=True, key=f"tech_status_{tech_id}")
     
-        # Dynamically fetch 15 closest cities based on input_curr_city
         dynamic_nearby_cities = get_nearby_cities(input_curr_city, max_results=15)
     
         with c2:
@@ -918,10 +898,10 @@ def get_nearby_cities(city_name, max_results=15):
 # -----------------------------------------------------------------------------
 # 8. MANAGER COMMAND DASHBOARD & ANALYTICS
 # -----------------------------------------------------------------------------
-# Replace non-breaking spaces with standard spaces:
-elif logged_role in ["Manager", "Admin"]:
 
+elif logged_role in ["Manager", "Admin"]:
     st.markdown("<h1 style='color: #0F3D7A; font-weight:800; margin-bottom: 20px;'>📡 AMC Tracker Portal — Command & Control Center</h1>", unsafe_allow_html=True)
+
     # AMC Alerts
     contracts_df = st.session_state.amc_contracts_db
     if not contracts_df.empty and "Next_Visit_Due" in contracts_df.columns:
