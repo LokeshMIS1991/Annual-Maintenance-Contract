@@ -62,7 +62,7 @@ def filter_df_by_date_range(df, date_col, filter_option):
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_nearby_cities(city_name, max_results=15):
-    if not city_name or len(city_name.strip()) < 3:
+    if not city_name or len(str(city_name).strip()) < 3:
         return ["Vadodara", "Surat", "Ahmedabad", "Rajkot", "Bhavnagar", "Anand", "Bharuch", "Vapi"]
 
     try:
@@ -91,7 +91,7 @@ def get_nearby_cities(city_name, max_results=15):
         distances = []
         for city, coords in all_cities_db.items():
             dist_km = geodesic(curr_coords, coords).km
-            if city.lower() != city_name.strip().lower():
+            if city.lower() != str(city_name).strip().lower():
                 distances.append((city, dist_km))
 
         distances.sort(key=lambda x: x[1])
@@ -101,7 +101,6 @@ def get_nearby_cities(city_name, max_results=15):
         return ["Vadodara", "Surat", "Ahmedabad", "Delhi", "Noida", "Gurugram", "Faridabad"]
 
 def generate_next_user_id(users_df, role="Technician"):
-    """Dynamically generates next ID based on Role (e.g. TECH01, MGR01, ADM01)."""
     prefix_map = {
         "Technician": "TECH",
         "Manager": "MGR",
@@ -163,7 +162,7 @@ def load_sheet_data(worksheet_name):
         "Jobs": ["Job_ID", "Assigned_Tech_ID", "Client_Name", "Client_Phone", "Address", "City", "Pincode", "Issue_Description", "Status", "Scheduled_Time"],
         "TechStatus": ["Tech_ID", "Current_City", "Current_Pincode", "Current_Status", "Next_City", "Next_Pincode", "ETA", "Last_Updated"],
         "ServiceReports": service_report_cols,
-        "AMCContracts": ["AMC_Contract_No", "PO_Number", "Client_Name", "Client_Phone", "Site_Address", "City", "Pincode", "Start_Date", "End_Date", "Allowed_Visits", "Next_Visit_Due"]
+        "AMCContracts": ["AMC_Contract_No", "PO_Number", "Client_Name", "Client_Phone", "Site_Address", "City", "Pincode", "Start_Date", "End_Date", "Allowed_Visits", "Next_Visit_Due", "Status"]
     }
     
     cols = default_columns.get(worksheet_name, [])
@@ -219,7 +218,7 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 # Google Drive Integration
-DRIVE_FOLDER_ID = "https://drive.google.com/drive/folders/1dnzcSiMuLMUKVcd4pAe95T_6aOjwmBFA"
+DRIVE_FOLDER_ID = "1dnzcSiMuLMUKVcd4pAe95T_6aOjwmBFA"
 
 @st.cache_resource
 def get_drive_service():
@@ -239,9 +238,10 @@ def upload_photo_to_drive(file_obj, filename):
             'parents': [DRIVE_FOLDER_ID]
         }
         
+        file_bytes = file_obj.getvalue() if hasattr(file_obj, 'getvalue') else file_obj.read()
         media = MediaIoBaseUpload(
-            io.BytesIO(file_obj.getvalue()), 
-            mimetype=file_obj.type,
+            io.BytesIO(file_bytes), 
+            mimetype=getattr(file_obj, 'type', 'image/jpeg'),
             resumable=True
         )
         
@@ -256,6 +256,24 @@ def upload_photo_to_drive(file_obj, filename):
         st.error(f"❌ Failed to upload image to Google Drive: {e}")
         return None
 
+def get_active_contracts():
+    df = st.session_state.amc_contracts_db.copy()
+    if df.empty:
+        return df
+    
+    today = date.today()
+    if "Status" not in df.columns:
+        df["Status"] = "Active"
+    
+    # Auto expire based on End_Date
+    df["End_Date_DT"] = pd.to_datetime(df["End_Date"], errors="coerce")
+    active_df = df[
+        (df["Status"].str.strip().str.title() != "Completed") & 
+        (df["Status"].str.strip().str.title() != "Expired") & 
+        ((df["End_Date_DT"].isna()) | (df["End_Date_DT"].dt.date >= today))
+    ]
+    return active_df
+
 # -----------------------------------------------------------------------------
 # 3. BRANDED UI STYLING
 # -----------------------------------------------------------------------------
@@ -268,16 +286,12 @@ st.markdown(
         background-color: #F8FAFC !important; 
     }
 
-    /* ==========================================
-       1. BLUE NAVIGATION MENU (SIDEBAR)
-       ========================================== */
     section[data-testid="stSidebar"],
     [data-testid="stSidebar"] { 
         background: linear-gradient(180deg, #0D3268 0%, #0A244D 60%, #061733 100%) !important; 
         border-right: 1px solid rgba(255, 255, 255, 0.1) !important; 
     }
 
-    /* Ensure text inside sidebar remains bright and readable */
     section[data-testid="stSidebar"] *,
     [data-testid="stSidebar"] * { 
         color: #E2E8F0 !important; 
@@ -302,10 +316,6 @@ st.markdown(
         backdrop-filter: blur(4px);
     }
 
-    /* ==========================================
-       2. BUTTONS WITH DYNAMIC GRADIENTS & HOVER GLOW
-       ========================================== */
-    /* Form Submit Buttons (Main Action Buttons like Submit Visit Log) */
     div[data-testid="stFormSubmitButton"] > button {
         background: linear-gradient(135deg, #0E5A9B 0%, #0F4C81 100%) !important; 
         color: #FFFFFF !important;
@@ -326,12 +336,6 @@ st.markdown(
         color: #FFFFFF !important;
     }
 
-    div[data-testid="stFormSubmitButton"] > button:active {
-        transform: translateY(0px) !important;
-        box-shadow: 0 2px 8px rgba(0, 150, 136, 0.3) !important;
-    }
-
-    /* Standard Base Buttons outside forms */
     div.stButton > button {
         background: linear-gradient(135deg, #0F3D7A 0%, #1E3A8A 100%) !important;
         color: #FFFFFF !important;
@@ -348,7 +352,6 @@ st.markdown(
         transform: translateY(-2px) !important;
     }
 
-    /* Sidebar Action/Logout Buttons */
     [data-testid="stSidebar"] .stButton > button {
         background: rgba(239, 68, 68, 0.15) !important;
         color: #FCA5A5 !important;
@@ -358,16 +361,6 @@ st.markdown(
         transition: all 0.2s ease;
     }
 
-    [data-testid="stSidebar"] .stButton > button:hover {
-        background-color: #EF4444 !important;
-        color: #FFFFFF !important;
-        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4) !important;
-        transform: translateY(-1px);
-    }
-
-    /* ==========================================
-       3. NAVIGATION TABS & FORM CONTAINERS
-       ========================================== */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: #E2E8F0;
@@ -391,41 +384,6 @@ st.markdown(
         box-shadow: 0 4px 10px rgba(15, 61, 122, 0.2);
     }
 
-    .stTabs [data-baseweb="tab-highlight"] { 
-        display: none !important; 
-    }
-
-    /* Form Container Styling */
-    div[data-testid="stForm"] {
-        background-color: #FFFFFF;
-        border: 1px solid #E2E8F0;
-        border-radius: 12px;
-        padding: 24px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
-    }
-
-    .login-box div[data-testid="stForm"] {
-        background-color: #FFFFFF !important;
-        border: 1px solid #E2E8F0 !important;
-        border-radius: 14px !important;
-        padding: 32px !important;
-        box-shadow: 0px 10px 25px rgba(15, 61, 122, 0.1) !important;
-        max-width: 440px !important;
-        margin: 30px auto !important;
-    }
-
-    .login-subtitle {
-        text-align: center; 
-        color: #10B981; 
-        font-size: 0.95rem; 
-        font-weight: 800;
-        letter-spacing: 1px;
-        margin-top: 4px; 
-        margin-bottom: 24px;
-        text-transform: uppercase;
-    }
-
-    /* Section Headings & Cards */
     .section-header {
         color: #0F3D7A;
         font-weight: 700;
@@ -443,14 +401,6 @@ st.markdown(
         padding: 16px 20px; 
         margin-bottom: 20px; 
         border: 1px solid #E2E8F0;
-        border-left-width: 5px;
-    }
-
-    .equipment-title { 
-        color: #0F3D7A !important; 
-        font-weight: 700; 
-        margin: 0 0 10px 0; 
-        font-size: 1.2rem; 
     }
 
     .tech-card-header {
@@ -580,7 +530,7 @@ def render_technician_dashboard():
     # TAB 1: Assigned Work Orders
     with tech_tab1:
         st.markdown("<div class='section-header'>📋 Your Assigned Field Tasks</div>", unsafe_allow_html=True)
-        my_jobs = st.session_state.jobs_db[st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id].copy()
+        my_jobs = st.session_state.jobs_db[st.session_state.jobs_db["Assigned_Tech_ID"].astype(str) == tech_id]
         
         if my_jobs.empty:
             st.info("🎉 No active or pending work orders assigned to you.")
@@ -658,13 +608,14 @@ def render_technician_dashboard():
             if selected_job.get("Pincode"):
                 auto_address += f" - {selected_job.get('Pincode')}"
 
-            contracts_df = st.session_state.amc_contracts_db
+            # Only display Active contracts in dropdown
+            contracts_df = get_active_contracts()
             contract_options = ["N/A"] + contracts_df["AMC_Contract_No"].astype(str).tolist() if not contracts_df.empty else ["N/A"]
 
             c_header1, c_header2 = st.columns(2)
             with c_header1:
                 st.text_input("Client Name", value=auto_client_name, disabled=True)
-                selected_contract_no = st.selectbox("Link AMC Contract Number", contract_options)
+                selected_contract_no = st.selectbox("Link AMC Contract Number (Active Contracts Only)", contract_options)
                 
                 auto_po = "N/A"
                 if selected_contract_no != "N/A" and not contracts_df.empty:
@@ -809,6 +760,14 @@ def render_technician_dashboard():
                         st.session_state.jobs_db.loc[st.session_state.jobs_db["Job_ID"] == selected_job_id, "Status"] = "Completed"
                         save_sheet_data(st.session_state.jobs_db, "Jobs")
                         
+                        # Update AMC contract next visit date if linked
+                        if selected_contract_no != "N/A" and not st.session_state.amc_contracts_db.empty:
+                            st.session_state.amc_contracts_db.loc[
+                                st.session_state.amc_contracts_db["AMC_Contract_No"] == selected_contract_no, 
+                                "Next_Visit_Due"
+                            ] = str(rpt_next_due)
+                            save_sheet_data(st.session_state.amc_contracts_db, "AMCContracts")
+
                         st.session_state.selected_job_for_report = None
                         st.toast(f"✅ Service report submitted for {selected_job_id}!", icon="📄")
                         st.rerun()
@@ -827,12 +786,12 @@ def render_technician_dashboard():
         
         with c1:
             st.markdown("**📍 Current Location**")
-            input_curr_city = st.text_input("Current City", value=c_city_val, placeholder="e.g. Delhi, Surat, Mumbai", key=f"tech_curr_city_{tech_id}")
-            input_curr_pin = st.text_input("Current Pin Code", value=c_pin_val, max_chars=6, placeholder="e.g. 110001", key=f"tech_curr_pin_{tech_id}")
+            input_curr_city = st.text_input("Current City", value=c_city_val, placeholder="e.g. Delhi, Surat, Mumbai", key=f"tech_curr_city_input_{tech_id}")
+            input_curr_pin = st.text_input("Current Pin Code", value=c_pin_val, max_chars=6, placeholder="e.g. 110001", key=f"tech_curr_pin_input_{tech_id}")
             
             status_options = ["Available", "On Site", "In Transit"]
             selected_idx = status_options.index(c_status_raw) if c_status_raw in status_options else 0
-            input_status = st.radio("Current Activity Status", status_options, index=selected_idx, horizontal=True, key=f"tech_status_{tech_id}")
+            input_status = st.radio("Current Activity Status", status_options, index=selected_idx, horizontal=True, key=f"tech_status_radio_{tech_id}")
     
         dynamic_nearby_cities = get_nearby_cities(input_curr_city, max_results=15)
     
@@ -844,13 +803,13 @@ def render_technician_dashboard():
                 options=dynamic_nearby_cities,
                 default=[],
                 help="These cities update dynamically based on your Current City input.",
-                key=f"tech_multiselect_{tech_id}"
+                key=f"tech_multiselect_city_{tech_id}"
             )
     
             other_cities_input = st.text_input(
                 "Other / Additional Target Cities or Industrial Zones",
                 placeholder="e.g. Greater Noida, Manesar, Sonipat (comma-separated)",
-                key=f"tech_other_cities_{tech_id}"
+                key=f"tech_other_cities_input_{tech_id}"
             )
     
         st.divider()
@@ -930,20 +889,20 @@ def render_technician_dashboard():
 def render_admin_dashboard():
     st.markdown("<h1 style='color: #0F3D7A; font-weight:800; margin-bottom: 20px;'>📡 AMC Tracker Portal — Command & Control Center</h1>", unsafe_allow_html=True)
 
-    # DYNAMIC 15-DAY AMC ALERTS
-    contracts_df = st.session_state.amc_contracts_db.copy()
-    if not contracts_df.empty and "Next_Visit_Due" in contracts_df.columns:
-        contracts_df["Next_Visit_Due_DT"] = pd.to_datetime(contracts_df["Next_Visit_Due"], errors="coerce")
+    # DYNAMIC 15-DAY AMC ALERTS (REMINDER TO MANAGER)
+    active_contracts = get_active_contracts()
+    if not active_contracts.empty and "Next_Visit_Due" in active_contracts.columns:
+        active_contracts["Next_Visit_Due_DT"] = pd.to_datetime(active_contracts["Next_Visit_Due"], errors="coerce")
         today_dt = pd.Timestamp(date.today())
         fifteen_days_dt = today_dt + timedelta(days=15)
         
-        upcoming_15_days = contracts_df[
-            (contracts_df["Next_Visit_Due_DT"] >= today_dt) & 
-            (contracts_df["Next_Visit_Due_DT"] <= fifteen_days_dt)
+        upcoming_15_days = active_contracts[
+            (active_contracts["Next_Visit_Due_DT"] >= today_dt) & 
+            (active_contracts["Next_Visit_Due_DT"] <= fifteen_days_dt)
         ]
         
         if not upcoming_15_days.empty:
-            st.warning(f"🔔 **Dynamic AMC Alert: {len(upcoming_15_days)} Client Service Visit(s) Due in the Next 15 Days**")
+            st.warning(f"🔔 **AMC Manager Alert: {len(upcoming_15_days)} Contract(s) Due for AMC Service in the Next 15 Days!**")
             for _, u_row in upcoming_15_days.iterrows():
                 days_remaining = (u_row["Next_Visit_Due_DT"].date() - date.today()).days
                 st.write(
@@ -953,13 +912,14 @@ def render_admin_dashboard():
             st.divider()
 
     # PRIMARY CONSOLIDATED NAVIGATION TABS
-    mgr_primary_tab1, mgr_primary_tab2 = st.tabs([
+    mgr_primary_tab1, mgr_primary_tab2, mgr_primary_tab3 = st.tabs([
         "⚙️ Operations & Management",
+        "📅 Upcoming AMC",
         "📊 Fleet Analytics & Audit Reports"
     ])
 
     # =========================================================================
-    # PRIMARY TAB 1: OPERATIONS & MANAGEMENT (Consolidated Sub-Tabs)
+    # PRIMARY TAB 1: OPERATIONS & MANAGEMENT
     # =========================================================================
     with mgr_primary_tab1:
         ops_sub_tab1, ops_sub_tab2, ops_sub_tab3, ops_sub_tab4 = st.tabs([
@@ -974,10 +934,7 @@ def render_admin_dashboard():
             st.markdown("<div class='section-header'>👤 Register New System User</div>", unsafe_allow_html=True)
             st.caption("Managers and Admins can create new user accounts here. Prefixes adapt automatically (TECH, MGR, ADM).")
 
-            # Select Role first (outside the form) to update the ID dynamically
             new_role = st.selectbox("Assign Role*", ["Technician", "Manager", "Admin"], key="user_role_select")
-
-            # Calculate dynamic ID based on selected role
             dynamic_next_id = generate_next_user_id(st.session_state.users_db, role=new_role)
 
             with st.form("create_user_consolidated_form", clear_on_submit=True):
@@ -1027,7 +984,7 @@ def render_admin_dashboard():
 
             st.divider()
 
-            # USER MANAGEMENT SECTION: UPDATE DETAILS OR DELETE USER
+            # EDIT/DELETE USER SECTION
             st.markdown("<div class='section-header'>🛠️ Edit or Delete Existing System Users</div>", unsafe_allow_html=True)
             
             if st.session_state.users_db.empty:
@@ -1045,7 +1002,6 @@ def render_admin_dashboard():
 
                 action_col1, action_col2 = st.columns(2)
 
-                # Form to Edit Existing User
                 with action_col1:
                     st.markdown("#### ✏️ Update User Details")
                     with st.form("edit_user_form"):
@@ -1077,7 +1033,6 @@ def render_admin_dashboard():
                                 st.toast(f"✅ User details for {selected_user_id} updated successfully!")
                                 st.rerun()
 
-                # Form to Delete User
                 with action_col2:
                     st.markdown("#### 🗑️ Delete User Account")
                     st.warning(f"⚠️ Warning: Deleting user **{selected_user_row.get('Full_Name')}** ({selected_user_id}) will permanently remove them from the system.")
@@ -1167,9 +1122,9 @@ def render_admin_dashboard():
 
         # SUB-TAB 3: AMC CONTRACTS
         with ops_sub_tab3:
-            st.markdown("<div class='section-header'>🗓️ AMC Client Contracts Management & Dynamic Auto-ID</div>", unsafe_allow_html=True)
+            st.markdown("<div class='section-header'>🗓️ Active AMC Contracts Management & Registration</div>", unsafe_allow_html=True)
             
-            st.markdown("### ✏️ Register / Update AMC Contract & PO Details")
+            st.markdown("### ✏️ Register / Update AMC Contract & Status")
             
             with st.form("edit_amc_contract_enhanced_form"):
                 col_c1, col_c2 = st.columns(2)
@@ -1182,6 +1137,7 @@ def render_admin_dashboard():
                     c_client_name = st.text_input("Client / Business Name*", placeholder="e.g. Apex Industries").strip()
                     c_phone = st.text_input("Client Phone Number*", placeholder="e.g. +91 9876543210").strip()
                     visits_allowed = st.selectbox("Annual Allowed Visits Limit*", [2, 3, 4, 6, 12], index=2)
+                    contract_status = st.selectbox("Contract Status*", ["Active", "Completed", "Expired"])
                 
                 with col_c2:
                     c_address = st.text_input("Complete Site / Factory Address*", placeholder="e.g. Plot 42, GIDC Estate").strip()
@@ -1201,8 +1157,8 @@ def render_admin_dashboard():
                         if not contracts_df.empty and contract_no in contracts_df["AMC_Contract_No"].astype(str).values:
                             st.session_state.amc_contracts_db.loc[
                                 st.session_state.amc_contracts_db["AMC_Contract_No"].astype(str) == contract_no,
-                                ["PO_Number", "Client_Name", "Client_Phone", "Site_Address", "City", "Pincode", "Start_Date", "End_Date", "Allowed_Visits", "Next_Visit_Due"]
-                            ] = [po_number, c_client_name, c_phone, c_address, c_city, c_pincode, str(contract_start), str(contract_end), visits_allowed, str(next_visit_due)]
+                                ["PO_Number", "Client_Name", "Client_Phone", "Site_Address", "City", "Pincode", "Start_Date", "End_Date", "Allowed_Visits", "Next_Visit_Due", "Status"]
+                            ] = [po_number, c_client_name, c_phone, c_address, c_city, c_pincode, str(contract_start), str(contract_end), visits_allowed, str(next_visit_due), contract_status]
                         else:
                             new_contract = {
                                 "AMC_Contract_No": contract_no,
@@ -1215,7 +1171,8 @@ def render_admin_dashboard():
                                 "Start_Date": str(contract_start),
                                 "End_Date": str(contract_end),
                                 "Allowed_Visits": visits_allowed,
-                                "Next_Visit_Due": str(next_visit_due)
+                                "Next_Visit_Due": str(next_visit_due),
+                                "Status": contract_status
                             }
                             st.session_state.amc_contracts_db = pd.concat([st.session_state.amc_contracts_db, pd.DataFrame([new_contract])], ignore_index=True)
                         
@@ -1225,22 +1182,97 @@ def render_admin_dashboard():
 
             st.divider()
             st.markdown("### 📋 Active AMC Client Contracts Master Log")
-            st.dataframe(st.session_state.amc_contracts_db, use_container_width=True)
+            st.dataframe(get_active_contracts(), use_container_width=True)
 
         # SUB-TAB 4: MAP / LIVE RADAR
         with ops_sub_tab4:
-            st.markdown("<div class='section-header'>MAP / Live Radar</div>", unsafe_allow_html=True)
-            full_radar = pd.merge(st.session_state.tech_status_db, st.session_state.users_db[["User_ID", "Full_Name", "Mobile_Number"]], left_on="Tech_ID", right_on="User_ID", how="left")
-            st.dataframe(full_radar, use_container_width=True)
+            st.markdown("<div class='section-header'>MAP / Technician Site Availability Radar</div>", unsafe_allow_html=True)
+            full_radar = pd.merge(
+                st.session_state.tech_status_db, 
+                st.session_state.users_db[["User_ID", "Full_Name", "Mobile_Number"]], 
+                left_on="Tech_ID", right_on="User_ID", how="left"
+            )
             
+            for _, tech_row in full_radar.iterrows():
+                t_name = tech_row.get("Full_Name", tech_row.get("Tech_ID"))
+                t_status = tech_row.get("Current_Status", "Unknown")
+                t_city = tech_row.get("Current_City", "N/A")
+                t_targets = tech_row.get("Next_City", "None")
+                
+                with st.container(border=True):
+                    c_r1, c_r2, c_r3 = st.columns([2, 2, 2])
+                    with c_r1:
+                        st.markdown(f"**👷 Technician:** {t_name}")
+                        st.write(f"📞 **Phone:** {tech_row.get('Mobile_Number', 'N/A')}")
+                    with c_r2:
+                        st.write(f"📍 **Current City:** {t_city}")
+                        st.write(f"🟢 **Availability:** {t_status}")
+                    with c_r3:
+                        st.write(f"🎯 **Target Cities:** {t_targets}")
+                        st.write(f"🕒 **Last Updated:** {tech_row.get('Last_Updated', 'N/A')}")
+
             st.divider()
             st.markdown("<div class='section-header'>📋 All Dispatched Active Work Orders</div>", unsafe_allow_html=True)
             st.dataframe(st.session_state.jobs_db, use_container_width=True)
 
     # =========================================================================
-    # PRIMARY TAB 2: FLEET ANALYTICS & AUDIT REPORTS (Consolidated Sub-Tabs)
+    # PRIMARY TAB 2: UPCOMING AMC (SEPARATE TAB FOR CARDS & SCHEDULE)
     # =========================================================================
     with mgr_primary_tab2:
+        st.markdown("<div class='section-header'>📅 Upcoming AMC Contracts & Schedule Cards</div>", unsafe_allow_html=True)
+        
+        amc_sub1, amc_sub2 = st.tabs(["🎴 Upcoming AMC Cards", "⏳ Next AMC Service Schedule"])
+        
+        active_amc_df = get_active_contracts()
+
+        # SUB-TAB 1: UPCOMING AMC CARDS
+        with amc_sub1:
+            if active_amc_df.empty:
+                st.info("🎉 No active AMC contracts found.")
+            else:
+                active_amc_df["Next_Visit_Due_DT"] = pd.to_datetime(active_amc_df["Next_Visit_Due"], errors="coerce")
+                sorted_amc = active_amc_df.sort_values(by="Next_Visit_Due_DT")
+
+                for _, amc_card in sorted_amc.iterrows():
+                    due_date_str = amc_card.get("Next_Visit_Due", "N/A")
+                    days_left_text = "N/A"
+                    if pd.notna(amc_card["Next_Visit_Due_DT"]):
+                        diff = (amc_card["Next_Visit_Due_DT"].date() - date.today()).days
+                        days_left_text = f"Due in {diff} days" if diff >= 0 else f"Overdue by {abs(diff)} days"
+
+                    with st.container(border=True):
+                        col_card1, col_card2, col_card3 = st.columns([3, 2, 1.5])
+                        
+                        with col_card1:
+                            st.markdown(f"### 🏢 {amc_card['Client_Name']}")
+                            st.write(f"📜 **Contract No:** `{amc_card['AMC_Contract_No']}` | **PO:** `{amc_card.get('PO_Number', 'N/A')}`")
+                            st.write(f"📍 **Address:** {amc_card.get('Site_Address', '')}, {amc_card.get('City', '')}")
+
+                        with col_card2:
+                            st.write(f"📞 **Phone:** {amc_card.get('Client_Phone', 'N/A')}")
+                            st.write(f"🗓️ **Contract Term:** {amc_card.get('Start_Date', 'N/A')} to {amc_card.get('End_Date', 'N/A')}")
+                            st.write(f"🔁 **Allowed Visits:** {amc_card.get('Allowed_Visits', 'N/A')} Visits/Year")
+
+                        with col_card3:
+                            st.markdown(f"**Next Due Date:**\n#### 🗓️ {due_date_str}")
+                            st.caption(f"📌 {days_left_text}")
+
+        # SUB-TAB 2: SUB TAB WITH NEXT AMC TIMELINES
+        with amc_sub2:
+            st.markdown("### ⏰ Other Next AMCs Schedule Timeline")
+            if active_amc_df.empty:
+                st.info("No active contract schedule available.")
+            else:
+                active_amc_df["Next_Visit_Due_DT"] = pd.to_datetime(active_amc_df["Next_Visit_Due"], errors="coerce")
+                timeline_df = active_amc_df.sort_values(by="Next_Visit_Due_DT")[
+                    ["AMC_Contract_No", "Client_Name", "City", "Next_Visit_Due", "End_Date", "Allowed_Visits"]
+                ]
+                st.dataframe(timeline_df, use_container_width=True)
+
+    # =========================================================================
+    # PRIMARY TAB 3: FLEET ANALYTICS & AUDIT REPORTS
+    # =========================================================================
+    with mgr_primary_tab3:
         reports_sub_tab1, reports_sub_tab2, reports_sub_tab3 = st.tabs([
             "📊 Overview Analytics",
             "👤 Technician Deep Dive",
@@ -1256,14 +1288,14 @@ def render_admin_dashboard():
                 time_filter = st.selectbox(
                     "🗓️ Date Range Filter", 
                     ["All Time", "Today", "Weekly (Last 7 Days)", "Monthly (Last 30 Days)", "3 Months", "Yearly"],
-                    key="mgr_time_filter_tab1_new"
+                    key="mgr_time_filter_tab3_new"
                 )
             
             tech_users = st.session_state.users_db[st.session_state.users_db["Role"] == "Technician"]
             tech_options = ["All Technicians"] + tech_users["Full_Name"].tolist()
             
             with f_col2:
-                tech_filter = st.selectbox("👷 Technician Filter", tech_options, key="mgr_tech_filter_tab1_new")
+                tech_filter = st.selectbox("👷 Technician Filter", tech_options, key="mgr_tech_filter_tab3_new")
 
             all_reports = st.session_state.service_reports_db.copy()
             
@@ -1370,13 +1402,13 @@ def render_admin_dashboard():
                         "🔍 Select Technician to Inspect*", 
                         tech_users["Full_Name"].tolist(),
                         index=0,
-                        key="tech_deep_dive_selectbox_new"
+                        key="tech_deep_dive_selectbox_tab3"
                     )
                 with filter_c2:
                     tech_time_range = st.selectbox(
                         "🗓️ Time Period Filter", 
                         ["All Time", "Today", "Weekly (Last 7 Days)", "Monthly (Last 30 Days)", "3 Months", "Yearly"],
-                        key="tech_time_range_selectbox_new"
+                        key="tech_time_range_selectbox_tab3"
                     )
 
                 selected_tech_user = tech_users[tech_users["Full_Name"] == selected_tech_name].iloc[0]
