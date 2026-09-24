@@ -126,7 +126,7 @@ def load_sheet_data(worksheet_name):
         "Report_ID", "Job_ID", "Tech_ID", "Tech_Name", "Client_Name", "PO_Number", 
         "Site_Location", "AMC_Contract_No", "Category", "Equipment_Type", "Make_Model", 
         "Door_Size", "Qty", "Condition", "Checklist_Data", "Service_Date", "Visit_Number", 
-        "Next_Service_Due_Date", "Distance_Travelled_KM", "Time_Taken_Hours", "Work_Done_Details", 
+        "Next_Service_Due_Date", "Distance_Travelled_KM", "Time_Taken_Hours", "Travel_Expense_INR", "Work_Done_Details", 
         "Site_Photo", "Problems_Faced", "Remarks", "Submitted_At"
     ]
     
@@ -331,6 +331,13 @@ st.markdown("""
         font-weight: 700; 
         margin: 0 0 10px 0; 
         font-size: 1.2rem; 
+    }
+    .tech-card-header {
+        background: linear-gradient(135deg, #0F3D7A 0%, #1E3A8A 100%);
+        color: white;
+        padding: 18px 24px;
+        border-radius: 12px;
+        margin-bottom: 20px;
     }
     div[data-testid="stFormSubmitButton"] > button {
         background-color: #10B981 !important; 
@@ -589,14 +596,13 @@ if logged_role == "Technician":
                 rpt_po_number = st.text_input("PO Number (Auto Linked or Manual)", value=auto_po)
             
             with c_header2:
-                # Dynamic Equipment Category Selection loaded from products.py database
                 selected_category = st.selectbox("Equipment Category*", list(EQUIPMENT_DATA.keys()))
                 rpt_visit_num_str = st.selectbox("AMC Visit Sequence*", ["Visit 1 of 4", "Visit 2 of 4", "Visit 3 of 4", "Visit 4 of 4"])
 
             st.divider()
 
             with st.form(f"service_report_form_{tech_id}"):
-                st.markdown("### General Visit Details & Travel Metrics")
+                st.markdown("### General Visit Details, Travel & Expense Metrics")
                 c_det1, c_det2 = st.columns(2)
                 with c_det1:
                     rpt_site_location = st.text_input("Site / Location*", value=auto_address)
@@ -605,6 +611,7 @@ if logged_role == "Technician":
                 with c_det2:
                     rpt_next_due = st.date_input("Next Service Due Date", value=date.today() + pd.Timedelta(days=90))
                     rpt_time_taken = st.number_input("Time Spent on Site (Hours)*", min_value=0.25, value=1.5, step=0.25)
+                    rpt_travel_expense = st.number_input("Travel Expense Incurred / Paid (₹)*", min_value=0.0, value=150.0, step=10.0)
 
                 st.markdown("<div class='equipment-box'><h3 class='equipment-title'>1. Equipment Details</h3>", unsafe_allow_html=True)
                 eq_col1, eq_col2, eq_col3, eq_col4, eq_col5 = st.columns([3, 2, 2, 1, 2])
@@ -697,6 +704,7 @@ if logged_role == "Technician":
                             "Next_Service_Due_Date": str(rpt_next_due),
                             "Distance_Travelled_KM": float(rpt_distance),
                             "Time_Taken_Hours": float(rpt_time_taken),
+                            "Travel_Expense_INR": float(rpt_travel_expense),
                             "Work_Done_Details": rpt_work_done,
                             "Site_Photo": photo_url_or_name,
                             "Problems_Faced": problems_faced_input.strip() if problems_faced_input.strip() else "None",
@@ -813,18 +821,20 @@ if logged_role == "Technician":
             my_reports = reports_df[reports_df["Tech_ID"].astype(str) == tech_id]
             
             if not my_reports.empty:
-                km_series = my_reports["Distance_Travelled_KM"] if "Distance_Travelled_KM" in my_reports.columns else pd.Series(dtype=float)
-                hrs_series = my_reports["Time_Taken_Hours"] if "Time_Taken_Hours" in my_reports.columns else pd.Series(dtype=float)
+                km_series = pd.to_numeric(my_reports.get("Distance_Travelled_KM", pd.Series(dtype=float)), errors='coerce').fillna(0)
+                hrs_series = pd.to_numeric(my_reports.get("Time_Taken_Hours", pd.Series(dtype=float)), errors='coerce').fillna(0)
+                exp_series = pd.to_numeric(my_reports.get("Travel_Expense_INR", pd.Series(dtype=float)), errors='coerce').fillna(0)
 
                 sites_visited = len(my_reports)
-                tot_km = pd.to_numeric(km_series, errors='coerce').sum()
-                tot_hrs = pd.to_numeric(hrs_series, errors='coerce').sum()
+                tot_km = km_series.sum()
+                tot_hrs = hrs_series.sum()
+                tot_exp = exp_series.sum()
 
                 m1, m2, m3, m4 = st.columns(4)
                 m1.metric("Sites Visited", sites_visited)
                 m2.metric("Total Travelled", f"{tot_km:.1f} KM")
                 m3.metric("Time Spent On-Site", f"{tot_hrs:.1f} Hrs")
-                m4.metric("Avg Time / Site", f"{(tot_hrs / sites_visited):.1f} Hrs" if sites_visited > 0 else "0 Hrs")
+                m4.metric("Travel Reimbursement", f"₹ {tot_exp:,.2f}")
                 
                 st.divider()
                 st.markdown("### Detailed Reports Log")
@@ -857,30 +867,32 @@ elif logged_role in ["Manager", "Admin"]:
                 st.caption(f"• **{u_row['Client_Name']}** (Contract: `{u_row['AMC_Contract_No']}`, PO: `{u_row.get('PO_Number','N/A')}`) — Visit Due Date: **{u_row['Next_Visit_Due']}**")
             st.divider()
 
-    mgr_tab1, mgr_tab2, mgr_tab3, mgr_tab4, mgr_tab5 = st.tabs([
-        "📊 Progress & Analytics",
+    mgr_tab1, mgr_tab2, mgr_tab3, mgr_tab4, mgr_tab5, mgr_tab6 = st.tabs([
+        "📊 Overview Analytics",
+        "👤 Technician Deep Dive",
         "MAP / Live Radar", 
         "📄 Service Reports",
         "📅 AMC Contracts",
         "➕ Dispatch Task / User"
     ])
 
-    # TAB 1: Filterable Progress Dashboard & Analytics
+    # TAB 1: Filterable Progress Dashboard & Fleet Analytics
     with mgr_tab1:
-        st.markdown("<div class='section-header'>📊 Technician Field Operations & Progress Dashboard</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-header'>📊 Fleet Performance & Travel Expense Analytics</div>", unsafe_allow_html=True)
         
         f_col1, f_col2 = st.columns(2)
         with f_col1:
             time_filter = st.selectbox(
                 "🗓️ Date Range Filter", 
-                ["All Time", "Today", "Weekly (Last 7 Days)", "Monthly (Last 30 Days)", "3 Months", "Yearly"]
+                ["All Time", "Today", "Weekly (Last 7 Days)", "Monthly (Last 30 Days)", "3 Months", "Yearly"],
+                key="mgr_time_filter_tab1"
             )
         
         tech_users = st.session_state.users_db[st.session_state.users_db["Role"] == "Technician"]
         tech_options = ["All Technicians"] + tech_users["Full_Name"].tolist()
         
         with f_col2:
-            tech_filter = st.selectbox("👷 Technician Filter", tech_options)
+            tech_filter = st.selectbox("👷 Technician Filter", tech_options, key="mgr_tech_filter_tab1")
 
         all_reports = st.session_state.service_reports_db.copy()
         
@@ -894,46 +906,51 @@ elif logged_role in ["Manager", "Admin"]:
 
         tot_visited = len(all_reports)
         
-        if not all_reports.empty and "Distance_Travelled_KM" in all_reports.columns:
-            all_reports["Distance_Travelled_KM"] = pd.to_numeric(all_reports["Distance_Travelled_KM"], errors='coerce').fillna(0)
+        if not all_reports.empty:
+            all_reports["Distance_Travelled_KM"] = pd.to_numeric(all_reports.get("Distance_Travelled_KM", 0), errors='coerce').fillna(0)
+            all_reports["Time_Taken_Hours"] = pd.to_numeric(all_reports.get("Time_Taken_Hours", 0), errors='coerce').fillna(0)
+            all_reports["Travel_Expense_INR"] = pd.to_numeric(all_reports.get("Travel_Expense_INR", 0), errors='coerce').fillna(0)
+            
             tot_dist = all_reports["Distance_Travelled_KM"].sum()
-        else:
-            tot_dist = 0.0
-
-        if not all_reports.empty and "Time_Taken_Hours" in all_reports.columns:
-            all_reports["Time_Taken_Hours"] = pd.to_numeric(all_reports["Time_Taken_Hours"], errors='coerce').fillna(0)
             tot_time = all_reports["Time_Taken_Hours"].sum()
+            tot_expenses = all_reports["Travel_Expense_INR"].sum()
         else:
-            tot_time = 0.0
+            tot_dist, tot_time, tot_expenses = 0.0, 0.0, 0.0
 
-        p_col1, p_col2, p_col3, p_col4 = st.columns(4)
-        p_col1.metric("📍 Total Sites Visited", tot_visited)
-        p_col2.metric("🚗 Total Travelled", f"{tot_dist:.1f} KM")
-        p_col3.metric("⏱️ Total Field Hours", f"{tot_time:.1f} Hours")
-        p_col4.metric("📊 Avg Time / Site", f"{(tot_time / tot_visited):.1f} Hrs" if tot_visited > 0 else "0.0 Hrs")
+        p_col1, p_col2, p_col3, p_col4, p_col5 = st.columns(5)
+        p_col1.metric("📍 Total Visits", tot_visited)
+        p_col2.metric("🚗 Distance Travelled", f"{tot_dist:.1f} KM")
+        p_col3.metric("⏱️ Field Hours", f"{tot_time:.1f} Hrs")
+        p_col4.metric("💰 Travel Payout", f"₹ {tot_expenses:,.2f}")
+        p_col5.metric("📊 Avg Time / Site", f"{(tot_time / tot_visited):.1f} Hrs" if tot_visited > 0 else "0.0 Hrs")
 
         st.divider()
 
         if not all_reports.empty and "Tech_Name" in all_reports.columns:
-            chart_col1, chart_col2 = st.columns(2)
+            chart_col1, chart_col2, chart_col3 = st.columns(3)
             
             summary_grp = all_reports.groupby("Tech_Name").agg(
-                Sites_Visited=("Report_ID", "count"),
-                Total_KM=("Distance_Travelled_KM", "sum"),
-                Total_Hours=("Time_Taken_Hours", "sum")
+                Visits=("Report_ID", "count"),
+                Distance_KM=("Distance_Travelled_KM", "sum"),
+                Hours_Spent=("Time_Taken_Hours", "sum"),
+                Expenses_Paid_INR=("Travel_Expense_INR", "sum")
             ).reset_index()
 
             with chart_col1:
-                st.markdown("#### 📍 Sites Visited per Technician")
-                st.bar_chart(data=summary_grp, x="Tech_Name", y="Sites_Visited", color="#0F3D7A")
+                st.markdown("#### 📍 Visits per Technician")
+                st.bar_chart(data=summary_grp, x="Tech_Name", y="Visits", color="#0F3D7A")
 
             with chart_col2:
-                st.markdown("#### 🚗 Total Travel Distance (KM)")
-                st.bar_chart(data=summary_grp, x="Tech_Name", y="Total_KM", color="#10B981")
+                st.markdown("#### 🚗 Total Distance (KM)")
+                st.bar_chart(data=summary_grp, x="Tech_Name", y="Distance_KM", color="#10B981")
+
+            with chart_col3:
+                st.markdown("#### 💰 Travel Payouts (₹)")
+                st.bar_chart(data=summary_grp, x="Tech_Name", y="Expenses_Paid_INR", color="#D97706")
 
             st.divider()
 
-            st.markdown("### 🎯 Task Completion Rate by Technician")
+            st.markdown("### 🎯 Work Order Completion Rate")
             all_jobs = st.session_state.jobs_db.copy()
             
             for _, tech in tech_users.iterrows():
@@ -946,29 +963,177 @@ elif logged_role in ["Manager", "Admin"]:
                 
                 if total_assigned > 0:
                     pct = int((completed / total_assigned) * 100)
-                    col_txt, col_bar = st.columns([2, 5])
+                    col_txt, col_bar = st.columns([2.5, 4.5])
                     with col_txt:
-                        st.write(f"**{t_name}**: {completed}/{total_assigned} Jobs Done ({pct}%)")
+                        st.write(f"**{t_name}**: {completed}/{total_assigned} Finished ({pct}%)")
                     with col_bar:
                         st.progress(pct / 100)
 
             st.divider()
 
-            st.markdown("### 📋 Progress Summary Table")
+            st.markdown("### 📋 Comparative Fleet Summary Table")
             st.dataframe(summary_grp, use_container_width=True)
             
             csv_data = all_reports.to_csv(index=False).encode('utf-8')
             st.download_button(
-                label="📥 Download Detailed Progress Report (CSV)",
+                label="📥 Download Detailed Fleet Performance Report (CSV)",
                 data=csv_data,
-                file_name=f"technician_progress_report_{date.today()}.csv",
+                file_name=f"fleet_performance_report_{date.today()}.csv",
                 mime="text/csv"
             )
         else:
             st.info("ℹ️ No visit or progress records match the selected filter criteria.")
 
-    # TAB 2: MAP / Live Radar
+    # TAB 2: DEDICATED INDIVIDUAL TECHNICIAN TRACKER
     with mgr_tab2:
+        st.markdown("<div class='section-header'>👤 Technician Individual Performance & Expense Audit Center</div>", unsafe_allow_html=True)
+        
+        tech_users = st.session_state.users_db[st.session_state.users_db["Role"] == "Technician"]
+        
+        if tech_users.empty:
+            st.warning("⚠️ No technicians registered in the system.")
+        else:
+            filter_c1, filter_c2 = st.columns([2, 2])
+            with filter_c1:
+                selected_tech_name = st.selectbox(
+                    "🔍 Select Technician to Inspect*", 
+                    tech_users["Full_Name"].tolist(),
+                    index=0,
+                    key="tech_deep_dive_selectbox"
+                )
+            with filter_c2:
+                tech_time_range = st.selectbox(
+                    "🗓️ Time Period Filter", 
+                    ["All Time", "Today", "Weekly (Last 7 Days)", "Monthly (Last 30 Days)", "3 Months", "Yearly"],
+                    key="tech_time_range_selectbox"
+                )
+
+            selected_tech_user = tech_users[tech_users["Full_Name"] == selected_tech_name].iloc[0]
+            selected_tech_id = str(selected_tech_user["User_ID"])
+
+            # Filter reports for this technician
+            tech_reports = st.session_state.service_reports_db.copy()
+            if not tech_reports.empty and "Tech_ID" in tech_reports.columns:
+                tech_reports = tech_reports[tech_reports["Tech_ID"].astype(str) == selected_tech_id]
+                if tech_time_range != "All Time":
+                    tech_reports = filter_df_by_date_range(tech_reports, "Service_Date", tech_time_range)
+            else:
+                tech_reports = pd.DataFrame()
+
+            # Live Status details
+            tech_status_row = st.session_state.tech_status_db[st.session_state.tech_status_db["Tech_ID"].astype(str) == selected_tech_id]
+            curr_city = tech_status_row["Current_City"].values[0] if not tech_status_row.empty and "Current_City" in tech_status_row.columns else "Unknown"
+            curr_status = tech_status_row["Current_Status"].values[0] if not tech_status_row.empty and "Current_Status" in tech_status_row.columns else "Offline"
+            next_targets = tech_status_row["Next_City"].values[0] if not tech_status_row.empty and "Next_City" in tech_status_row.columns else "None"
+            last_updated = tech_status_row["Last_Updated"].values[0] if not tech_status_row.empty and "Last_Updated" in tech_status_row.columns else "N/A"
+
+            # Header Banner
+            st.markdown(f"""
+            <div class='tech-card-header'>
+                <h2 style='margin:0; font-weight:800;'>👷 {selected_tech_name} <span style='font-size:1rem; opacity:0.8;'>({selected_tech_id})</span></h2>
+                <p style='margin:4px 0 0 0; font-size:0.95rem; opacity:0.9;'>
+                    📍 <b>Current City:</b> {curr_city} | 🔴 <b>Status:</b> {curr_status} | 🎯 <b>Targets:</b> {next_targets} | 🕒 <b>Updated:</b> {last_updated}
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if tech_reports.empty:
+                st.info(f"ℹ️ No service records or travel logs found for **{selected_tech_name}** in the selected time period ({tech_time_range}).")
+            else:
+                # Calculations
+                tech_reports["Distance_Travelled_KM"] = pd.to_numeric(tech_reports.get("Distance_Travelled_KM", 0), errors='coerce').fillna(0)
+                tech_reports["Time_Taken_Hours"] = pd.to_numeric(tech_reports.get("Time_Taken_Hours", 0), errors='coerce').fillna(0)
+                tech_reports["Travel_Expense_INR"] = pd.to_numeric(tech_reports.get("Travel_Expense_INR", 0), errors='coerce').fillna(0)
+
+                t_visits = len(tech_reports)
+                t_distance = tech_reports["Distance_Travelled_KM"].sum()
+                t_hours = tech_reports["Time_Taken_Hours"].sum()
+                t_payout = tech_reports["Travel_Expense_INR"].sum()
+                t_avg_time = (t_hours / t_visits) if t_visits > 0 else 0
+                t_cost_per_km = (t_payout / t_distance) if t_distance > 0 else 0
+
+                st.markdown("### 📈 Performance & Reimbursement KPI Summary")
+                k1, k2, k3, k4, k5, k6 = st.columns(6)
+                k1.metric("📍 Visited Sites", t_visits)
+                k2.metric("🚗 Total Travelled", f"{t_distance:.1f} KM")
+                k3.metric("⏱️ On-Site Hours", f"{t_hours:.1f} Hrs")
+                k4.metric("💰 Total Paid (₹)", f"₹ {t_payout:,.2f}")
+                k5.metric("⏳ Avg Time / Site", f"{t_avg_time:.1f} Hrs")
+                k6.metric("⛽ Avg Cost / KM", f"₹ {t_cost_per_km:.1f}/KM")
+
+                st.divider()
+
+                # Visual Analytics Charts
+                st.markdown(f"### 📊 Graphical Performance Trends — {selected_tech_name}")
+                chart_a1, chart_a2 = st.columns(2)
+
+                with chart_a1:
+                    st.markdown("#### 🚗 Travel Distance (KM) per Visit")
+                    chart_dist_df = tech_reports[["Client_Name", "Distance_Travelled_KM"]].copy().set_index("Client_Name")
+                    st.bar_chart(chart_dist_df, color="#10B981")
+
+                with chart_a2:
+                    st.markdown("#### 💰 Travel Expense (₹) per Visit")
+                    chart_exp_df = tech_reports[["Client_Name", "Travel_Expense_INR"]].copy().set_index("Client_Name")
+                    st.bar_chart(chart_exp_df, color="#D97706")
+
+                st.divider()
+
+                # Granular Visit Breakdowns
+                st.markdown(f"### 📑 Granular Field Visit & Travel Breakdown for {selected_tech_name}")
+                
+                display_cols = [
+                    "Report_ID", "Service_Date", "Client_Name", "PO_Number", "Site_Location", 
+                    "Equipment_Type", "Distance_Travelled_KM", "Time_Taken_Hours", "Travel_Expense_INR", 
+                    "Work_Done_Details", "Site_Photo"
+                ]
+                existing_disp_cols = [c for c in display_cols if c in tech_reports.columns]
+                
+                st.dataframe(tech_reports[existing_disp_cols], use_container_width=True)
+
+                st.divider()
+
+                # Individual Site Visit Expansion Cards
+                st.markdown("### 🖼️ Detailed Site Visit Logs & Work Evidence")
+                for _, r_row in tech_reports.iterrows():
+                    with st.expander(f"📍 Visit Report: {r_row['Report_ID']} — {r_row['Client_Name']} ({r_row['Service_Date']})"):
+                        v_col1, v_col2 = st.columns(2)
+                        with v_col1:
+                            st.write(f"🏢 **Client Name:** {r_row['Client_Name']}")
+                            st.write(f"📄 **PO Number:** {r_row.get('PO_Number', 'N/A')}")
+                            st.write(f"📍 **Location:** {r_row.get('Site_Location', 'N/A')}")
+                            st.write(f"🛠️ **Equipment:** {r_row.get('Category', '')} ({r_row.get('Equipment_Type', '')})")
+                            st.write(f"📏 **Door Size & Qty:** {r_row.get('Door_Size', 'N/A')} | Qty: {r_row.get('Qty', '1')}")
+                            st.write(f"🔄 **Visit Sequence:** {r_row.get('Visit_Number', 'N/A')}")
+
+                        with v_col2:
+                            st.write(f"🚗 **Distance Travelled:** {r_row.get('Distance_Travelled_KM', 0)} KM")
+                            st.write(f"⏱️ **Time Spent:** {r_row.get('Time_Taken_Hours', 0)} Hours")
+                            st.write(f"💰 **Travel Expense Paid:** ₹ {r_row.get('Travel_Expense_INR', 0)}")
+                            st.write(f"📅 **Next Service Due:** {r_row.get('Next_Service_Due_Date', 'N/A')}")
+                            st.write(f"🕒 **Submitted At:** {r_row.get('Submitted_At', 'N/A')}")
+
+                        st.write("---")
+                        st.write(f"🔧 **Work Done / Action Taken:** {r_row.get('Work_Done_Details', 'N/A')}")
+                        st.write(f"⚠️ **Problems Faced:** {r_row.get('Problems_Faced', 'None')}")
+                        st.write(f"💬 **General Remarks:** {r_row.get('Remarks', 'N/A')}")
+
+                        if str(r_row.get("Site_Photo", "")).startswith("http"):
+                            st.markdown(f"📷 [**View Site Photo Evidence (Google Drive)**]({r_row['Site_Photo']})")
+
+                st.divider()
+
+                # Download individual technician report
+                tech_csv = tech_reports.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label=f"📥 Download Performance & Expense Statement for {selected_tech_name} (CSV)",
+                    data=tech_csv,
+                    file_name=f"{selected_tech_name.replace(' ', '_')}_performance_statement.csv",
+                    mime="text/csv"
+                )
+
+    # TAB 3: MAP / Live Radar
+    with mgr_tab3:
         st.markdown("<div class='section-header'>Technician Fleet Live Radar</div>", unsafe_allow_html=True)
         full_radar = pd.merge(st.session_state.tech_status_db, st.session_state.users_db[["User_ID", "Full_Name"]], left_on="Tech_ID", right_on="User_ID", how="left")
         st.dataframe(full_radar, use_container_width=True)
@@ -977,13 +1142,13 @@ elif logged_role in ["Manager", "Admin"]:
         st.markdown("<div class='section-header'>All Active Work Orders</div>", unsafe_allow_html=True)
         st.dataframe(st.session_state.jobs_db, use_container_width=True)
 
-    # TAB 3: Service Reports Log
-    with mgr_tab3:
+    # TAB 4: Service Reports Log
+    with mgr_tab4:
         st.markdown("<div class='section-header'>📋 Field Service Visit Reports Log</div>", unsafe_allow_html=True)
         st.dataframe(st.session_state.service_reports_db, use_container_width=True)
 
-    # TAB 4: Contract Manager
-    with mgr_tab4:
+    # TAB 5: Contract Manager
+    with mgr_tab5:
         st.markdown("<div class='section-header'>🗓️ AMC Client Contracts & PO Number Management</div>", unsafe_allow_html=True)
         st.dataframe(st.session_state.amc_contracts_db, use_container_width=True)
         st.divider()
@@ -1027,8 +1192,8 @@ elif logged_role in ["Manager", "Admin"]:
                     st.toast(f"✅ Contract {contract_no} with PO {po_number} saved!")
                     st.rerun()
 
-    # TAB 5: Create Tasks/Users
-    with mgr_tab5:
+    # TAB 6: Create Tasks/Users
+    with mgr_tab6:
         col_mgr_a, col_mgr_b = st.columns(2)
         
         with col_mgr_a:
