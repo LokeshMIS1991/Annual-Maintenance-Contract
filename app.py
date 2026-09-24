@@ -53,6 +53,46 @@ def filter_df_by_date_range(df, date_col, filter_option):
         return temp_df[temp_df[date_col] >= (today - timedelta(days=365))]
     return temp_df
 
+@st.cache_data(ttl=86400, show_spinner=False)
+def get_nearby_cities(city_name, max_results=15):
+    if not city_name or len(city_name.strip()) < 3:
+        return ["Vadodara", "Surat", "Ahmedabad", "Rajkot", "Bhavnagar", "Anand", "Bharuch", "Vapi"]
+
+    try:
+        geolocator = Nominatim(user_agent="amc_tracker_app")
+        location = geolocator.geocode(f"{city_name}, India", timeout=5)
+        
+        if not location:
+            return ["Vadodara", "Surat", "Ahmedabad", "Delhi", "Noida", "Gurugram", "Faridabad", "Ghaziabad"]
+
+        curr_coords = (location.latitude, location.longitude)
+
+        all_cities_db = {
+            "Delhi": (28.6139, 77.2090), "Noida": (28.5355, 77.3910), "Gurugram": (28.4595, 77.0266),
+            "Faridabad": (28.4089, 77.3178), "Ghaziabad": (28.6692, 77.4538), "Greater Noida": (28.4744, 77.5040),
+            "Meerut": (28.9845, 77.7064), "Sonipat": (28.9931, 77.0151), "Panipat": (29.3909, 76.9635),
+            "Rohtak": (28.8955, 76.6066), "Alwar": (27.5530, 76.6346), "Agra": (27.1767, 78.0081),
+            "Mathura": (27.4924, 77.6737), "Karnal": (29.6857, 76.9905), "Ambala": (30.3782, 76.7767),
+            "Surat": (21.1702, 72.8311), "Vadodara": (22.3072, 73.1812), "Ahmedabad": (23.0225, 72.5714),
+            "Rajkot": (22.3039, 70.8022), "Bhavnagar": (21.7645, 72.1519), "Jamnagar": (22.4707, 70.0577),
+            "Anand": (22.5645, 72.9289), "Bharuch": (21.7051, 72.9959), "Vapi": (20.3852, 72.9106),
+            "Navsari": (20.9467, 72.9520), "Gandhinagar": (23.2156, 72.6369), "Ankleshwar": (21.6264, 73.0152),
+            "Mumbai": (19.0760, 72.8777), "Thane": (19.2183, 72.9781), "Navi Mumbai": (19.0330, 73.0297),
+            "Pune": (18.5204, 73.8567), "Nashik": (19.9975, 73.7898), "Aurangabad": (19.8762, 75.3433)
+        }
+
+        distances = []
+        for city, coords in all_cities_db.items():
+            dist_km = geodesic(curr_coords, coords).km
+            if city.lower() != city_name.strip().lower():
+                distances.append((city, dist_km))
+
+        distances.sort(key=lambda x: x[1])
+        return [city for city, dist in distances[:max_results]]
+
+    except Exception:
+        return ["Vadodara", "Surat", "Ahmedabad", "Delhi", "Noida", "Gurugram", "Faridabad"]
+
 # -----------------------------------------------------------------------------
 # 2. GOOGLE SHEETS CONNECTION
 # -----------------------------------------------------------------------------
@@ -213,27 +253,18 @@ EQUIPMENT_DATA = {
 }
 
 # -----------------------------------------------------------------------------
-# 4. BRANDED UI STYLING (FIXED AND ENHANCED)
+# 4. BRANDED UI STYLING
 # -----------------------------------------------------------------------------
 
 st.markdown("""
 <style>
-    /* Global Page Styling */
-    .stApp { 
-        background-color: #F8FAFC !important; 
-    }
-    
-    /* Sidebar Styling */
+    .stApp { background-color: #F8FAFC !important; }
     [data-testid="stSidebar"] { 
         background: linear-gradient(180deg, #0F2027 0%, #203A43 50%, #2C5364 100%) !important; 
         border-right: 1px solid #1E293B !important; 
         color: #FFFFFF !important;
     }
-
-    [data-testid="stSidebar"] * {
-        color: #E2E8F0 !important;
-    }
-
+    [data-testid="stSidebar"] * { color: #E2E8F0 !important; }
     .sidebar-logo-sub { 
         color: #10B981 !important; 
         font-weight: 800; 
@@ -243,7 +274,6 @@ st.markdown("""
         margin-top: 8px; 
         text-transform: uppercase;
     }
-
     .sidebar-user-card {
         background: rgba(255, 255, 255, 0.07);
         border: 1px solid rgba(255, 255, 255, 0.12);
@@ -251,15 +281,12 @@ st.markdown("""
         padding: 14px;
         margin-bottom: 20px;
     }
-
-    /* Tabs Styling */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: #E2E8F0;
         padding: 6px;
         border-radius: 10px;
     }
-
     .stTabs [data-baseweb="tab"] {
         height: 45px;
         border-radius: 8px;
@@ -269,18 +296,12 @@ st.markdown("""
         background-color: transparent;
         border: none !important;
     }
-
     .stTabs [data-baseweb="tab"][aria-selected="true"] {
         background-color: #0F3D7A !important;
         color: #FFFFFF !important;
         box-shadow: 0 4px 10px rgba(15, 61, 122, 0.2);
     }
-
-    .stTabs [data-baseweb="tab-highlight"] {
-        display: none !important;
-    }
-
-    /* Target ONLY the Login Form specifically, preventing form shrinkage on main pages */
+    .stTabs [data-baseweb="tab-highlight"] { display: none !important; }
     .login-box div[data-testid="stForm"] {
         background-color: #FFFFFF !important;
         border: 1px solid #E2E8F0 !important;
@@ -290,8 +311,6 @@ st.markdown("""
         max-width: 440px !important;
         margin: 30px auto !important;
     }
-
-    /* Standard Form Container Styling for Content Forms */
     div[data-testid="stForm"] {
         background-color: #FFFFFF;
         border: 1px solid #E2E8F0;
@@ -299,8 +318,6 @@ st.markdown("""
         padding: 24px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.03);
     }
-
-    /* Login Subtitle */
     .login-subtitle {
         text-align: center; 
         color: #10B981; 
@@ -311,8 +328,6 @@ st.markdown("""
         margin-bottom: 24px;
         text-transform: uppercase;
     }
-
-    /* Form Section Headers */
     .section-header {
         color: #0F3D7A;
         font-weight: 700;
@@ -322,8 +337,6 @@ st.markdown("""
         margin-top: 15px;
         margin-bottom: 15px;
     }
-
-    /* Equipment Box for Checklist */
     .equipment-box {
         background-color: #F8FAFC; 
         border-left: 5px solid #0F3D7A;
@@ -333,15 +346,12 @@ st.markdown("""
         border: 1px solid #E2E8F0;
         border-left-width: 5px;
     }
-    
     .equipment-title { 
         color: #0F3D7A !important; 
         font-weight: 700; 
         margin: 0 0 10px 0; 
         font-size: 1.2rem; 
     }
-
-    /* Buttons Styling */
     div[data-testid="stFormSubmitButton"] > button {
         background-color: #10B981 !important; 
         color: #FFFFFF !important;
@@ -354,13 +364,10 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25) !important;
         transition: all 0.2s ease;
     }
-    
     div[data-testid="stFormSubmitButton"] > button:hover {
         background-color: #059669 !important;
         transform: translateY(-1px);
     }
-
-    /* Sidebar Logout Button */
     [data-testid="stSidebar"] .stButton > button {
         background-color: rgba(239, 68, 68, 0.15) !important;
         color: #FCA5A5 !important;
@@ -369,7 +376,6 @@ st.markdown("""
         font-weight: 600 !important;
         transition: all 0.2s ease;
     }
-
     [data-testid="stSidebar"] .stButton > button:hover {
         background-color: #EF4444 !important;
         color: #FFFFFF !important;
@@ -397,11 +403,7 @@ def render_login_form():
 
             st.markdown("<p class='login-subtitle'>AMC Tracker Portal</p>", unsafe_allow_html=True)
 
-            user_id_input = st.text_input(
-                "Username / Name", 
-                placeholder="Enter User Name", 
-                key="login_userid"
-            )
+            user_id_input = st.text_input("Username / Name", placeholder="Enter User Name", key="login_userid")
 
             chk_col1, chk_col2 = st.columns(2)
             with chk_col1:
@@ -410,13 +412,7 @@ def render_login_form():
                 st.checkbox("Remember Me", key="remember_me_toggle")
 
             pwd_type = "text" if show_password else "password"
-            
-            password_input = st.text_input(
-                "Password / PIN", 
-                type=pwd_type, 
-                placeholder="Enter password", 
-                key="login_password"
-            )
+            password_input = st.text_input("Password / PIN", type=pwd_type, placeholder="Enter password", key="login_password")
 
             submit_button = st.form_submit_button("🔑 LOGIN TO DASHBOARD", use_container_width=True)
 
@@ -744,50 +740,7 @@ if logged_role == "Technician":
                         st.toast(f"✅ Service report submitted for {selected_job_id}!", icon="📄")
                         st.rerun()
 
-
-@st.cache_data(ttl=86400, show_spinner=False)
-def get_nearby_cities(city_name, max_results=15):
-    if not city_name or len(city_name.strip()) < 3:
-        return ["Vadodara", "Surat", "Ahmedabad", "Rajkot", "Bhavnagar", "Anand", "Bharuch", "Vapi"]
-
-    try:
-        geolocator = Nominatim(user_agent="amc_tracker_app")
-        location = geolocator.geocode(f"{city_name}, India", timeout=5)
-        
-        if not location:
-            return ["Vadodara", "Surat", "Ahmedabad", "Delhi", "Noida", "Gurugram", "Faridabad", "Ghaziabad"]
-
-        curr_coords = (location.latitude, location.longitude)
-
-        all_cities_db = {
-            "Delhi": (28.6139, 77.2090), "Noida": (28.5355, 77.3910), "Gurugram": (28.4595, 77.0266),
-            "Faridabad": (28.4089, 77.3178), "Ghaziabad": (28.6692, 77.4538), "Greater Noida": (28.4744, 77.5040),
-            "Meerut": (28.9845, 77.7064), "Sonipat": (28.9931, 77.0151), "Panipat": (29.3909, 76.9635),
-            "Rohtak": (28.8955, 76.6066), "Alwar": (27.5530, 76.6346), "Agra": (27.1767, 78.0081),
-            "Mathura": (27.4924, 77.6737), "Karnal": (29.6857, 76.9905), "Ambala": (30.3782, 76.7767),
-            "Surat": (21.1702, 72.8311), "Vadodara": (22.3072, 73.1812), "Ahmedabad": (23.0225, 72.5714),
-            "Rajkot": (22.3039, 70.8022), "Bhavnagar": (21.7645, 72.1519), "Jamnagar": (22.4707, 70.0577),
-            "Anand": (22.5645, 72.9289), "Bharuch": (21.7051, 72.9959), "Vapi": (20.3852, 72.9106),
-            "Navsari": (20.9467, 72.9520), "Gandhinagar": (23.2156, 72.6369), "Ankleshwar": (21.6264, 73.0152),
-            "Mumbai": (19.0760, 72.8777), "Thane": (19.2183, 72.9781), "Navi Mumbai": (19.0330, 73.0297),
-            "Pune": (18.5204, 73.8567), "Nashik": (19.9975, 73.7898), "Aurangabad": (19.8762, 75.3433)
-        }
-
-        distances = []
-        for city, coords in all_cities_db.items():
-            dist_km = geodesic(curr_coords, coords).km
-            if city.lower() != city_name.strip().lower():
-                distances.append((city, dist_km))
-
-        distances.sort(key=lambda x: x[1])
-        nearby_cities = [city for city, dist in distances[:max_results]]
-        return nearby_cities
-
-    except Exception:
-        return ["Vadodara", "Surat", "Ahmedabad", "Delhi", "Noida", "Gurugram", "Faridabad"]
-
-
-    # TAB 3: BROADCAST LIVE LOCATION & NEXT TARGET CITIES
+    # TAB 3: Live Location Broadcast
     with tech_tab3:
         st.markdown("<div class='section-header'>Broadcast Live Location & Next Target Cities</div>", unsafe_allow_html=True)
         
@@ -920,7 +873,7 @@ elif logged_role in ["Manager", "Admin"]:
 
     mgr_tab1, mgr_tab2, mgr_tab3, mgr_tab4, mgr_tab5 = st.tabs([
         "📊 Progress & Analytics",
-        "🗺️ MAP / Live Radar", 
+        "MAP / Live Radar", 
         "📄 Service Reports",
         "📅 AMC Contracts",
         "➕ Dispatch Task / User"
