@@ -19,7 +19,7 @@ st.set_page_config(
     page_title="AMC Tracker Portal", 
     page_icon="🛠️", 
     layout="wide",
-    'binitial_sidebar_state="expanded"
+    initial_sidebar_state="expanded"
 )
 
 # -----------------------------------------------------------------------------
@@ -194,7 +194,9 @@ if "authenticated" not in st.session_state:
 #  Google Drive
 # -----------------------------------------------------------------------------
 
-DRIVE_FOLDER_ID = "https://drive.google.com/drive/folders/1dnzcSiMuLMUKVcd4pAe95T_6aOjwmBFA"  # Paste your copied folder ID
+# DRIVE_FOLDER_ID = "https://drive.google.com/drive/folders/1dnzcSiMuLMUKVcd4pAe95T_6aOjwmBFA"  # Paste your copied folder ID
+# Fetches the folder ID safely from secrets
+DRIVE_FOLDER_ID = st.secrets["drive_folder_id"]
 
 @st.cache_resource
 def get_drive_service():
