@@ -830,11 +830,18 @@ def render_technician_dashboard():
     
             next_cities_str = ", ".join(final_cities_list)
             
-            if tech_id in st.session_state.tech_status_db["Tech_ID"].astype(str).values:
-                st.session_state.tech_status_db.loc[
-                    st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id,
-                    ["Current_City", "Current_Pincode", "Current_Status", "Next_City", "Last_Updated"]
-                ] = [input_curr_city, input_curr_pin, input_status, next_cities_str, now_str]
+            cols_to_update = ["Current_City", "Current_Pincode", "Current_Status", "Next_City", "Last_Updated"]
+
+            for col in cols_to_update:
+                if col in st.session_state.tech_status_db.columns:
+                    st.session_state.tech_status_db[col] = st.session_state.tech_status_db[col].astype(object)
+            
+            # Now perform the update safely
+            st.session_state.tech_status_db.loc[
+                st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id,
+                cols_to_update
+            ] = [input_curr_city, str(input_curr_pin), str(input_status), str(next_cities_str), str(now_str)]
+            
             else:
                 new_row = {
                     "Tech_ID": tech_id, 
