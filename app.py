@@ -218,7 +218,7 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 # Google Drive Integration
-DRIVE_FOLDER_ID = "1dnzcSiMuLMUKVcd4pAe95T_6aOjwmBFA"
+DRIVE_FOLDER_ID = "0ACGPiwuns-s_Uk9PVA"
 
 @st.cache_resource
 def get_drive_service():
@@ -245,10 +245,12 @@ def upload_photo_to_drive(file_obj, filename):
             resumable=True
         )
         
+        # supportsAllDrives=True is required for Shared Drives
         uploaded_file = service.files().create(
             body=file_metadata,
             media_body=media,
-            fields='id, webViewLink'
+            fields='id, webViewLink',
+            supportsAllDrives=True
         ).execute()
         
         return uploaded_file.get('webViewLink')
