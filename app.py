@@ -834,26 +834,27 @@ def render_technician_dashboard():
             
             cols_to_update = ["Current_City", "Current_Pincode", "Current_Status", "Next_City", "Last_Updated"]
 
+            # Ensure columns in tech_status_db are cast to string to prevent lossy setitem or type casting errors
             for col in cols_to_update:
                 if col in st.session_state.tech_status_db.columns:
-                    st.session_state.tech_status_db[col] = st.session_state.tech_status_db[col].astype(object)
-            
-                    # Now perform the update safely
-                    st.session_state.tech_status_db.loc[
-                        st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id,
-                        cols_to_update
-                    ] = [input_curr_city, str(input_curr_pin), str(input_status), str(next_cities_str), str(now_str)]
-            
-                else:
-                    new_row = {
-                        "Tech_ID": tech_id, 
-                        "Current_City": input_curr_city, 
-                        "Current_Pincode": input_curr_pin, 
-                        "Current_Status": input_status, 
-                        "Next_City": next_cities_str, 
-                        "Last_Updated": now_str
-                    }
-                    st.session_state.tech_status_db = pd.concat([st.session_state.tech_status_db, pd.DataFrame([new_row])], ignore_index=True)
+                    st.session_state.tech_status_db[col] = st.session_state.tech_status_db[col].astype(str)
+
+            # Perform update or row insertion
+            if not st.session_state.tech_status_db[st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id].empty:
+                st.session_state.tech_status_db.loc[
+                    st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id,
+                    cols_to_update
+                ] = [str(input_curr_city), str(input_curr_pin), str(input_status), str(next_cities_str), str(now_str)]
+            else:
+                new_row = {
+                    "Tech_ID": str(tech_id), 
+                    "Current_City": str(input_curr_city), 
+                    "Current_Pincode": str(input_curr_pin), 
+                    "Current_Status": str(input_status), 
+                    "Next_City": str(next_cities_str), 
+                    "Last_Updated": str(now_str)
+                }
+                st.session_state.tech_status_db = pd.concat([st.session_state.tech_status_db, pd.DataFrame([new_row])], ignore_index=True)
                 
             save_sheet_data(st.session_state.tech_status_db, "TechStatus")
             st.toast(f"📍 Target cities updated to: {next_cities_str or 'None'}", icon="✅")
