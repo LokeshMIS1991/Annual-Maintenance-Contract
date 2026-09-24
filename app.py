@@ -8,6 +8,9 @@ import gspread
 from google.oauth2.service_account import Credentials
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+import io
 
 # -----------------------------------------------------------------------------
 # 0. PAGE CONFIGURATION
@@ -16,7 +19,7 @@ st.set_page_config(
     page_title="AMC Tracker Portal", 
     page_icon="🛠️", 
     layout="wide",
-    initial_sidebar_state="expanded"
+    'binitial_sidebar_state="expanded"
 )
 
 # -----------------------------------------------------------------------------
@@ -187,6 +190,50 @@ if "selected_job_for_report" not in st.session_state:
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
+# -----------------------------------------------------------------------------
+#  Google Drive
+# -----------------------------------------------------------------------------
+
+DRIVE_FOLDER_ID = "https://drive.google.com/drive/folders/1dnzcSiMuLMUKVcd4pAe95T_6aOjwmBFA"  # Paste your copied folder ID
+
+@st.cache_resource
+def get_drive_service():
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    creds_dict = st.secrets["gcp_service_account"]
+    credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    return build('drive', 'v3', credentials=credentials)
+
+def upload_photo_to_drive(file_obj, filename):
+    """Uploads Streamlit uploaded file buffer to target Google Drive folder."""
+    try:
+        service = get_drive_service()
+        file_metadata = {
+            'name': filename,
+            'parents': [DRIVE_FOLDER_ID]
+        }
+        
+        # Read uploaded image bytes directly
+        media = MediaIoBaseUpload(
+            io.BytesIO(file_obj.getvalue()), 
+            mimetype=file_obj.type,
+            resumable=True
+        )
+        
+        uploaded_file = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id, webViewLink'
+        ).execute()
+        
+        # Returns the viewable web link to the image on Google Drive
+        return uploaded_file.get('webViewLink')
+    except Exception as e:
+        st.error(f"❌ Failed to upload image to Google Drive: {e}")
+        return None
+        
 # -----------------------------------------------------------------------------
 # 3. CHECKLIST DATA CONFIGURATION
 # -----------------------------------------------------------------------------
@@ -682,14 +729,15 @@ if logged_role == "Technician":
                     if not rpt_site_location or not rpt_remarks or not rpt_work_done:
                         st.error("⚠️ Please fill in all required fields marked with *")
                     else:
-                        try:
-                            local_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
-                            submit_time_str = datetime.now(local_tz).strftime("%Y-%m-%d %I:%M %p")
-                        except Exception:
-                            submit_time_str = datetime.now().strftime("%Y-%m-%d %I:%M %p")
-
-                        photo_filename = site_photo_file.name if site_photo_file is not None else "No Photo Uploaded"
-
+                        # 1. Handle Photo Upload to Google Drive
+                        photo_url_or_name = "No Photo Uploaded"
+                        if site_photo_file is not None:
+                            formatted_filename = f"{selected_job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{site_photo_file.name}"
+                            drive_link = upload_photo_to_drive(site_photo_file, formatted_filename)
+                            if drive_link:
+                                photo_url_or_name = drive_link
+                
+                        # 2. Store the Drive Link in Google Sheets
                         report_entry = {
                             "Report_ID": f"RPT-{len(st.session_state.service_reports_db) + 1001}",
                             "Job_ID": selected_job_id,
@@ -712,7 +760,7 @@ if logged_role == "Technician":
                             "Distance_Travelled_KM": float(rpt_distance),
                             "Time_Taken_Hours": float(rpt_time_taken),
                             "Work_Done_Details": rpt_work_done,
-                            "Site_Photo": photo_filename,
+                            "Site_Photo": photo_url_or_name,  # Saves the clickable Google Drive Link!
                             "Problems_Faced": problems_faced_input.strip() if problems_faced_input.strip() else "None",
                             "Remarks": rpt_remarks,
                             "Submitted_At": submit_time_str
