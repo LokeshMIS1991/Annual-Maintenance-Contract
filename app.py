@@ -150,7 +150,7 @@ def load_sheet_data(worksheet_name):
         service_report_cols.extend([f"Q{i}_Choice", f"Q{i}_Remark"])
 
     default_columns = {
-        "Users": ["User_ID", "Full_Name", "Role", "Password", "Aadhaar_Number"],
+        "Users": ["User_ID", "Full_Name", "Role", "Password", "Aadhaar_Number", "Mobile_Number"],
         "Jobs": ["Job_ID", "Assigned_Tech_ID", "Client_Name", "Client_Phone", "Address", "City", "Pincode", "Issue_Description", "Status", "Scheduled_Time"],
         "TechStatus": ["Tech_ID", "Current_City", "Current_Pincode", "Current_Status", "Next_City", "Next_Pincode", "ETA", "Last_Updated"],
         "ServiceReports": service_report_cols,
@@ -883,15 +883,15 @@ def render_admin_dashboard():
     # =========================================================================
     with mgr_primary_tab1:
         ops_sub_tab1, ops_sub_tab2, ops_sub_tab3, ops_sub_tab4 = st.tabs([
-            "👤 Create User / Technician",
+            "👤 Create & Manage Users",
             "➕ Dispatch Task",
             "📅 AMC Contracts",
             "🗺️ MAP / Live Radar"
         ])
 
-        # SUB-TAB 1: CREATE USER / TECHNICIAN (Dynamic User ID Generation)
+        # SUB-TAB 1: CREATE & MANAGE USER / TECHNICIAN (With Update & Delete Options + Mobile Number)
         with ops_sub_tab1:
-            st.markdown("<div class='section-header'>👤 Register System User / Technician</div>", unsafe_allow_html=True)
+            st.markdown("<div class='section-header'>👤 Register New System User</div>", unsafe_allow_html=True)
             st.caption("Managers and Admins can create new technician and staff accounts here. User IDs are dynamically generated.")
 
             dynamic_next_id = generate_next_tech_id(st.session_state.users_db)
@@ -904,6 +904,7 @@ def render_admin_dashboard():
                     new_role = st.selectbox("Assign Role*", ["Technician", "Manager", "Admin"])
                 
                 with u_col2:
+                    new_mobile = st.text_input("Mobile Number*", max_chars=15, placeholder="e.g. +91 9876543210").strip()
                     new_aadhaar = st.text_input("Aadhaar Number* (12 Digits)", max_chars=12, placeholder="e.g. 123456789012").strip()
                     new_pass = st.text_input("Password / PIN*", type="password").strip()
 
@@ -911,8 +912,8 @@ def render_admin_dashboard():
                 submit_create_user = st.form_submit_button("Register New User")
 
                 if submit_create_user:
-                    if not new_uid or not new_name or not new_pass or not new_aadhaar:
-                        st.error("⚠️ All fields marked with * including Aadhaar Number are compulsory.")
+                    if not new_uid or not new_name or not new_pass or not new_aadhaar or not new_mobile:
+                        st.error("⚠️ All fields marked with * including Mobile Number and Aadhaar Number are compulsory.")
                     elif len(new_aadhaar) != 12 or not new_aadhaar.isdigit():
                         st.error("⚠️ Please enter a valid 12-digit numeric Aadhaar Number.")
                     else:
@@ -933,7 +934,8 @@ def render_admin_dashboard():
                                 "Full_Name": new_name, 
                                 "Role": new_role, 
                                 "Password": new_pass,
-                                "Aadhaar_Number": new_aadhaar
+                                "Aadhaar_Number": new_aadhaar,
+                                "Mobile_Number": new_mobile
                             }
                             st.session_state.users_db = pd.concat([st.session_state.users_db, pd.DataFrame([user_entry])], ignore_index=True)
                             save_sheet_data(st.session_state.users_db, "Users")
@@ -941,8 +943,79 @@ def render_admin_dashboard():
                             st.rerun()
 
             st.divider()
+
+            # USER MANAGEMENT SECTION: UPDATE DETAILS OR DELETE USER
+            st.markdown("<div class='section-header'>🛠️ Edit or Delete Existing System Users</div>", unsafe_allow_html=True)
+            
+            if st.session_state.users_db.empty:
+                st.info("No registered users found.")
+            else:
+                users_list = st.session_state.users_db["User_ID"].astype(str).tolist()
+                
+                selected_user_id = st.selectbox(
+                    "Select User to Update or Delete*", 
+                    users_list, 
+                    format_func=lambda x: f"{x} - {st.session_state.users_db[st.session_state.users_db['User_ID'].astype(str) == x]['Full_Name'].values[0]} ({st.session_state.users_db[st.session_state.users_db['User_ID'].astype(str) == x]['Role'].values[0]})"
+                )
+
+                selected_user_row = st.session_state.users_db[st.session_state.users_db["User_ID"].astype(str) == selected_user_id].iloc[0]
+
+                action_col1, action_col2 = st.columns(2)
+
+                # Form to Edit Existing User
+                with action_col1:
+                    st.markdown("#### ✏️ Update User Details")
+                    with st.form("edit_user_form"):
+                        edit_name = st.text_input("Full Name", value=str(selected_user_row.get("Full_Name", "")))
+                        
+                        roles_options = ["Technician", "Manager", "Admin"]
+                        cur_role = str(selected_user_row.get("Role", "Technician"))
+                        role_idx = roles_options.index(cur_role) if cur_role in roles_options else 0
+                        edit_role = st.selectbox("Role", roles_options, index=role_idx)
+
+                        edit_mobile = st.text_input("Mobile Number", value=str(selected_user_row.get("Mobile_Number", "")))
+                        edit_aadhaar = st.text_input("Aadhaar Number", value=str(selected_user_row.get("Aadhaar_Number", "")), max_chars=12)
+                        edit_pass = st.text_input("Password / PIN", value=str(selected_user_row.get("Password", "")), type="password")
+
+                        btn_update = st.form_submit_button("💾 Save Changes")
+
+                        if btn_update:
+                            if not edit_name or not edit_mobile or not edit_aadhaar or not edit_pass:
+                                st.error("⚠️ All fields are mandatory for updating.")
+                            else:
+                                idx = st.session_state.users_db[st.session_state.users_db["User_ID"].astype(str) == selected_user_id].index[0]
+                                st.session_state.users_db.at[idx, "Full_Name"] = edit_name
+                                st.session_state.users_db.at[idx, "Role"] = edit_role
+                                st.session_state.users_db.at[idx, "Mobile_Number"] = edit_mobile
+                                st.session_state.users_db.at[idx, "Aadhaar_Number"] = edit_aadhaar
+                                st.session_state.users_db.at[idx, "Password"] = edit_pass
+
+                                save_sheet_data(st.session_state.users_db, "Users")
+                                st.toast(f"✅ User details for {selected_user_id} updated successfully!")
+                                st.rerun()
+
+                # Form to Delete User
+                with action_col2:
+                    st.markdown("#### 🗑️ Delete User Account")
+                    st.warning(f"⚠️ Warning: Deleting user **{selected_user_row.get('Full_Name')}** ({selected_user_id}) will permanently remove them from the system.")
+                    
+                    confirm_delete = st.checkbox(f"Confirm deletion for {selected_user_id}", key="confirm_del_chk")
+                    
+                    if st.button("🗑️ Delete Selected User", type="primary", disabled=not confirm_delete, use_container_width=True):
+                        logged_user_id = str(st.session_state.get("user_id", ""))
+                        if selected_user_id == logged_user_id:
+                            st.error("❌ Safety Lock: You cannot delete your own currently logged-in account!")
+                        else:
+                            st.session_state.users_db = st.session_state.users_db[st.session_state.users_db["User_ID"].astype(str) != selected_user_id].reset_index(drop=True)
+                            save_sheet_data(st.session_state.users_db, "Users")
+                            st.toast(f"🗑️ User {selected_user_id} removed successfully!", icon="✅")
+                            st.rerun()
+
+            st.divider()
             st.markdown("### 📋 Existing System Users List")
-            st.dataframe(st.session_state.users_db[["User_ID", "Full_Name", "Role", "Aadhaar_Number"]], use_container_width=True)
+            display_cols = ["User_ID", "Full_Name", "Role", "Mobile_Number", "Aadhaar_Number"]
+            avail_cols = [col for col in display_cols if col in st.session_state.users_db.columns]
+            st.dataframe(st.session_state.users_db[avail_cols], use_container_width=True)
 
         # SUB-TAB 2: DISPATCH TASK
         with ops_sub_tab2:
@@ -1073,8 +1146,8 @@ def render_admin_dashboard():
 
         # SUB-TAB 4: MAP / LIVE RADAR
         with ops_sub_tab4:
-            st.markdown("<div class='section-header'>🗺️ Technician Fleet Live Radar & Locations</div>", unsafe_allow_html=True)
-            full_radar = pd.merge(st.session_state.tech_status_db, st.session_state.users_db[["User_ID", "Full_Name"]], left_on="Tech_ID", right_on="User_ID", how="left")
+            st.markdown("<div class='section-header'>MAP / Live Radar</div>", unsafe_allow_html=True)
+            full_radar = pd.merge(st.session_state.tech_status_db, st.session_state.users_db[["User_ID", "Full_Name", "Mobile_Number"]], left_on="Tech_ID", right_on="User_ID", how="left")
             st.dataframe(full_radar, use_container_width=True)
             
             st.divider()
@@ -1225,6 +1298,7 @@ def render_admin_dashboard():
 
                 selected_tech_user = tech_users[tech_users["Full_Name"] == selected_tech_name].iloc[0]
                 selected_tech_id = str(selected_tech_user["User_ID"])
+                selected_tech_mobile = str(selected_tech_user.get("Mobile_Number", "N/A"))
 
                 tech_reports = st.session_state.service_reports_db.copy()
                 if not tech_reports.empty and "Tech_ID" in tech_reports.columns:
@@ -1244,7 +1318,7 @@ def render_admin_dashboard():
                 <div class='tech-card-header'>
                     <h2 style='margin:0; font-weight:800;'>👷 {selected_tech_name} <span style='font-size:1rem; opacity:0.8;'>({selected_tech_id})</span></h2>
                     <p style='margin:4px 0 0 0; font-size:0.95rem; opacity:0.9;'>
-                        📍 <b>Current City:</b> {curr_city} | 🔴 <b>Status:</b> {curr_status} | 🎯 <b>Targets:</b> {next_targets} | 🕒 <b>Updated:</b> {last_updated}
+                        📞 <b>Mobile:</b> {selected_tech_mobile} | 📍 <b>Current City:</b> {curr_city} | 🔴 <b>Status:</b> {curr_status} | 🎯 <b>Targets:</b> {next_targets} | 🕒 <b>Updated:</b> {last_updated}
                     </p>
                 </div>
                 """, unsafe_allow_html=True)
