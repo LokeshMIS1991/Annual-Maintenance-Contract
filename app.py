@@ -207,7 +207,6 @@ def get_drive_service():
     return build('drive', 'v3', credentials=credentials)
 
 def upload_photo_to_drive(file_obj, filename):
-    """Uploads Streamlit uploaded file buffer to target Google Drive folder."""
     try:
         service = get_drive_service()
         file_metadata = {
@@ -821,9 +820,9 @@ if logged_role == "Technician":
             my_reports = reports_df[reports_df["Tech_ID"].astype(str) == tech_id]
             
             if not my_reports.empty:
-                km_series = pd.to_numeric(my_reports.get("Distance_Travelled_KM", pd.Series(dtype=float)), errors='coerce').fillna(0)
-                hrs_series = pd.to_numeric(my_reports.get("Time_Taken_Hours", pd.Series(dtype=float)), errors='coerce').fillna(0)
-                exp_series = pd.to_numeric(my_reports.get("Travel_Expense_INR", pd.Series(dtype=float)), errors='coerce').fillna(0)
+                km_series = pd.to_numeric(my_reports["Distance_Travelled_KM"] if "Distance_Travelled_KM" in my_reports.columns else 0, errors='coerce').fillna(0)
+                hrs_series = pd.to_numeric(my_reports["Time_Taken_Hours"] if "Time_Taken_Hours" in my_reports.columns else 0, errors='coerce').fillna(0)
+                exp_series = pd.to_numeric(my_reports["Travel_Expense_INR"] if "Travel_Expense_INR" in my_reports.columns else 0, errors='coerce').fillna(0)
 
                 sites_visited = len(my_reports)
                 tot_km = km_series.sum()
@@ -851,20 +850,26 @@ if logged_role == "Technician":
 elif logged_role in ["Manager", "Admin"]:
     st.markdown("<h1 style='color: #0F3D7A; font-weight:800; margin-bottom: 20px;'>📡 AMC Tracker Portal — Command & Control Center</h1>", unsafe_allow_html=True)
 
-    # AMC Alerts
+    # DYNAMIC 15-DAY AMC ALERTS
     contracts_df = st.session_state.amc_contracts_db
     if not contracts_df.empty and "Next_Visit_Due" in contracts_df.columns:
         contracts_df["Next_Visit_Due_DT"] = pd.to_datetime(contracts_df["Next_Visit_Due"], errors="coerce")
         today_dt = pd.Timestamp(date.today())
-        upcoming_due = contracts_df[
+        fifteen_days_dt = today_dt + timedelta(days=15)
+        
+        upcoming_15_days = contracts_df[
             (contracts_df["Next_Visit_Due_DT"] >= today_dt) & 
-            (contracts_df["Next_Visit_Due_DT"] <= (today_dt + timedelta(days=7)))
+            (contracts_df["Next_Visit_Due_DT"] <= fifteen_days_dt)
         ]
         
-        if not upcoming_due.empty:
-            st.warning(f"🔔 **Upcoming AMC Visit Alerts ({len(upcoming_due)} Due in Next 7 Days)**")
-            for _, u_row in upcoming_due.iterrows():
-                st.caption(f"• **{u_row['Client_Name']}** (Contract: `{u_row['AMC_Contract_No']}`, PO: `{u_row.get('PO_Number','N/A')}`) — Visit Due Date: **{u_row['Next_Visit_Due']}**")
+        if not upcoming_15_days.empty:
+            st.warning(f"🔔 **Dynamic AMC Alert: {len(upcoming_15_days)} Client Service Visit(s) Due in the Next 15 Days**")
+            for _, u_row in upcoming_15_days.iterrows():
+                days_remaining = (u_row["Next_Visit_Due_DT"].date() - date.today()).days
+                st.write(
+                    f"• 🏢 **{u_row['Client_Name']}** | Contract: `{u_row['AMC_Contract_No']}` | PO: `{u_row.get('PO_Number','N/A')}` "
+                    f"| Due Date: **{u_row['Next_Visit_Due']}** (`{days_remaining} Days Remaining`)"
+                )
             st.divider()
 
     mgr_tab1, mgr_tab2, mgr_tab3, mgr_tab4, mgr_tab5, mgr_tab6 = st.tabs([
@@ -907,9 +912,10 @@ elif logged_role in ["Manager", "Admin"]:
         tot_visited = len(all_reports)
         
         if not all_reports.empty:
-            all_reports["Distance_Travelled_KM"] = pd.to_numeric(all_reports.get("Distance_Travelled_KM", 0), errors='coerce').fillna(0)
-            all_reports["Time_Taken_Hours"] = pd.to_numeric(all_reports.get("Time_Taken_Hours", 0), errors='coerce').fillna(0)
-            all_reports["Travel_Expense_INR"] = pd.to_numeric(all_reports.get("Travel_Expense_INR", 0), errors='coerce').fillna(0)
+            # FIX: Prevent AttributeError by safe series assignment
+            all_reports["Distance_Travelled_KM"] = pd.to_numeric(all_reports["Distance_Travelled_KM"] if "Distance_Travelled_KM" in all_reports.columns else 0, errors='coerce').fillna(0)
+            all_reports["Time_Taken_Hours"] = pd.to_numeric(all_reports["Time_Taken_Hours"] if "Time_Taken_Hours" in all_reports.columns else 0, errors='coerce').fillna(0)
+            all_reports["Travel_Expense_INR"] = pd.to_numeric(all_reports["Travel_Expense_INR"] if "Travel_Expense_INR" in all_reports.columns else 0, errors='coerce').fillna(0)
             
             tot_dist = all_reports["Distance_Travelled_KM"].sum()
             tot_time = all_reports["Time_Taken_Hours"].sum()
@@ -1040,10 +1046,10 @@ elif logged_role in ["Manager", "Admin"]:
             if tech_reports.empty:
                 st.info(f"ℹ️ No service records or travel logs found for **{selected_tech_name}** in the selected time period ({tech_time_range}).")
             else:
-                # Calculations
-                tech_reports["Distance_Travelled_KM"] = pd.to_numeric(tech_reports.get("Distance_Travelled_KM", 0), errors='coerce').fillna(0)
-                tech_reports["Time_Taken_Hours"] = pd.to_numeric(tech_reports.get("Time_Taken_Hours", 0), errors='coerce').fillna(0)
-                tech_reports["Travel_Expense_INR"] = pd.to_numeric(tech_reports.get("Travel_Expense_INR", 0), errors='coerce').fillna(0)
+                # Calculations with safe fallbacks
+                tech_reports["Distance_Travelled_KM"] = pd.to_numeric(tech_reports["Distance_Travelled_KM"] if "Distance_Travelled_KM" in tech_reports.columns else 0, errors='coerce').fillna(0)
+                tech_reports["Time_Taken_Hours"] = pd.to_numeric(tech_reports["Time_Taken_Hours"] if "Time_Taken_Hours" in tech_reports.columns else 0, errors='coerce').fillna(0)
+                tech_reports["Travel_Expense_INR"] = pd.to_numeric(tech_reports["Travel_Expense_INR"] if "Travel_Expense_INR" in tech_reports.columns else 0, errors='coerce').fillna(0)
 
                 t_visits = len(tech_reports)
                 t_distance = tech_reports["Distance_Travelled_KM"].sum()
