@@ -749,50 +749,79 @@ if logged_role == "Technician":
                         st.toast(f"✅ Service report submitted for {selected_job_id}!", icon="📄")
                         st.rerun()
 
-    # TAB 3: Broadcast Location
+    # TAB 3: Broadcast Location & Next Target Cities
     with tech_tab3:
-        st.markdown("<div class='section-header'>Broadcast Live Location & Next Target</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-header'>Broadcast Live Location & Next Target Cities</div>", unsafe_allow_html=True)
+        
+        # Load existing record
         curr_rec = st.session_state.tech_status_db[st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id]
         
         c_city = str(curr_rec["Current_City"].values[0]) if not curr_rec.empty and "Current_City" in curr_rec.columns else ""
         c_pin = str(curr_rec["Current_Pincode"].values[0]) if not curr_rec.empty and "Current_Pincode" in curr_rec.columns else ""
         c_status_raw = str(curr_rec["Current_Status"].values[0]).strip().title() if not curr_rec.empty and "Current_Status" in curr_rec.columns else "Available"
-        n_city = str(curr_rec["Next_City"].values[0]) if not curr_rec.empty and "Next_City" in curr_rec.columns else ""
-        n_pin = str(curr_rec["Next_Pincode"].values[0]) if not curr_rec.empty and "Next_Pincode" in curr_rec.columns else ""
-        eta_val = str(curr_rec["ETA"].values[0]) if not curr_rec.empty and "ETA" in curr_rec.columns else ""
+        
+        # Parse existing next target cities (stored as comma-separated string)
+        raw_next_cities = str(curr_rec["Next_City"].values[0]) if not curr_rec.empty and "Next_City" in curr_rec.columns else ""
+        default_next_cities = [city.strip() for city in raw_next_cities.split(",") if city.strip()]
+
+        # Common city options list (Technicians can also type & add custom cities)
+        city_options = list(set([
+            "Vadodara", "Surat", "Ahmedabad", "Rajkot", "Bhavnagar", 
+            "Jamnagar", "Anand", "Bharuch", "Vapi", "Gandhinagar"
+        ] + default_next_cities))
 
         with st.form(f"broadcast_location_form_{tech_id}"):
             c1, c2 = st.columns(2)
+            
             with c1:
-                input_curr_city = st.text_input("Current City", value=c_city)
-                input_curr_pin = st.text_input("Current Pin Code", value=c_pin, max_chars=6)
+                st.markdown("**📍 Current Location**")
+                input_curr_city = st.text_input("Current City", value=c_city, placeholder="e.g. Surat")
+                input_curr_pin = st.text_input("Current Pin Code", value=c_pin, max_chars=6, placeholder="e.g. 395007")
+                
                 status_options = ["Available", "On Site", "In Transit"]
                 selected_idx = status_options.index(c_status_raw) if c_status_raw in status_options else 0
-                input_status = st.radio("Current Activity", status_options, index=selected_idx, horizontal=True)
-                
+                input_status = st.radio("Current Activity Status", status_options, index=selected_idx, horizontal=True)
+
             with c2:
-                input_next_city = st.text_input("Next Target City", value=n_city)
-                input_next_pin = st.text_input("Next Target Pin Code", value=n_pin, max_chars=6)
-                input_eta = st.text_input("ETA Arrival Time", value=eta_val)
-                
-            if st.form_submit_button("Broadcast Location Update"):
+                st.markdown("**🎯 Next Preferred / Target Destinations**")
+                # Multiselect allowing selection or custom entry of multiple target cities
+                input_next_cities = st.multiselect(
+                    "Next Target Cities (Select multiple or type new ones)",
+                    options=city_options,
+                    default=default_next_cities,
+                    help="Select all cities you can visit next so managers can assign nearby tasks."
+                )
+
+            st.divider()
+
+            if st.form_submit_button("Broadcast Location & Cities Update", use_container_width=True):
                 try:
                     local_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
                     now_str = datetime.now(local_tz).strftime("%I:%M %p")
                 except Exception:
                     now_str = datetime.now().strftime("%I:%M %p")
                 
+                # Format multiselect list into comma-separated string for Sheet storage
+                next_cities_str = ", ".join(input_next_cities)
+                
                 if tech_id in st.session_state.tech_status_db["Tech_ID"].astype(str).values:
                     st.session_state.tech_status_db.loc[
                         st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id,
-                        ["Current_City", "Current_Pincode", "Current_Status", "Next_City", "Next_Pincode", "ETA", "Last_Updated"]
-                    ] = [input_curr_city, input_curr_pin, input_status, input_next_city, input_next_pin, input_eta, now_str]
+                        ["Current_City", "Current_Pincode", "Current_Status", "Next_City", "Last_Updated"]
+                    ] = [input_curr_city, input_curr_pin, input_status, next_cities_str, now_str]
                 else:
-                    new_row = {"Tech_ID": tech_id, "Current_City": input_curr_city, "Current_Pincode": input_curr_pin, "Current_Status": input_status, "Next_City": input_next_city, "Next_Pincode": input_next_pin, "ETA": input_eta, "Last_Updated": now_str}
+                    new_row = {
+                        "Tech_ID": tech_id, 
+                        "Current_City": input_curr_city, 
+                        "Current_Pincode": input_curr_pin, 
+                        "Current_Status": input_status, 
+                        "Next_City": next_cities_str, 
+                        "Last_Updated": now_str
+                    }
                     st.session_state.tech_status_db = pd.concat([st.session_state.tech_status_db, pd.DataFrame([new_row])], ignore_index=True)
                 
                 save_sheet_data(st.session_state.tech_status_db, "TechStatus")
-                st.toast(f"📍 Location Broadcast Updated at {now_str}!", icon="✅")
+                st.toast(f"📍 Target cities updated to: {next_cities_str or 'None'}", icon="✅")
                 st.rerun()
 
     # TAB 4: Personal History
