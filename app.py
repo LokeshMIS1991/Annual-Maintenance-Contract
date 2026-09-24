@@ -6,6 +6,9 @@ import urllib.parse
 import os
 import gspread
 from google.oauth2.service_account import Credentials
+from geopy.geocoders import Nominatim
+from geopy.distance import geodesic
+import zoneinfo
 
 # -----------------------------------------------------------------------------
 # 0. PAGE CONFIGURATION
@@ -749,100 +752,138 @@ if logged_role == "Technician":
                         st.toast(f"✅ Service report submitted for {selected_job_id}!", icon="📄")
                         st.rerun()
 
-    # TAB 3: Broadcast Location & Next Target Cities
+
+# Helper function to get nearby cities dynamically
+@st.cache_data(ttl=86400, show_spinner=False)
+def get_nearby_cities(city_name, max_results=15):
+    """
+    Fetches coordinates of the typed city and calculates nearby major cities.
+    Falls back to a curated list of major Indian hubs if geocoding fails.
+    """
+    if not city_name or len(city_name.strip()) < 3:
+        return ["Vadodara", "Surat", "Ahmedabad", "Rajkot", "Bhavnagar", "Anand", "Bharuch", "Vapi"]
+
+    try:
+        geolocator = Nominatim(user_agent="amc_tracker_app")
+        location = geolocator.geocode(f"{city_name}, India", timeout=5)
+        
+        if not location:
+            return ["Vadodara", "Surat", "Ahmedabad", "Delhi", "Noida", "Gurugram", "Faridabad", "Ghaziabad"]
+
+        curr_coords = (location.latitude, location.longitude)
+
+        # Reference database of major Indian cities across regions
+        all_cities_db = {
+            "Delhi": (28.6139, 77.2090), "Noida": (28.5355, 77.3910), "Gurugram": (28.4595, 77.0266),
+            "Faridabad": (28.4089, 77.3178), "Ghaziabad": (28.6692, 77.4538), "Greater Noida": (28.4744, 77.5040),
+            "Meerut": (28.9845, 77.7064), "Sonipat": (28.9931, 77.0151), "Panipat": (29.3909, 76.9635),
+            "Rohtak": (28.8955, 76.6066), "Alwar": (27.5530, 76.6346), "Agra": (27.1767, 78.0081),
+            "Mathura": (27.4924, 77.6737), "Karnal": (29.6857, 76.9905), "Ambala": (30.3782, 76.7767),
+            "Surat": (21.1702, 72.8311), "Vadodara": (22.3072, 73.1812), "Ahmedabad": (23.0225, 72.5714),
+            "Rajkot": (22.3039, 70.8022), "Bhavnagar": (21.7645, 72.1519), "Jamnagar": (22.4707, 70.0577),
+            "Anand": (22.5645, 72.9289), "Bharuch": (21.7051, 72.9959), "Vapi": (20.3852, 72.9106),
+            "Navsari": (20.9467, 72.9520), "Gandhinagar": (23.2156, 72.6369), "Ankleshwar": (21.6264, 73.0152),
+            "Mumbai": (19.0760, 72.8777), "Thane": (19.2183, 72.9781), "Navi Mumbai": (19.0330, 73.0297),
+            "Pune": (18.5204, 73.8567), "Nashik": (19.9975, 73.7898), "Aurangabad": (19.8762, 75.3433)
+        }
+
+        # Calculate distance to all known hubs and sort by closest
+        distances = []
+        for city, coords in all_cities_db.items():
+            dist_km = geodesic(curr_coords, coords).km
+            # Exclude the exact same city typed
+            if city.lower() != city_name.strip().lower():
+                distances.append((city, dist_km))
+
+        distances.sort(key=lambda x: x[1])
+        nearby_cities = [city for city, dist in distances[:max_results]]
+        return nearby_cities
+
+    except Exception:
+        # Safe fallback list
+        return ["Vadodara", "Surat", "Ahmedabad", "Delhi", "Noida", "Gurugram", "Faridabad"]
+
+
+# --- TAB 3: BROADCAST LIVE LOCATION & NEXT TARGET CITIES ---
     with tech_tab3:
         st.markdown("<div class='section-header'>Broadcast Live Location & Next Target Cities</div>", unsafe_allow_html=True)
         
         # Load existing record
         curr_rec = st.session_state.tech_status_db[st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id]
         
-        c_city = str(curr_rec["Current_City"].values[0]) if not curr_rec.empty and "Current_City" in curr_rec.columns else ""
-        c_pin = str(curr_rec["Current_Pincode"].values[0]) if not curr_rec.empty and "Current_Pincode" in curr_rec.columns else ""
+        c_city_val = str(curr_rec["Current_City"].values[0]) if not curr_rec.empty and "Current_City" in curr_rec.columns else "Delhi"
+        c_pin_val = str(curr_rec["Current_Pincode"].values[0]) if not curr_rec.empty and "Current_Pincode" in curr_rec.columns else "110001"
         c_status_raw = str(curr_rec["Current_Status"].values[0]).strip().title() if not curr_rec.empty and "Current_Status" in curr_rec.columns else "Available"
+    
+        # Direct inputs outside form to allow live dynamic rerun on city change
+        c1, c2 = st.columns(2)
         
-        # Parse existing next target cities (stored as comma-separated string)
-        raw_next_cities = str(curr_rec["Next_City"].values[0]) if not curr_rec.empty and "Next_City" in curr_rec.columns else ""
-        all_saved_cities = [city.strip() for city in raw_next_cities.split(",") if city.strip()]
-
-        # Predefined major cities list
-        standard_city_options = [
-            "Vadodara", "Surat", "Ahmedabad", "Rajkot", "Bhavnagar", 
-            "Jamnagar", "Anand", "Bharuch", "Vapi", "Gandhinagar"
-        ]
-
-        # Separate saved cities between standard options and custom "Other" cities
-        default_multiselect = [c for c in all_saved_cities if c in standard_city_options]
-        default_other_text = ", ".join([c for c in all_saved_cities if c not in standard_city_options])
-
-        with st.form(f"broadcast_location_form_{tech_id}"):
-            c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**📍 Current Location**")
+            input_curr_city = st.text_input("Current City", value=c_city_val, placeholder="e.g. Delhi, Surat, Mumbai", key=f"tech_curr_city_{tech_id}")
+            input_curr_pin = st.text_input("Current Pin Code", value=c_pin_val, max_chars=6, placeholder="e.g. 110001", key=f"tech_curr_pin_{tech_id}")
             
-            with c1:
-                st.markdown("**📍 Current Location**")
-                input_curr_city = st.text_input("Current City", value=c_city, placeholder="e.g. Surat")
-                input_curr_pin = st.text_input("Current Pin Code", value=c_pin, max_chars=6, placeholder="e.g. 395007")
-                
-                status_options = ["Available", "On Site", "In Transit"]
-                selected_idx = status_options.index(c_status_raw) if c_status_raw in status_options else 0
-                input_status = st.radio("Current Activity Status", status_options, index=selected_idx, horizontal=True)
-
-            with c2:
-                st.markdown("**🎯 Next Preferred / Target Destinations**")
-                
-                # Multiselect for quick selection of primary cities
-                selected_multiselect_cities = st.multiselect(
-                    "Next Target Cities (Select multiple)",
-                    options=standard_city_options,
-                    default=default_multiselect,
-                    help="Select primary cities you are heading to next."
-                )
-
-                # Dedicated "Other" input field for custom/additional towns or GIDC areas
-                other_cities_input = st.text_input(
-                    "Other / Additional Target Cities or Industrial Zones",
-                    value=default_other_text,
-                    placeholder="e.g. Ankleshwar GIDC, Navsari, Halol (comma-separated)",
-                    help="Add any other nearby locations not present in the selection above."
-                )
-
-            st.divider()
-
-            if st.form_submit_button("Broadcast Location & Cities Update", use_container_width=True):
-                try:
-                    local_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
-                    now_str = datetime.now(local_tz).strftime("%I:%M %p")
-                except Exception:
-                    now_str = datetime.now().strftime("%I:%M %p")
-                
-                # Merge both multiselect items and "Other" custom text input into a unified clean list
-                final_cities_list = list(selected_multiselect_cities)
-                if other_cities_input.strip():
-                    other_parsed = [c.strip() for c in other_cities_input.split(",") if c.strip()]
-                    for c in other_parsed:
-                        if c not in final_cities_list:
-                            final_cities_list.append(c)
-
-                next_cities_str = ", ".join(final_cities_list)
-                
-                if tech_id in st.session_state.tech_status_db["Tech_ID"].astype(str).values:
-                    st.session_state.tech_status_db.loc[
-                        st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id,
-                        ["Current_City", "Current_Pincode", "Current_Status", "Next_City", "Last_Updated"]
-                    ] = [input_curr_city, input_curr_pin, input_status, next_cities_str, now_str]
-                else:
-                    new_row = {
-                        "Tech_ID": tech_id, 
-                        "Current_City": input_curr_city, 
-                        "Current_Pincode": input_curr_pin, 
-                        "Current_Status": input_status, 
-                        "Next_City": next_cities_str, 
-                        "Last_Updated": now_str
-                    }
-                    st.session_state.tech_status_db = pd.concat([st.session_state.tech_status_db, pd.DataFrame([new_row])], ignore_index=True)
-                
-                save_sheet_data(st.session_state.tech_status_db, "TechStatus")
-                st.toast(f"📍 Target cities updated to: {next_cities_str or 'None'}", icon="✅")
-                st.rerun()
+            status_options = ["Available", "On Site", "In Transit"]
+            selected_idx = status_options.index(c_status_raw) if c_status_raw in status_options else 0
+            input_status = st.radio("Current Activity Status", status_options, index=selected_idx, horizontal=True, key=f"tech_status_{tech_id}")
+    
+        # Dynamically fetch 15 closest cities based on input_curr_city
+        dynamic_nearby_cities = get_nearby_cities(input_curr_city, max_results=15)
+    
+        with c2:
+            st.markdown("**🎯 Next Preferred / Target Destinations**")
+            
+            selected_multiselect_cities = st.multiselect(
+                f"Next Target Cities (Nearby {input_curr_city.strip() or 'Location'})",
+                options=dynamic_nearby_cities,
+                default=[],
+                help="These cities update dynamically based on your Current City input.",
+                key=f"tech_multiselect_{tech_id}"
+            )
+    
+            other_cities_input = st.text_input(
+                "Other / Additional Target Cities or Industrial Zones",
+                placeholder="e.g. Greater Noida, Manesar, Sonipat (comma-separated)",
+                key=f"tech_other_cities_{tech_id}"
+            )
+    
+        st.divider()
+    
+        if st.button("Broadcast Location & Cities Update", type="primary", use_container_width=True):
+            try:
+                local_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
+                now_str = datetime.now(local_tz).strftime("%I:%M %p")
+            except Exception:
+                now_str = datetime.now().strftime("%I:%M %p")
+            
+            final_cities_list = list(selected_multiselect_cities)
+            if other_cities_input.strip():
+                other_parsed = [c.strip() for c in other_cities_input.split(",") if c.strip()]
+                for c in other_parsed:
+                    if c not in final_cities_list:
+                        final_cities_list.append(c)
+    
+            next_cities_str = ", ".join(final_cities_list)
+            
+            if tech_id in st.session_state.tech_status_db["Tech_ID"].astype(str).values:
+                st.session_state.tech_status_db.loc[
+                    st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id,
+                    ["Current_City", "Current_Pincode", "Current_Status", "Next_City", "Last_Updated"]
+                ] = [input_curr_city, input_curr_pin, input_status, next_cities_str, now_str]
+            else:
+                new_row = {
+                    "Tech_ID": tech_id, 
+                    "Current_City": input_curr_city, 
+                    "Current_Pincode": input_curr_pin, 
+                    "Current_Status": input_status, 
+                    "Next_City": next_cities_str, 
+                    "Last_Updated": now_str
+                }
+                st.session_state.tech_status_db = pd.concat([st.session_state.tech_status_db, pd.DataFrame([new_row])], ignore_index=True)
+            
+            save_sheet_data(st.session_state.tech_status_db, "TechStatus")
+            st.toast(f"📍 Target cities updated to: {next_cities_str or 'None'}", icon="✅")
+            st.rerun()
 
     # TAB 4: Personal History
     with tech_tab4:
