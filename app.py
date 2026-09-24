@@ -260,15 +260,29 @@ def upload_photo_to_drive(file_obj, filename):
 # 3. BRANDED UI STYLING
 # -----------------------------------------------------------------------------
 
-st.markdown("""
+st.markdown(
+    """
 <style>
-    .stApp { background-color: #F8FAFC !important; }
-    [data-testid="stSidebar"] { 
-        background: linear-gradient(180deg, #0F2027 0%, #203A43 50%, #2C5364 100%) !important; 
-        border-right: 1px solid #1E293B !important; 
-        color: #FFFFFF !important;
+    /* Global App Background */
+    .stApp { 
+        background-color: #F8FAFC !important; 
     }
-    [data-testid="stSidebar"] * { color: #E2E8F0 !important; }
+
+    /* ==========================================
+       1. BLUE NAVIGATION MENU (SIDEBAR)
+       ========================================== */
+    section[data-testid="stSidebar"],
+    [data-testid="stSidebar"] { 
+        background: linear-gradient(180deg, #0D3268 0%, #0A244D 60%, #061733 100%) !important; 
+        border-right: 1px solid rgba(255, 255, 255, 0.1) !important; 
+    }
+
+    /* Ensure text inside sidebar remains bright and readable */
+    section[data-testid="stSidebar"] *,
+    [data-testid="stSidebar"] * { 
+        color: #E2E8F0 !important; 
+    }
+
     .sidebar-logo-sub { 
         color: #10B981 !important; 
         font-weight: 800; 
@@ -278,19 +292,89 @@ st.markdown("""
         margin-top: 8px; 
         text-transform: uppercase;
     }
+
     .sidebar-user-card {
         background: rgba(255, 255, 255, 0.07);
         border: 1px solid rgba(255, 255, 255, 0.12);
         border-radius: 10px;
         padding: 14px;
         margin-bottom: 20px;
+        backdrop-filter: blur(4px);
     }
+
+    /* ==========================================
+       2. BUTTONS WITH DYNAMIC GRADIENTS & HOVER GLOW
+       ========================================== */
+    /* Form Submit Buttons (Main Action Buttons like Submit Visit Log) */
+    div[data-testid="stFormSubmitButton"] > button {
+        background: linear-gradient(135deg, #0E5A9B 0%, #0F4C81 100%) !important; 
+        color: #FFFFFF !important;
+        border-radius: 8px !important; 
+        font-weight: 700 !important; 
+        font-size: 1rem !important;
+        height: 48px !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important; 
+        width: 100% !important;
+        box-shadow: 0 4px 12px rgba(13, 50, 104, 0.3) !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    div[data-testid="stFormSubmitButton"] > button:hover {
+        background: linear-gradient(135deg, #0077B6 0%, #009688 100%) !important;
+        box-shadow: 0 6px 20px rgba(0, 150, 136, 0.45) !important;
+        transform: translateY(-2px) !important;
+        color: #FFFFFF !important;
+    }
+
+    div[data-testid="stFormSubmitButton"] > button:active {
+        transform: translateY(0px) !important;
+        box-shadow: 0 2px 8px rgba(0, 150, 136, 0.3) !important;
+    }
+
+    /* Standard Base Buttons outside forms */
+    div.stButton > button {
+        background: linear-gradient(135deg, #0F3D7A 0%, #1E3A8A 100%) !important;
+        color: #FFFFFF !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(15, 61, 122, 0.2) !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    div.stButton > button:hover {
+        background: linear-gradient(135deg, #1E70BF 0%, #059669 100%) !important;
+        box-shadow: 0 6px 18px rgba(5, 150, 105, 0.35) !important;
+        transform: translateY(-2px) !important;
+    }
+
+    /* Sidebar Action/Logout Buttons */
+    [data-testid="stSidebar"] .stButton > button {
+        background: rgba(239, 68, 68, 0.15) !important;
+        color: #FCA5A5 !important;
+        border: 1px solid rgba(239, 68, 68, 0.3) !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        transition: all 0.2s ease;
+    }
+
+    [data-testid="stSidebar"] .stButton > button:hover {
+        background-color: #EF4444 !important;
+        color: #FFFFFF !important;
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4) !important;
+        transform: translateY(-1px);
+    }
+
+    /* ==========================================
+       3. NAVIGATION TABS & FORM CONTAINERS
+       ========================================== */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: #E2E8F0;
         padding: 6px;
         border-radius: 10px;
     }
+
     .stTabs [data-baseweb="tab"] {
         height: 45px;
         border-radius: 8px;
@@ -300,12 +384,26 @@ st.markdown("""
         background-color: transparent;
         border: none !important;
     }
+
     .stTabs [data-baseweb="tab"][aria-selected="true"] {
         background-color: #0F3D7A !important;
         color: #FFFFFF !important;
         box-shadow: 0 4px 10px rgba(15, 61, 122, 0.2);
     }
-    .stTabs [data-baseweb="tab-highlight"] { display: none !important; }
+
+    .stTabs [data-baseweb="tab-highlight"] { 
+        display: none !important; 
+    }
+
+    /* Form Container Styling */
+    div[data-testid="stForm"] {
+        background-color: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+    }
+
     .login-box div[data-testid="stForm"] {
         background-color: #FFFFFF !important;
         border: 1px solid #E2E8F0 !important;
@@ -315,13 +413,7 @@ st.markdown("""
         max-width: 440px !important;
         margin: 30px auto !important;
     }
-    div[data-testid="stForm"] {
-        background-color: #FFFFFF;
-        border: 1px solid #E2E8F0;
-        border-radius: 12px;
-        padding: 24px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-    }
+
     .login-subtitle {
         text-align: center; 
         color: #10B981; 
@@ -332,6 +424,8 @@ st.markdown("""
         margin-bottom: 24px;
         text-transform: uppercase;
     }
+
+    /* Section Headings & Cards */
     .section-header {
         color: #0F3D7A;
         font-weight: 700;
@@ -341,6 +435,7 @@ st.markdown("""
         margin-top: 15px;
         margin-bottom: 15px;
     }
+
     .equipment-box {
         background-color: #F8FAFC; 
         border-left: 5px solid #0F3D7A;
@@ -350,12 +445,14 @@ st.markdown("""
         border: 1px solid #E2E8F0;
         border-left-width: 5px;
     }
+
     .equipment-title { 
         color: #0F3D7A !important; 
         font-weight: 700; 
         margin: 0 0 10px 0; 
         font-size: 1.2rem; 
     }
+
     .tech-card-header {
         background: linear-gradient(135deg, #0F3D7A 0%, #1E3A8A 100%);
         color: white;
@@ -363,36 +460,10 @@ st.markdown("""
         border-radius: 12px;
         margin-bottom: 20px;
     }
-    div[data-testid="stFormSubmitButton"] > button {
-        background-color: #10B981 !important; 
-        color: #FFFFFF !important;
-        border-radius: 8px !important; 
-        font-weight: 700 !important; 
-        font-size: 1rem !important;
-        height: 46px !important;
-        border: none !important; 
-        width: 100% !important;
-        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25) !important;
-        transition: all 0.2s ease;
-    }
-    div[data-testid="stFormSubmitButton"] > button:hover {
-        background-color: #059669 !important;
-        transform: translateY(-1px);
-    }
-    [data-testid="stSidebar"] .stButton > button {
-        background-color: rgba(239, 68, 68, 0.15) !important;
-        color: #FCA5A5 !important;
-        border: 1px solid rgba(239, 68, 68, 0.3) !important;
-        border-radius: 8px !important;
-        font-weight: 600 !important;
-        transition: all 0.2s ease;
-    }
-    [data-testid="stSidebar"] .stButton > button:hover {
-        background-color: #EF4444 !important;
-        color: #FFFFFF !important;
-    }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # -----------------------------------------------------------------------------
 # 4. AUTHENTICATION & LOGIN FORM
