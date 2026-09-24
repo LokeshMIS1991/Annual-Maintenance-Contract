@@ -836,11 +836,11 @@ def render_technician_dashboard():
                 if col in st.session_state.tech_status_db.columns:
                     st.session_state.tech_status_db[col] = st.session_state.tech_status_db[col].astype(object)
             
-            # Now perform the update safely
-            st.session_state.tech_status_db.loc[
-                st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id,
-                cols_to_update
-            ] = [input_curr_city, str(input_curr_pin), str(input_status), str(next_cities_str), str(now_str)]
+                    # Now perform the update safely
+                    st.session_state.tech_status_db.loc[
+                        st.session_state.tech_status_db["Tech_ID"].astype(str) == tech_id,
+                        cols_to_update
+                    ] = [input_curr_city, str(input_curr_pin), str(input_status), str(next_cities_str), str(now_str)]
             
                 else:
                     new_row = {
